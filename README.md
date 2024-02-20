@@ -9,4 +9,3 @@ Developed by the [EPFL Center for Imaging](https://imaging.epfl.ch/) as part of 
 [![Python Version](https://img.shields.io/pypi/pyversions/splinebox.svg?color=green)](https://python.org)
 [![tests](https://github.com/EPFL-Center-for-Imaging/splinebox/workflows/tests/badge.svg)](https://github.com/EPFL-Center-for-Imaging/splinebox/actions)
 [![codecov](https://codecov.io/gh/EPFL-Center-for-Imaging/splinebox/branch/main/graph/badge.svg)](https://codecov.io/gh/EPFL-Center-for-Imaging/splinebox)
-[![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/splinebox)](https://napari-hub.org/plugins/splinebox)
