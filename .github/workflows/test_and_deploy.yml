@@ -24,10 +24,10 @@ jobs:
         python-version: ['3.8', '3.9', '3.10']
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -42,16 +42,15 @@ jobs:
 
       # this runs the platform-specific tests declared in tox.ini
       - name: Test with tox
-        uses: aganders3/headless-gui@v1
-        with:
-          run: python -m tox
+        run: python -m tox
         env:
           PLATFORM: ${{ matrix.platform }}
 
-      - name: Coverage
-        uses: codecov/codecov-action@v3
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4.0.1
         env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: EPFL-Center-for-Imaging/splinebox
 
   deploy:
     # this will run when you have tagged a commit, starting with "v*"
