@@ -168,3 +168,6 @@ cython_debug/
 
 # vim swap files
 **.swp
+
+# virtual environment for development
+venv_splinebox
