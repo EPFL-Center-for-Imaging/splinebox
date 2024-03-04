@@ -106,7 +106,7 @@ class B1(BasisFunction):
     """
 
     def __init__(self):
-        super().__init__(self, False, 2.0)
+        super().__init__(False, 2.0)
 
     def eval(self, x):
         val = 0.0
@@ -147,7 +147,7 @@ class B2(BasisFunction):
     """
 
     def __init__(self):
-        super().__init__(self, False, 3.0)
+        super().__init__(False, 3.0)
 
     def eval(self, x):
         val = 0.0
@@ -198,7 +198,7 @@ class B3(BasisFunction):
     """
 
     def __init__(self):
-        super().__init__(self, False, 4.0)
+        super().__init__(False, 4.0)
 
     def eval(self, x):
         val = 0.0
@@ -302,7 +302,7 @@ class EM(BasisFunction):
     """
 
     def __init__(self, M, alpha):
-        super().__init__(self, False, 3.0)
+        super().__init__(False, 3.0)
         self.M = M
         self.alpha = alpha
 
@@ -452,7 +452,7 @@ class Keys(BasisFunction):
     """
 
     def __init__(self):
-        super().__init__(self, False, 4.0)
+        super().__init__(False, 4.0)
 
     def eval(self, x):
         val = 0.0
@@ -508,7 +508,7 @@ class H3(BasisFunction):
     """
 
     def __init__(self):
-        super().__init__(self, True, 2.0)
+        super().__init__(True, 2.0)
 
     def eval(self, x):
         return np.array([self.h31(x), self.h32(x)])
@@ -667,7 +667,7 @@ class HE3(BasisFunction):
     """
 
     def __init__(self, alpha):
-        super().__init__(self, True, 2.0)
+        super().__init__(True, 2.0)
         self.alpha = alpha
 
     def eval(self, x):
