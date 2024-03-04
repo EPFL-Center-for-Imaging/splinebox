@@ -1,60 +1,120 @@
+"""
+This module provides spline basis functions.
+"""
+
 import math
 
 import numpy as np
 
-# TODO: local refinement filters
-# TODO: quadratic prefilters
 
-
-class SplineGenerator:
-    unimplementedMessage = "This function is not implemented."
+class BasisFunction:
+    _unimplemented_message = "This function is not implemented."
 
     def __init__(self, multigenerator, support):
-        self.multigenerator = multigenerator
+        """
+        Base class for all basis functions.
+
+        Parameters
+        ----------
+        multigenerator : ???
+        support : float or int?
+            The support of the function, i.e. the size of the area
+            being mapped to non-zero values.
+        """
         self.support = support
 
-    def value(self, x):
-        # This needs to be overloaded
-        raise NotImplementedError(SplineGenerator.unimplementedMessage)
-        return
+    def eval(self, x):
+        """
+        Evaluate the function at position(s) `x`.
 
-    def firstDerivativeValue(self, x):
-        # This needs to be overloaded
-        raise NotImplementedError(SplineGenerator.unimplementedMessage)
-        return
+        Parameters
+        ----------
+        x : numpy.array
+            The points where the functions should be evaluated.
+        """
+        raise NotImplementedError(BasisFunction._unimplemented_message)
 
-    def secondDerivativeValue(self, x):
-        # This needs to be overloaded
-        raise NotImplementedError(SplineGenerator.unimplementedMessage)
-        return
+    def eval_1st_derivative(self, x):
+        """
+        Evaluate the first derivative of the function at position(s) `x`.
+
+        Parameters
+        ----------
+        x : numpy.array
+            The points where the functions first derivative should be
+            evaluated.
+
+        Returns
+        -------
+        y : numpy.array
+            Values of the first derivative at position(s) `x`.
+        """
+        raise NotImplementedError(BasisFunction._unimplemented_message)
+
+    def eval_2nd_derivative(self, x):
+        """
+        Evaluate the second derivative of the function at position(s) `x`.
+
+        Parameters
+        ----------
+        x : numpy.array
+            The points where the functions second derivative should be
+            evaluated.
+
+        Returns
+        -------
+        y : numpy.array
+            Values of the second derivative at position(s) `x`.
+        """
+        raise NotImplementedError(BasisFunction._unimplemented_message)
 
     def filterSymmetric(self, s):
-        # This needs to be overloaded
-        raise NotImplementedError(SplineGenerator.unimplementedMessage)
-        return
+        """
+        ???
+
+        Parameters
+        ----------
+        s : ?
+            ?
+        """
+        raise NotImplementedError(BasisFunction._unimplemented_message)
 
     def filterPeriodic(self, s):
-        # This needs to be overloaded
-        raise NotImplementedError(SplineGenerator.unimplementedMessage)
-        return
+        """
+        ???
+
+        Parameters
+        ----------
+        s : ?
+            ?
+        """
+        raise NotImplementedError(BasisFunction._unimplemented_message)
 
     def refinementMask(self):
-        # This needs to be overloaded
-        raise NotImplementedError(SplineGenerator.unimplementedMessage)
-        return
+        """
+        ???
+        """
+        raise NotImplementedError(BasisFunction._unimplemented_message)
 
 
-class B1(SplineGenerator):
+class B1(BasisFunction):
+    r"""
+    Basis spline of degree 1.
+
+    .. math::
+        f(x) = \begin{cases}1 - \lvert x \rvert & \text{for } -1 \leq x \leq 1 \\ 0 & \text{otherwise}\end{cases}
+    """
+
     def __init__(self):
-        SplineGenerator.__init__(self, False, 2.0)
+        super().__init__(self, False, 2.0)
 
-    def value(self, x):
+    def eval(self, x):
         val = 0.0
         if abs(x) >= 0 and abs(x) < 1:
             val = 1.0 - abs(x)
         return val
 
-    def firstDerivativeValue(self, x):
+    def eval_1st_derivative(self, x):
         val = 0.0
         if x >= -1.0 and x < 0:
             val = -1.0
@@ -62,9 +122,8 @@ class B1(SplineGenerator):
             val = 1.0
         return val
 
-    def secondDerivativeValue(self, x):
+    def eval_2nd_derivative(self, x):
         raise RuntimeError("B1 isn't twice differentiable.")
-        return
 
     def filterSymmetric(self, s):
         return s
@@ -75,15 +134,22 @@ class B1(SplineGenerator):
     def refinementMask(self):
         order = int(self.support)
         mask = np.zeros(order + 1)
-        multinomial(order, 2, np.zeros(2), 0, 2, order, mask)
+        _multinomial(order, 2, np.zeros(2), 0, 2, order, mask)
         return mask
 
 
-class B2(SplineGenerator):
-    def __init__(self):
-        SplineGenerator.__init__(self, False, 3.0)
+class B2(BasisFunction):
+    r"""
+    Basis spline of degree 2.
 
-    def value(self, x):
+    .. math::
+        f(x) = \begin{cases}\frac{x^2}{2} + \frac{3}{2} x + \frac{9}{8} & \text{for } -\frac{3}{2} \leq x \leq -\frac{1}{2} \\ -x^2 + \frac{3}{4} & \text{for } -\frac{1}{2} < x \leq \frac{1}{2} \\ \frac{1}{2} x^2 - \frac{3}{2} x + \frac{9}{8} & \text{for } \frac{1}{2} < x \leq \frac{3}{2} \\ 0 & \text{otherwise}\end{cases}
+    """
+
+    def __init__(self):
+        super().__init__(self, False, 3.0)
+
+    def eval(self, x):
         val = 0.0
         if x >= -1.5 and x <= -0.5:
             val = 0.5 * (x**2) + 1.5 * x + 1.125
@@ -93,7 +159,7 @@ class B2(SplineGenerator):
             val = 0.5 * (x**2) - 1.5 * x + 1.125
         return val
 
-    def firstDerivativeValue(self, x):
+    def eval_1st_derivative(self, x):
         val = 0.0
         if x >= -1.5 and x <= -0.5:
             val = x + 1.5
@@ -103,7 +169,7 @@ class B2(SplineGenerator):
             val = x - 1.5
         return val
 
-    def secondDerivativeValue(self, x):
+    def eval_2nd_derivative(self, x):
         val = 0.0
         if x >= -1.5 and x <= -0.5:
             val = 1.0
@@ -116,15 +182,25 @@ class B2(SplineGenerator):
     def refinementMask(self):
         order = int(self.support)
         mask = np.zeros(order + 1)
-        multinomial(order, 2, np.zeros(2), 0, 2, order, mask)
+        _multinomial(order, 2, np.zeros(2), 0, 2, order, mask)
         return mask
 
 
-class B3(SplineGenerator):
-    def __init__(self):
-        SplineGenerator.__init__(self, False, 4.0)
+class B3(BasisFunction):
+    r"""
+    Basis spline of degree 3.
 
-    def value(self, x):
+    .. math::
+        f(x) = \begin{cases}
+        \frac{2}{3} - \lvert x \rvert^2 + \frac{\lvert x \rvert^3}{2} & \text{for } 0 \leq \lvert x \rvert < 1 \\
+        \frac{1}{6}(2 - \lvert x \rvert)^3 & \text{for } 1 \leq \lvert x \rvert \leq 2 \\
+        0 & \text{otherwise}\end{cases}
+    """
+
+    def __init__(self):
+        super().__init__(self, False, 4.0)
+
+    def eval(self, x):
         val = 0.0
         if abs(x) >= 0 and abs(x) < 1:
             val = 2.0 / 3.0 - (abs(x) ** 2) + (abs(x) ** 3) / 2.0
@@ -132,7 +208,7 @@ class B3(SplineGenerator):
             val = ((2.0 - abs(x)) ** 3) / 6.0
         return val
 
-    def firstDerivativeValue(self, x):
+    def eval_1st_derivative(self, x):
         val = 0.0
         if x >= 0 and x < 1:
             val = -2.0 * x + 1.5 * x * x
@@ -144,7 +220,7 @@ class B3(SplineGenerator):
             val = 0.5 * ((2.0 + x) ** 2)
         return val
 
-    def secondDerivativeValue(self, x):
+    def eval_2nd_derivative(self, x):
         val = 0.0
         if x >= 0 and x < 1:
             val = -2.0 + 3.0 * x
@@ -216,17 +292,21 @@ class B3(SplineGenerator):
     def refinementMask(self):
         order = int(self.support)
         mask = np.zeros(order + 1)
-        multinomial(order, 2, np.zeros(2), 0, 2, order, mask)
+        _multinomial(order, 2, np.zeros(2), 0, 2, order, mask)
         return mask
 
 
-class EM(SplineGenerator):
+class EM(BasisFunction):
+    """
+    ???
+    """
+
     def __init__(self, M, alpha):
-        SplineGenerator.__init__(self, False, 3.0)
+        super().__init__(self, False, 3.0)
         self.M = M
         self.alpha = alpha
 
-    def value(self, x):
+    def eval(self, x):
         x += self.support / 2.0
         L = (np.sin(np.pi / self.M) / (np.pi / self.M)) ** (-2)
 
@@ -252,7 +332,7 @@ class EM(SplineGenerator):
 
         return (L * val) / (self.alpha * self.alpha)
 
-    def firstDerivativeValue(self, x):
+    def eval_1st_derivative(self, x):
         x += self.support / 2.0
         L = (np.sin(np.pi / self.M) / (np.pi / self.M)) ** (-2)
 
@@ -268,7 +348,7 @@ class EM(SplineGenerator):
 
         return (L * val) / (self.alpha * self.alpha)
 
-    def secondDerivativeValue(self, x):
+    def eval_2nd_derivative(self, x):
         x += self.support() / 2.0
         L = (np.sin(np.pi / self.M) / (np.pi / self.M)) ** (-2)
 
@@ -366,11 +446,15 @@ class EM(SplineGenerator):
         return mask
 
 
-class Keys(SplineGenerator):
-    def __init__(self):
-        SplineGenerator.__init__(self, False, 4.0)
+class Keys(BasisFunction):
+    """
+    ???
+    """
 
-    def value(self, x):
+    def __init__(self):
+        super().__init__(self, False, 4.0)
+
+    def eval(self, x):
         val = 0.0
         if np.abs(x) >= 0 and np.abs(x) <= 1:
             val = (
@@ -387,7 +471,7 @@ class Keys(SplineGenerator):
             )
         return val
 
-    def firstDerivativeValue(self, x):
+    def eval_1st_derivative(self, x):
         val = 0.0
         if x >= 0 and x <= 1:
             val = x * (4.5 * x - 5.0)
@@ -399,7 +483,7 @@ class Keys(SplineGenerator):
             val = 1.5 * x * x + 5.0 * x + 4.0
         return val
 
-    def secondDerivativeValue(self, x):
+    def eval_2nd_derivative(self, x):
         val = 0.0
         if x >= 0 and x <= 1:
             val = 9.0 * x - 5.0
@@ -418,11 +502,15 @@ class Keys(SplineGenerator):
         return s
 
 
-class H3(SplineGenerator):
-    def __init__(self):
-        SplineGenerator.__init__(self, True, 2.0)
+class H3(BasisFunction):
+    """
+    ???
+    """
 
-    def value(self, x):
+    def __init__(self):
+        super().__init__(self, True, 2.0)
+
+    def eval(self, x):
         return np.array([self.h31(x), self.h32(x)])
 
     def h31(self, x):
@@ -441,7 +529,7 @@ class H3(SplineGenerator):
             val = x * (x + 1) * (x + 1)
         return val
 
-    def firstDerivativeValue(self, x):
+    def eval_1st_derivative(self, x):
         return np.array([self.h31prime(x), self.h32prime(x)])
 
     def h31prime(self, x):
@@ -460,7 +548,7 @@ class H3(SplineGenerator):
             val = 3.0 * x * x + 4.0 * x + 1
         return val
 
-    def secondDerivativeValue(self, x):
+    def eval_2nd_derivative(self, x):
         raise RuntimeError("H3 isn't twice differentiable.")
         return
 
@@ -573,12 +661,16 @@ class H3(SplineGenerator):
         return val
 
 
-class HE3(SplineGenerator):
+class HE3(BasisFunction):
+    """
+    ???
+    """
+
     def __init__(self, alpha):
-        SplineGenerator.__init__(self, True, 2.0)
+        super().__init__(self, True, 2.0)
         self.alpha = alpha
 
-    def value(self, x):
+    def eval(self, x):
         return np.array([self.he31(x), self.he32(x)])
 
     def he31(self, x):
@@ -641,7 +733,7 @@ class HE3(SplineGenerator):
             val = num / denom
         return val
 
-    def firstDerivativeValue(self, x):
+    def eval_1st_derivative(self, x):
         return np.array([self.he31prime(x), self.he32prime(x)])
 
     def he31prime(self, x):
@@ -695,15 +787,12 @@ class HE3(SplineGenerator):
             val = num / denom
         return val
 
-    def secondDerivativeValue(self, x):
+    def eval_2nd_derivative(self, x):
         raise RuntimeError("HE3 isn't twice differentiable.")
         return
 
 
-# Recursive function to compute the multinomial coefficient of (x0+x1+...+xm-1)^N
-# This function finds every {k0,...,km-1} such that k0+...+km-1=N
-# (cf multinomial theorem on Wikipedia for a detailed explanation)
-def multinomial(
+def _multinomial(
     maxValue,
     numberOfCoefficiens,
     kArray,
@@ -712,6 +801,11 @@ def multinomial(
     order,
     mask,
 ):
+    """
+    Recursive function to compute the _multinomial coefficient of (x0+x1+...+xm-1)^N
+    This function finds every {k0,...,km-1} such that k0+...+km-1=N
+    (cf multinomial theorem on Wikipedia for a detailed explanation)
+    """
     if numberOfCoefficiens == 1:
         kArray[iteration] = maxValue
 
@@ -727,7 +821,7 @@ def multinomial(
     else:
         for k in range(maxValue + 1):
             kArray[iteration] = k
-            multinomial(
+            _multinomial(
                 maxValue - k,
                 numberOfCoefficiens - 1,
                 kArray,

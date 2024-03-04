@@ -28,6 +28,7 @@ select = [
 ]
 ignore = [
     "E501", # line too long. let black handle this
+    "A003", # shadowing of a Python builtin
 ]
 
 exclude = [
