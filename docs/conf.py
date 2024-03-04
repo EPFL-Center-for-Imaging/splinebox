@@ -17,6 +17,7 @@
 
 # -- Project information -----------------------------------------------------
 
+
 project = "splinebox"
 copyright = (  # noqa: A001
     "2024, Florian Aymanns, Virginie Uhlmann, Edward Ando"
@@ -31,6 +32,8 @@ author = "Florian Aymanns, Virginie Uhlmann, Edward Ando"
 # ones.
 extensions = [
     "sphinx.ext.mathjax",
+    "sphinx.ext.autodoc",
+    "matplotlib.sphinxext.plot_directive",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
