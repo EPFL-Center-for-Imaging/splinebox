@@ -9,6 +9,19 @@ from skimage import measure
 
 
 class Spline:
+    """
+    Base class for the construction of a spline.
+
+    Parameters
+    ----------
+    M : int
+        Number of control points.
+    basis_function : :class:`splinebox.basis_functions.BasisFunction`
+        The basis function used to construct the spline.
+    closed : boolean
+        Whether or not the spline is closed, i.e. the two ends connect.
+    """
+
     _wrong_dimension_msg = "It looks like coefs is a 2D array with second dimension different than two. I don't know how to handle this yet."
     _wrong_array_size_msg = "It looks like coefs is neither a 1 nor a 2D array. I don't know how to handle this yet."
     _no_coefs_msg = "This model doesn't have any coefficients."
@@ -388,6 +401,19 @@ class Spline:
 
 
 class HermiteSpline(Spline):
+    """
+    Class for the construction of a Hermite spline.
+
+    Parameters
+    ----------
+    M : int
+        Number of control points.
+    basis_function : :class:`splinebox.basis_functions.BasisFunction`
+        The basis function used to construct the spline.
+    closed : boolean
+        Whether or not the spline is closed, i.e. the two ends connect.
+    """
+
     coefTangentMismatchMessage = (
         "It looks like coefs and tangents have different shapes."
     )
