@@ -30,7 +30,7 @@ class BasisFunction:
         Parameters
         ----------
         x : numpy.array
-            The points where the functions should be evaluated.
+            The points where the function should be evaluated.
         """
         raise NotImplementedError(BasisFunction._unimplemented_message)
 
@@ -41,7 +41,7 @@ class BasisFunction:
         Parameters
         ----------
         x : numpy.array
-            The points where the functions first derivative should be
+            The points where the function's first derivative should be
             evaluated.
 
         Returns
@@ -58,7 +58,7 @@ class BasisFunction:
         Parameters
         ----------
         x : numpy.array
-            The points where the functions second derivative should be
+            The points where the function's second derivative should be
             evaluated.
 
         Returns
