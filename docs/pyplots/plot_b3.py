@@ -1,10 +1,10 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import splinebox.basis
+import splinebox.basis_functions
 
 fig, axes = plt.subplots(3, 1, sharex=True)
 
-b3 = splinebox.basis.B3()
+b3 = splinebox.basis_functions.B3()
 
 x = np.linspace(-3, 3, 100)
 

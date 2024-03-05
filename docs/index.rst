@@ -10,7 +10,7 @@ Welcome to splinebox's documentation!
    :maxdepth: 2
    :caption: Contents:
 
-   basis
+   basis_functions
 
 .. math::
    f(x) = \sum_{k=0}^{M-1} c[k]\phi(x-k)
