@@ -41,6 +41,10 @@ class Spline:
         self.coefs = None
 
     def sample(self, samplingRate, cpuCount=1):
+        """
+        Should be renamed to eval and take a vector of positions x
+        as an argument instead of samplingRate.
+        """
         if self.coefs is None:
             raise RuntimeError(self._no_coefs_msg)
 
@@ -77,6 +81,14 @@ class Spline:
         return np.stack(curve)
 
     def draw(self, dimensions, cpuCount=1):
+        """
+        Computes a whether a point is inside or outside a closed
+        spline on a regular grid of points.
+
+        I would ask the user to provide a grid of points directly instead
+        of asking for the dimensions. Like that the user can choose how densly
+        they want to sample the grid.
+        """
         if self.coefs is None:
             raise RuntimeError(self._no_coefs_msg)
 
@@ -118,6 +130,12 @@ class Spline:
             raise RuntimeError("draw() can only be used with 2D curves.")
 
     def windingNumber(self, t):
+        """
+        ???
+
+        Number that can be integrated along the entire spline
+        to determine where it wraps around the origin or not.
+        """
         r = self.parameterToWorld(t)
         dr = self.parameterToWorld(t, dt=True)
 
@@ -126,6 +144,17 @@ class Spline:
         return val
 
     def isInside(self, point):
+        """
+        Determines if a point is inside the closed spline
+        or not. Is it fair game to change the coeff of the
+        object or should it be cloned first?
+        The :meth:`splinebox.splines.Spline.translate` method should
+        be used instead of subtracting the point.
+
+        Parameters
+        ----------
+        point : numpy.array
+        """
         if self.closed:
             originalCoefs = copy.deepcopy(self.coefs)
             self.coefs = originalCoefs - point
@@ -147,6 +176,13 @@ class Spline:
             )
 
     def getCoefsFromKnots(self, knots):
+        """
+        ???
+
+        Fits the spline to go through the knots.
+        get is a bad name since nothing is returned.
+        fit would be better.
+        """
         knots = np.array(knots)
         if len(knots.shape) == 1:
             if self.closed:
@@ -169,11 +205,19 @@ class Spline:
                 )
             else:
                 raise RuntimeError(self._wrong_dimension_msg)
-                return
         else:
             raise RuntimeError(self._wrong_array_size_msg)
 
     def getCoefsFromDenseContour(self, contourPoints):
+        """
+        ???
+
+        Fits the spline to match a contour.
+        get is a bad name since nothing is returned.
+        fit would be better.
+        Presumably the this is different from getCoefsFromKnots
+        because the spline does not have to go through the points.
+        """
         N = len(contourPoints)
         phi = np.zeros((N, self.M))
         if len(contourPoints.shape) == 1:
@@ -222,6 +266,10 @@ class Spline:
                 self.coefs[k] = np.array([cX[0][k], cY[0][k]])
 
     def getCoefsFromBinaryMask(self, binaryMask):
+        """
+        Same as getCoefsFromDenseContour, except the input
+        is a binary mask.
+        """
         contours = measure.find_contours(binaryMask, 0)
 
         if len(contours) > 1:
@@ -232,6 +280,19 @@ class Spline:
         self.getCoefsFromDenseContour(contours[0])
 
     def arcLength(self, t0, tf=None):
+        """
+        Integrate along the arc length.
+
+        Can probably be made faster if the basis functions
+        accept arrays directly.
+
+        Parameters
+        ----------
+        t0 : float
+            Start point in parameter space.
+        tf : float (optional)
+            End point in parameter space.
+        """
         if t0 == tf:
             return 0.0
 
@@ -258,6 +319,28 @@ class Spline:
     def lengthToParameterRecursion(
         self, s, currentValue, lowerBound, upperBound, precisionDecimals=4
     ):
+        """
+        Convert the given arc length s on the curve to a value in parameters space.
+        This is done recursively, i.e. check if the point is before or after halfway
+        and repeat.
+
+        Some intelegent default can probably be set so the user only has to provide s.
+        Or this function should be made private entirely,
+        because there is :meth:`splinebox.splines.Spline.lengthToParameter`
+
+        Parameters
+        ----------
+        s : float
+            Arc length on the spline.
+        currentValue : float
+            The arc length to the lower bound.
+        lowerBound : float
+            Lower limit in parameter space.
+        upperBound : float
+            Upper limit in parameters space.
+        precisionDecimals : int
+            Precision to which the length is matched.
+        """
         midPoint = lowerBound + (upperBound - lowerBound) / 2
         midPointLength = currentValue + self.arcLength(lowerBound, midPoint)
 
@@ -282,12 +365,25 @@ class Spline:
             )
 
     def lengthToParameter(self, s):
+        """
+        Convert the arc length `s` to the coresponding value in parameter space.
+
+        Parameters
+        ----------
+        s : float
+            Length on curve.
+        """
         if self.closed:
             return self.lengthToParameterRecursion(s, 0, 0, self.M)
         else:
             return self.lengthToParameterRecursion(s, 0, 0, self.M - 1)
 
     def sampleArcLength(self, numSamples, cpuCount=1):
+        """
+        Evaluate the spline equidistantly spaced along its trajectory.
+        Perhaps it makes sense to ask the user to provide an array of distances
+        instead of the numSamples.
+        """
         if self.coefs is None:
             raise RuntimeError(self._no_coefs_msg)
 
@@ -328,6 +424,13 @@ class Spline:
         return np.stack(curve)
 
     def parameterToWorld(self, t, dt=False):
+        """
+        Calculate the spline value at parameter t.
+        Maybe there should be two functions for the
+        value and the derivative instead of a dt parameter.
+
+        Rename to `eval`?
+        """
         if self.coefs is None:
             raise RuntimeError(Spline._no_coefs_msg)
 
@@ -345,6 +448,11 @@ class Spline:
         return value
 
     def wrapIndex(self, t, k):
+        """
+        ???
+
+        Should this be private?
+        """
         wrappedT = t - k
         if k < t - self.halfSupport:
             if (
@@ -360,6 +468,12 @@ class Spline:
         return wrappedT
 
     def centroid(self):
+        """
+        Does this correspond to the geometric centroid?
+        Probably not, since the coefficient values are used.
+        Why is centroid always 2D? Should there be a check for
+        dimensionality here?
+        """
         centroid = np.zeros(2)
 
         for k in range(self.M):
@@ -368,10 +482,19 @@ class Spline:
         return centroid / self.M
 
     def translate(self, translationVector):
+        """
+        Translates the spline by a vector.
+        Is vector the right name here or can it also be a scalar?
+        """
         for k in range(self.M):
             self.coefs[k] += translationVector
 
     def scale(self, scalingFactor):
+        """
+        Enlarge or shrink the spline.
+        This should probably use :meth:`splinebox.splines.Spline.translate`
+        `scalingFactor` can be renamed to `factor`.
+        """
         centroid = self.centroid()
 
         for k in range(self.M):
@@ -379,6 +502,10 @@ class Spline:
             self.coefs[k] = centroid + scalingFactor * vectorToCentroid
 
     def rotate(self, rotationMatrix):
+        """
+        Rotate the spline.
+        Should the dimensionality be checked here?
+        """
         for k in range(self.M):
             self.coefs[k] = np.matmul(rotationMatrix, self.coefs[k])
 
