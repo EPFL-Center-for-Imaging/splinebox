@@ -8,14 +8,14 @@ import scipy.integrate
 from skimage import measure
 
 
-class SplineCurve:
-    wrongDimensionMessage = "It looks like coefs is a 2D array with second dimension different than two. I don't know how to handle this yet."
-    wrongArraySizeMessage = "It looks like coefs is neither a 1 nor a 2D array. I don't know how to handle this yet."
-    noCoefsMessage = "This model doesn't have any coefficients."
-    unimplementedMessage = "This function is not implemented."
+class Spline:
+    _wrong_dimension_msg = "It looks like coefs is a 2D array with second dimension different than two. I don't know how to handle this yet."
+    _wrong_array_size_msg = "It looks like coefs is neither a 1 nor a 2D array. I don't know how to handle this yet."
+    _no_coefs_msg = "This model doesn't have any coefficients."
+    _unimplemented_msg = "This function is not implemented."
 
-    def __init__(self, M, splineGenerator, closed):
-        if splineGenerator.support <= M:
+    def __init__(self, M, basis_function, closed):
+        if basis_function.support <= M:
             self.M = M
         else:
             raise RuntimeError(
@@ -23,14 +23,14 @@ class SplineCurve:
             )
             return
 
-        self.splineGenerator = splineGenerator
-        self.halfSupport = self.splineGenerator.support / 2.0
+        self.basis_function = basis_function
+        self.halfSupport = self.basis_function.support / 2.0
         self.closed = closed
         self.coefs = None
 
     def sample(self, samplingRate, cpuCount=1):
         if self.coefs is None:
-            raise RuntimeError(self.noCoefsMessage)
+            raise RuntimeError(self._no_coefs_msg)
             return
 
         if len(self.coefs.shape) == 1 or (
@@ -61,14 +61,14 @@ class SplineCurve:
                     curve = curve[~np.all(curve == 0, axis=1)]
 
         else:
-            raise RuntimeError(self.wrongArraySizeMessage)
+            raise RuntimeError(self._wrong_array_size_msg)
             return
 
         return np.stack(curve)
 
     def draw(self, dimensions, cpuCount=1):
         if self.coefs is None:
-            raise RuntimeError(self.noCoefsMessage)
+            raise RuntimeError(self._no_coefs_msg)
             return
 
         if len(self.coefs.shape) == 2 and self.coefs.shape[1] == 2:
@@ -145,17 +145,17 @@ class SplineCurve:
         knots = np.array(knots)
         if len(knots.shape) == 1:
             if self.closed:
-                self.coefs = self.splineGenerator.filterPeriodic(knots)
+                self.coefs = self.basis_function.filterPeriodic(knots)
             else:
-                self.coefs = self.splineGenerator.filterSymmetric(knots)
+                self.coefs = self.basis_function.filterSymmetric(knots)
         elif len(knots.shape) == 2:
             if knots.shape[1] == 2:
                 if self.closed:
-                    coefsX = self.splineGenerator.filterPeriodic(knots[:, 0])
-                    coefsY = self.splineGenerator.filterPeriodic(knots[:, 1])
+                    coefsX = self.basis_function.filterPeriodic(knots[:, 0])
+                    coefsY = self.basis_function.filterPeriodic(knots[:, 1])
                 else:
-                    coefsX = self.splineGenerator.filterSymmetric(knots[:, 0])
-                    coefsY = self.splineGenerator.filterSymmetric(knots[:, 1])
+                    coefsX = self.basis_function.filterSymmetric(knots[:, 0])
+                    coefsY = self.basis_function.filterSymmetric(knots[:, 1])
                 self.coefs = np.hstack(
                     (
                         np.array([coefsX]).transpose(),
@@ -163,10 +163,10 @@ class SplineCurve:
                     )
                 )
             else:
-                raise RuntimeError(self.wrongDimensionMessage)
+                raise RuntimeError(self._wrong_dimension_msg)
                 return
         else:
-            raise RuntimeError(self.wrongArraySizeMessage)
+            raise RuntimeError(self._wrong_array_size_msg)
             return
 
         return
@@ -199,7 +199,7 @@ class SplineCurve:
             for k in range(self.M):
                 tval = self.wrapIndex(t, k) if self.closed else t - k
                 if tval > -self.halfSupport and tval < self.halfSupport:
-                    basisFactor = self.splineGenerator.value(tval)
+                    basisFactor = self.basis_function.value(tval)
                 else:
                     basisFactor = 0.0
 
@@ -290,7 +290,7 @@ class SplineCurve:
 
     def sampleArcLength(self, numSamples, cpuCount=1):
         if self.coefs is None:
-            raise RuntimeError(self.noCoefsMessage)
+            raise RuntimeError(self._no_coefs_msg)
             return
 
         if len(self.coefs.shape) == 1 or (
@@ -325,14 +325,14 @@ class SplineCurve:
                 curve = curve[~np.all(curve == 0, axis=1)]
 
         else:
-            raise RuntimeError(self.wrongArraySizeMessage)
+            raise RuntimeError(self._wrong_array_size_msg)
             return
 
         return np.stack(curve)
 
     def parameterToWorld(self, t, dt=False):
         if self.coefs is None:
-            raise RuntimeError(SplineCurve.noCoefsMessage)
+            raise RuntimeError(Spline._no_coefs_msg)
             return
 
         value = 0.0
@@ -340,11 +340,11 @@ class SplineCurve:
             tval = self.wrapIndex(t, k) if self.closed else t - k
             if tval > -self.halfSupport and tval < self.halfSupport:
                 if dt:
-                    splineValue = self.splineGenerator.firstDerivativeValue(
+                    splineValue = self.basis_function.firstDerivativeValue(
                         tval
                     )
                 else:
-                    splineValue = self.splineGenerator.value(tval)
+                    splineValue = self.basis_function.value(tval)
                 value += self.coefs[k] * splineValue
         return value
 
@@ -387,19 +387,19 @@ class SplineCurve:
             self.coefs[k] = np.matmul(rotationMatrix, self.coefs[k])
 
 
-class HermiteSplineCurve(SplineCurve):
+class HermiteSpline(Spline):
     coefTangentMismatchMessage = (
         "It looks like coefs and tangents have different shapes."
     )
 
-    def __init__(self, M, splineGenerator, closed):
-        if not splineGenerator.multigenerator:
+    def __init__(self, M, basis_function, closed):
+        if not basis_function.multigenerator:
             raise RuntimeError(
                 "It looks like you are trying to use a single generator to build a multigenerator spline model."
             )
             return
 
-        SplineCurve.__init__(self, M, splineGenerator, closed)
+        Spline.__init__(self, M, basis_function, closed)
         self.tangents = None
 
     def getCoefsFromKnots(self, knots, tangentAtKnots):
@@ -418,27 +418,27 @@ class HermiteSplineCurve(SplineCurve):
                 self.coefs = knots
                 self.tangents = tangentAtKnots
             else:
-                raise RuntimeError(SplineCurve.wrongDimensionMessage)
+                raise RuntimeError(Spline._wrong_dimension_msg)
                 return
         else:
-            raise RuntimeError(SplineCurve.wrongArraySizeMessage)
+            raise RuntimeError(Spline._wrong_array_size_msg)
             return
 
         return
 
     def getCoefsFromDenseContour(self, contourPoints, tangentAtPoints):
         # TODO
-        raise NotImplementedError(SplineCurve.unimplementedMessage)
+        raise NotImplementedError(Spline._unimplemented_msg)
         return
 
     def getCoefsFromBinaryMask(self, binaryMask):
         # TODO
-        raise NotImplementedError(SplineCurve.unimplementedMessage)
+        raise NotImplementedError(Spline._unimplemented_msg)
         return
 
     def parameterToWorld(self, t, dt=False):
         if self.coefs is None:
-            raise RuntimeError(self.noCoefsMessage)
+            raise RuntimeError(self._no_coefs_msg)
             return
 
         value = 0.0
@@ -446,11 +446,11 @@ class HermiteSplineCurve(SplineCurve):
             tval = self.wrapIndex(t, k) if self.closed else t - k
             if tval > -self.halfSupport and tval < self.halfSupport:
                 if dt:
-                    splineValue = self.splineGenerator.firstDerivativeValue(
+                    splineValue = self.basis_function.firstDerivativeValue(
                         tval
                     )
                 else:
-                    splineValue = self.splineGenerator.value(tval)
+                    splineValue = self.basis_function.value(tval)
                 value += (
                     self.coefs[k] * splineValue[0]
                     + self.tangents[k] * splineValue[1]
@@ -458,13 +458,13 @@ class HermiteSplineCurve(SplineCurve):
         return value
 
     def scale(self, scalingFactor):
-        SplineCurve.scale(self, scalingFactor)
+        Spline.scale(self, scalingFactor)
 
         for k in range(self.M):
             self.tangents[k] *= scalingFactor
 
     def rotate(self, rotationMatrix):
-        SplineCurve.rotate(self, rotationMatrix)
+        Spline.rotate(self, rotationMatrix)
 
         for k in range(self.M):
             self.tangents[k] = np.matmul(rotationMatrix, self.tangents[k])
