@@ -34,7 +34,6 @@ class Spline:
             raise RuntimeError(
                 "M must be greater or equal than the spline generator support size."
             )
-            return
 
         self.basis_function = basis_function
         self.halfSupport = self.basis_function.support / 2.0
@@ -44,7 +43,6 @@ class Spline:
     def sample(self, samplingRate, cpuCount=1):
         if self.coefs is None:
             raise RuntimeError(self._no_coefs_msg)
-            return
 
         if len(self.coefs.shape) == 1 or (
             len(self.coefs.shape) == 2 and self.coefs.shape[1] == 2
@@ -75,14 +73,12 @@ class Spline:
 
         else:
             raise RuntimeError(self._wrong_array_size_msg)
-            return
 
         return np.stack(curve)
 
     def draw(self, dimensions, cpuCount=1):
         if self.coefs is None:
             raise RuntimeError(self._no_coefs_msg)
-            return
 
         if len(self.coefs.shape) == 2 and self.coefs.shape[1] == 2:
             if self.closed:
@@ -93,7 +89,6 @@ class Spline:
 
                 if len(dimensions) != 2:
                     raise RuntimeError("dimensions must be a triplet.")
-                    return
 
                 xvals = range(dimensions[1])
                 yvals = range(dimensions[0])
@@ -119,10 +114,8 @@ class Spline:
                 raise RuntimeError(
                     "draw() can only be used with closed curves."
                 )
-                return
         else:
             raise RuntimeError("draw() can only be used with 2D curves.")
-            return
 
     def windingNumber(self, t):
         r = self.parameterToWorld(t)
@@ -152,7 +145,6 @@ class Spline:
             raise RuntimeError(
                 "isInside() can only be used with closed curves."
             )
-            return
 
     def getCoefsFromKnots(self, knots):
         knots = np.array(knots)
@@ -180,9 +172,6 @@ class Spline:
                 return
         else:
             raise RuntimeError(self._wrong_array_size_msg)
-            return
-
-        return
 
     def getCoefsFromDenseContour(self, contourPoints):
         N = len(contourPoints)
@@ -232,8 +221,6 @@ class Spline:
             for k in range(self.M):
                 self.coefs[k] = np.array([cX[0][k], cY[0][k]])
 
-        return
-
     def getCoefsFromBinaryMask(self, binaryMask):
         contours = measure.find_contours(binaryMask, 0)
 
@@ -243,7 +230,6 @@ class Spline:
             )
 
         self.getCoefsFromDenseContour(contours[0])
-        return
 
     def arcLength(self, t0, tf=None):
         if t0 == tf:
@@ -304,7 +290,6 @@ class Spline:
     def sampleArcLength(self, numSamples, cpuCount=1):
         if self.coefs is None:
             raise RuntimeError(self._no_coefs_msg)
-            return
 
         if len(self.coefs.shape) == 1 or (
             len(self.coefs.shape) == 2 and self.coefs.shape[1] == 2
@@ -339,14 +324,12 @@ class Spline:
 
         else:
             raise RuntimeError(self._wrong_array_size_msg)
-            return
 
         return np.stack(curve)
 
     def parameterToWorld(self, t, dt=False):
         if self.coefs is None:
             raise RuntimeError(Spline._no_coefs_msg)
-            return
 
         value = 0.0
         for k in range(self.M):
@@ -414,7 +397,7 @@ class HermiteSpline(Spline):
         Whether or not the spline is closed, i.e. the two ends connect.
     """
 
-    coefTangentMismatchMessage = (
+    _coef_tangent_mismatch_msg = (
         "It looks like coefs and tangents have different shapes."
     )
 
@@ -423,9 +406,8 @@ class HermiteSpline(Spline):
             raise RuntimeError(
                 "It looks like you are trying to use a single generator to build a multigenerator spline model."
             )
-            return
 
-        Spline.__init__(self, M, basis_function, closed)
+        super().__init__(M, basis_function, closed)
         self.tangents = None
 
     def getCoefsFromKnots(self, knots, tangentAtKnots):
@@ -433,8 +415,7 @@ class HermiteSpline(Spline):
         tangentAtKnots = np.array(tangentAtKnots)
 
         if knots.shape != tangentAtKnots.shape:
-            raise RuntimeError(self.coefTangentMismatchMessage)
-            return
+            raise RuntimeError(self._coef_tangent_mismatch_msg)
 
         if len(knots.shape) == 1:
             self.coefs = knots
@@ -445,27 +426,20 @@ class HermiteSpline(Spline):
                 self.tangents = tangentAtKnots
             else:
                 raise RuntimeError(Spline._wrong_dimension_msg)
-                return
         else:
             raise RuntimeError(Spline._wrong_array_size_msg)
-            return
-
-        return
 
     def getCoefsFromDenseContour(self, contourPoints, tangentAtPoints):
         # TODO
         raise NotImplementedError(Spline._unimplemented_msg)
-        return
 
     def getCoefsFromBinaryMask(self, binaryMask):
         # TODO
         raise NotImplementedError(Spline._unimplemented_msg)
-        return
 
     def parameterToWorld(self, t, dt=False):
         if self.coefs is None:
             raise RuntimeError(self._no_coefs_msg)
-            return
 
         value = 0.0
         for k in range(self.M):
