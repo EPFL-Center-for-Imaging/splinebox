@@ -319,7 +319,7 @@ class B3(BasisFunction):
         return mask
 
 
-class EM(BasisFunction):
+class Exponential(BasisFunction):
     r"""
     ???
 
@@ -473,7 +473,7 @@ class EM(BasisFunction):
         return mask
 
 
-class Keys(BasisFunction):
+class CatmullRom(BasisFunction):
     """
     ???
     """
@@ -528,7 +528,7 @@ class Keys(BasisFunction):
         return s
 
 
-class H3(BasisFunction):
+class CubicHermite(BasisFunction):
     """
     ???
     """
@@ -584,7 +584,7 @@ class H3(BasisFunction):
 
     @staticmethod
     def eval_2nd_derivative(x):
-        raise RuntimeError("H3 isn't twice differentiable.")
+        raise RuntimeError("CubicHermite isn't twice differentiable.")
 
     def h31Autocorrelation(self, i, j, M):
         if self.support > M:
@@ -674,7 +674,7 @@ class H3(BasisFunction):
         return val
 
 
-class HE3(BasisFunction):
+class ExponentialHermite(BasisFunction):
     """
     ???
     """
@@ -764,7 +764,7 @@ class HE3(BasisFunction):
 
     @staticmethod
     def eval_2nd_derivative(x):
-        raise RuntimeError("HE3 isn't twice differentiable.")
+        raise RuntimeError("ExponentialHermite isn't twice differentiable.")
         return
 
 

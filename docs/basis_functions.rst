@@ -17,18 +17,18 @@ Basis functions
 
 .. plot:: pyplots/plot_b3.py
 
-.. autoclass:: splinebox.basis_functions.EM
+.. autoclass:: splinebox.basis_functions.Exponential
 
-.. plot:: pyplots/plot_em.py
+.. plot:: pyplots/plot_exponential.py
 
-.. autoclass:: splinebox.basis_functions.Keys
+.. autoclass:: splinebox.basis_functions.CatmullRom
 
-.. plot:: pyplots/plot_keys.py
+.. plot:: pyplots/plot_catmullrom.py
 
-.. autoclass:: splinebox.basis_functions.H3
+.. autoclass:: splinebox.basis_functions.CubicHermite
 
-.. plot:: pyplots/plot_h3.py
+.. plot:: pyplots/plot_cubichermite.py
 
-.. autoclass:: splinebox.basis_functions.HE3
+.. autoclass:: splinebox.basis_functions.ExponentialHermite
 
-.. plot:: pyplots/plot_he3.py
+.. plot:: pyplots/plot_exponentialhermite.py
