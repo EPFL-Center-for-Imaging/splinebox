@@ -8,14 +8,10 @@ b2 = splinebox.basis_functions.B2()
 
 x = np.linspace(-2, 2, 100)
 
-b2_0th = []
-b2_1st = []
-b2_2nd = []
+b2_0th = b2.eval(x)
+b2_1st = b2.eval_1st_derivative(x)
+b2_2nd = b2.eval_2nd_derivative(x)
 
-for xx in x:
-    b2_0th.append(b2.eval(xx))
-    b2_1st.append(b2.eval_1st_derivative(xx))
-    b2_2nd.append(b2.eval_2nd_derivative(xx))
 
 fig.suptitle("B2 basis function and its derivatives")
 axes[0].plot(x, b2_0th, label=r"$f(x)$")

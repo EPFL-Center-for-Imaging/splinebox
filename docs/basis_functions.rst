@@ -19,8 +19,16 @@ Basis functions
 
 .. autoclass:: splinebox.basis_functions.EM
 
+.. plot:: pyplots/plot_em.py
+
 .. autoclass:: splinebox.basis_functions.Keys
+
+.. plot:: pyplots/plot_keys.py
 
 .. autoclass:: splinebox.basis_functions.H3
 
+.. plot:: pyplots/plot_h3.py
+
 .. autoclass:: splinebox.basis_functions.HE3
+
+.. plot:: pyplots/plot_he3.py
