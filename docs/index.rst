@@ -11,7 +11,7 @@ Welcome to splinebox's documentation!
    :caption: Contents:
 
    basis_functions
-   splines
+   spline_curves
 
 .. math::
    f(x) = \sum_{k=0}^{M-1} c[k]\phi(x-k)

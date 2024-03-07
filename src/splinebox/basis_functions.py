@@ -3,6 +3,8 @@ This module provides spline basis functions.
 """
 
 import math
+
+import numba
 import numpy as np
 
 
@@ -107,13 +109,17 @@ class B1(BasisFunction):
     def __init__(self):
         super().__init__(False, 2.0)
 
-    def eval(self, x):
+    @staticmethod
+    @numba.vectorize([numba.float64(numba.float64)])
+    def eval(x):
         val = 0.0
         if abs(x) >= 0 and abs(x) < 1:
             val = 1.0 - abs(x)
         return val
 
-    def eval_1st_derivative(self, x):
+    @staticmethod
+    @numba.vectorize([numba.float64(numba.float64)])
+    def eval_1st_derivative(x):
         val = 0
         if x > -1.0 and x < 0:
             val = 1.0
@@ -124,13 +130,16 @@ class B1(BasisFunction):
             val = np.nan
         return val
 
-    def eval_2nd_derivative(self, x):
+    @staticmethod
+    def eval_2nd_derivative(x):
         raise RuntimeError("B1 isn't twice differentiable.")
 
-    def filterSymmetric(self, s):
+    @staticmethod
+    def filterSymmetric(s):
         return s
 
-    def filterPeriodic(self, s):
+    @staticmethod
+    def filterPeriodic(s):
         return s
 
     def refinementMask(self):
@@ -151,7 +160,9 @@ class B2(BasisFunction):
     def __init__(self):
         super().__init__(False, 3.0)
 
-    def eval(self, x):
+    @staticmethod
+    @numba.vectorize([numba.float64(numba.float64)])
+    def eval(x):
         val = 0.0
         if x >= -1.5 and x <= -0.5:
             val = 0.5 * (x**2) + 1.5 * x + 1.125
@@ -161,7 +172,9 @@ class B2(BasisFunction):
             val = 0.5 * (x**2) - 1.5 * x + 1.125
         return val
 
-    def eval_1st_derivative(self, x):
+    @staticmethod
+    @numba.vectorize([numba.float64(numba.float64)])
+    def eval_1st_derivative(x):
         val = 0.0
         if x >= -1.5 and x <= -0.5:
             val = x + 1.5
@@ -171,7 +184,9 @@ class B2(BasisFunction):
             val = x - 1.5
         return val
 
-    def eval_2nd_derivative(self, x):
+    @staticmethod
+    @numba.vectorize([numba.float64(numba.float64)])
+    def eval_2nd_derivative(x):
         val = 0.0
         if x >= -1.5 and x <= -0.5:
             val = 1.0
@@ -202,7 +217,9 @@ class B3(BasisFunction):
     def __init__(self):
         super().__init__(False, 4.0)
 
-    def eval(self, x):
+    @staticmethod
+    @numba.vectorize([numba.float64(numba.float64)])
+    def eval(x):
         val = 0.0
         if abs(x) >= 0 and abs(x) < 1:
             val = 2.0 / 3.0 - (abs(x) ** 2) + (abs(x) ** 3) / 2.0
@@ -210,7 +227,9 @@ class B3(BasisFunction):
             val = ((2.0 - abs(x)) ** 3) / 6.0
         return val
 
-    def eval_1st_derivative(self, x):
+    @staticmethod
+    @numba.vectorize([numba.float64(numba.float64)])
+    def eval_1st_derivative(x):
         val = 0.0
         if x >= 0 and x < 1:
             val = -2.0 * x + 1.5 * x * x
@@ -222,7 +241,9 @@ class B3(BasisFunction):
             val = 0.5 * ((2.0 + x) ** 2)
         return val
 
-    def eval_2nd_derivative(self, x):
+    @staticmethod
+    @numba.vectorize([numba.float64(numba.float64)])
+    def eval_2nd_derivative(x):
         val = 0.0
         if x >= 0 and x < 1:
             val = -2.0 + 3.0 * x
@@ -234,15 +255,14 @@ class B3(BasisFunction):
             val = 2.0 + x
         return val
 
-    def filterSymmetric(self, s):
+    @staticmethod
+    def filterSymmetric(s):
         M = len(s)
         pole = -2.0 + np.sqrt(3.0)
 
         cp = np.zeros(M)
         eps = 1e-8
-        k0 = np.min(
-            ((2 * M) - 2, int(np.ceil(np.log(eps) / np.log(np.abs(pole)))))
-        )
+        k0 = np.min(((2 * M) - 2, int(np.ceil(np.log(eps) / np.log(np.abs(pole))))))
         for k in range(k0):
             k = k % (2 * M - 2)
             val = s[2 * M - 2 - k] if k >= M else s[k]
@@ -263,7 +283,8 @@ class B3(BasisFunction):
         c[np.where(abs(c) < eps)] = 0.0
         return c
 
-    def filterPeriodic(self, s):
+    @staticmethod
+    def filterPeriodic(s):
         M = len(s)
         pole = -2.0 + np.sqrt(3.0)
 
@@ -309,67 +330,61 @@ class EM(BasisFunction):
         self.alpha = alpha
 
     def eval(self, x):
-        x += self.support / 2.0
-        L = (np.sin(np.pi / self.M) / (np.pi / self.M)) ** (-2)
+        return self._eval(x, self.support / 2, self.M, self.alpha)
+
+    @staticmethod
+    @numba.vectorize([numba.float64(numba.float64, numba.float64, numba.float64, numba.float64)])
+    def _eval(x, half_support, M, alpha):
+        x += half_support
+        L = (np.sin(np.pi / M) / (np.pi / M)) ** (-2)
 
         val = 0.0
         if x >= 0 and x < 1:
-            val = (
-                2.0
-                * np.sin(self.alpha * 0.5 * x)
-                * np.sin(self.alpha * 0.5 * x)
-            )
+            val = 2.0 * np.sin(alpha * 0.5 * x) * np.sin(alpha * 0.5 * x)
         elif x >= 1 and x < 2:
-            val = (
-                np.cos(self.alpha * (x - 2))
-                + np.cos(self.alpha * (x - 1))
-                - 2.0 * np.cos(self.alpha)
-            )
+            val = np.cos(alpha * (x - 2)) + np.cos(alpha * (x - 1)) - 2.0 * np.cos(alpha)
         elif x >= 2 and x <= 3:
-            val = (
-                2.0
-                * np.sin(self.alpha * 0.5 * (x - 3))
-                * np.sin(self.alpha * 0.5 * (x - 3))
-            )
+            val = 2.0 * np.sin(alpha * 0.5 * (x - 3)) * np.sin(alpha * 0.5 * (x - 3))
 
-        return (L * val) / (self.alpha * self.alpha)
+        return (L * val) / (alpha * alpha)
 
     def eval_1st_derivative(self, x):
-        x += self.support / 2.0
-        L = (np.sin(np.pi / self.M) / (np.pi / self.M)) ** (-2)
+        return self._eval_1st_derivative(x, self.support / 2, self.M, self.alpha)
+
+    @staticmethod
+    @numba.vectorize([numba.float64(numba.float64, numba.float64, numba.float64, numba.float64)])
+    def _eval_1st_derivative(x, half_support, M, alpha):
+        x += half_support
+        L = (np.sin(np.pi / M) / (np.pi / M)) ** (-2)
 
         val = 0.0
         if x >= 0 and x <= 1:
-            val = self.alpha * np.sin(self.alpha * x)
+            val = alpha * np.sin(alpha * x)
         elif x > 1 and x <= 2:
-            val = self.alpha * (
-                np.sin(self.alpha * (1 - x)) + np.sin(self.alpha * (2 - x))
-            )
+            val = alpha * (np.sin(alpha * (1 - x)) + np.sin(alpha * (2 - x)))
         elif x > 2 and x <= 3:
-            val = self.alpha * np.sin(self.alpha * (x - 3))
+            val = alpha * np.sin(alpha * (x - 3))
 
-        return (L * val) / (self.alpha * self.alpha)
+        return (L * val) / (alpha * alpha)
 
     def eval_2nd_derivative(self, x):
-        x += self.support() / 2.0
-        L = (np.sin(np.pi / self.M) / (np.pi / self.M)) ** (-2)
+        return self._eval_2nd_derivative(x, self.support / 2, self.M, self.alpha)
+
+    @staticmethod
+    @numba.vectorize([numba.float64(numba.float64, numba.float64, numba.float64, numba.float64)])
+    def _eval_2nd_derivative(x, half_support, M, alpha):
+        x += half_support
+        L = (np.sin(np.pi / M) / (np.pi / M)) ** (-2)
 
         val = 0.0
         if x >= 0 and x <= 1:
-            val = self.alpha * self.alpha * np.cos(self.alpha * x)
+            val = alpha * alpha * np.cos(alpha * x)
         elif x > 1 and x <= 2:
-            val = (
-                self.alpha
-                * self.alpha
-                * (
-                    -np.cos(self.alpha * (1 - x))
-                    - np.cos(self.alpha * (2 - x))
-                )
-            )
+            val = alpha * alpha * (-np.cos(alpha * (1 - x)) - np.cos(alpha * (2 - x)))
         elif x > 2 and x <= 3:
-            val = self.alpha * self.alpha * self.cos(self.alpha * (x - 3))
+            val = alpha * alpha * np.cos(alpha * (x - 3))
 
-        return (L * val) / (self.alpha * self.alpha)
+        return (L * val) / (alpha * alpha)
 
     def filterSymmetric(self, s):
         self.M = len(s)
@@ -456,24 +471,19 @@ class Keys(BasisFunction):
     def __init__(self):
         super().__init__(False, 4.0)
 
-    def eval(self, x):
+    @staticmethod
+    @numba.vectorize([numba.float64(numba.float64)])
+    def eval(x):
         val = 0.0
         if np.abs(x) >= 0 and np.abs(x) <= 1:
-            val = (
-                (3.0 / 2.0) * (np.abs(x) ** 3)
-                - (5.0 / 2.0) * (np.abs(x) ** 2)
-                + 1
-            )
+            val = (3.0 / 2.0) * (np.abs(x) ** 3) - (5.0 / 2.0) * (np.abs(x) ** 2) + 1
         elif np.abs(x) > 1 and np.abs(x) <= 2:
-            val = (
-                (-1.0 / 2.0) * (np.abs(x) ** 3)
-                + (5.0 / 2.0) * (np.abs(x) ** 2)
-                - 4.0 * np.abs(x)
-                + 2.0
-            )
+            val = (-1.0 / 2.0) * (np.abs(x) ** 3) + (5.0 / 2.0) * (np.abs(x) ** 2) - 4.0 * np.abs(x) + 2.0
         return val
 
-    def eval_1st_derivative(self, x):
+    @staticmethod
+    @numba.vectorize([numba.float64(numba.float64)])
+    def eval_1st_derivative(x):
         val = 0.0
         if x >= 0 and x <= 1:
             val = x * (4.5 * x - 5.0)
@@ -485,7 +495,9 @@ class Keys(BasisFunction):
             val = 1.5 * x * x + 5.0 * x + 4.0
         return val
 
-    def eval_2nd_derivative(self, x):
+    @staticmethod
+    @numba.vectorize([numba.float64(numba.float64)])
+    def eval_2nd_derivative(x):
         val = 0.0
         if x >= 0 and x <= 1:
             val = 9.0 * x - 5.0
@@ -497,10 +509,12 @@ class Keys(BasisFunction):
             val = 3.0 * x + 5.0
         return val
 
-    def filterSymmetric(self, s):
+    @staticmethod
+    def filterSymmetric(s):
         return s
 
-    def filterPeriodic(self, s):
+    @staticmethod
+    def filterPeriodic(s):
         return s
 
 
@@ -515,7 +529,9 @@ class H3(BasisFunction):
     def eval(self, x):
         return np.array([self.h31(x), self.h32(x)])
 
-    def h31(self, x):
+    @staticmethod
+    @numba.vectorize([numba.float64(numba.float64)])
+    def h31(x):
         val = 0.0
         if x >= 0 and x <= 1:
             val = (1.0 + (2.0 * x)) * (x - 1) * (x - 1)
@@ -523,7 +539,9 @@ class H3(BasisFunction):
             val = (1.0 - (2.0 * x)) * (x + 1) * (x + 1)
         return val
 
-    def h32(self, x):
+    @staticmethod
+    @numba.vectorize([numba.float64(numba.float64)])
+    def h32(x):
         val = 0.0
         if x >= 0 and x <= 1:
             val = x * (x - 1) * (x - 1)
@@ -534,7 +552,9 @@ class H3(BasisFunction):
     def eval_1st_derivative(self, x):
         return np.array([self.h31prime(x), self.h32prime(x)])
 
-    def h31prime(self, x):
+    @staticmethod
+    @numba.vectorize([numba.float64(numba.float64)])
+    def h31prime(x):
         val = 0.0
         if x >= 0 and x <= 1:
             val = 6.0 * x * (x - 1.0)
@@ -542,7 +562,9 @@ class H3(BasisFunction):
             val = -6.0 * x * (x + 1.0)
         return val
 
-    def h32prime(self, x):
+    @staticmethod
+    @numba.vectorize([numba.float64(numba.float64)])
+    def h32prime(x):
         val = 0.0
         if x >= 0 and x <= 1:
             val = 3.0 * x * x - 4.0 * x + 1
@@ -550,34 +572,26 @@ class H3(BasisFunction):
             val = 3.0 * x * x + 4.0 * x + 1
         return val
 
-    def eval_2nd_derivative(self, x):
+    @staticmethod
+    def eval_2nd_derivative(x):
         raise RuntimeError("H3 isn't twice differentiable.")
-        return
 
     def h31Autocorrelation(self, i, j, M):
         if self.support > M:
-            raise ValueError(
-                "Cannot compute h31Autocorrelation for M<" + str(self.support)
-            )
+            raise ValueError("Cannot compute h31Autocorrelation for M<" + str(self.support))
             return
 
         val = 0.0
         if np.abs(i - j) == 1:
             val = 9.0 / ((M - 1.0) * 70.0)
         elif i == j:
-            if (i == 0) or (i == M - 1):
-                val = 13.0 / ((M - 1.0) * 35.0)
-            else:
-                val = 26.0 / ((M - 1.0) * 35.0)
+            val = 13.0 / ((M - 1.0) * 35.0) if i == 0 or i == M - 1 else 26.0 / ((M - 1.0) * 35.0)
 
         return val
 
     def h31PeriodicAutocorrelation(self, n, M):
         if self.support > M:
-            raise ValueError(
-                "Cannot compute h31PeriodicAutocorrelation for M<"
-                + str(self.support)
-            )
+            raise ValueError("Cannot compute h31PeriodicAutocorrelation for M<" + str(self.support))
             return
 
         nmod = np.mod(n, M)
@@ -591,28 +605,20 @@ class H3(BasisFunction):
 
     def h32Autocorrelation(self, i, j, M):
         if self.support > M:
-            raise ValueError(
-                "Cannot compute h32Autocorrelation for M<" + str(self.support)
-            )
+            raise ValueError("Cannot compute h32Autocorrelation for M<" + str(self.support))
             return
 
         val = 0.0
         if np.abs(i - j) == 1:
             val = -1.0 / ((M - 1.0) * 140.0)
         elif i == j:
-            if (i == 0) or (i == M - 1):
-                val = 1.0 / ((M - 1.0) * 105.0)
-            else:
-                val = 2.0 / ((M - 1.0) * 105.0)
+            val = 1.0 / ((M - 1.0) * 105.0) if i == 0 or i == M - 1 else 2.0 / ((M - 1.0) * 105.0)
 
         return val
 
     def h32PeriodicAutocorrelation(self, n, M):
         if self.support > M:
-            raise ValueError(
-                "Cannot compute h32PeriodicAutocorrelation for M<"
-                + str(self.support)
-            )
+            raise ValueError("Cannot compute h32PeriodicAutocorrelation for M<" + str(self.support))
             return
 
         nmod = np.mod(n, M)
@@ -626,9 +632,7 @@ class H3(BasisFunction):
 
     def h3Crosscorrelation(self, i, j, M):
         if self.support > M:
-            raise ValueError(
-                "Cannot compute h3Crosscorrelation for M<" + str(self.support)
-            )
+            raise ValueError("Cannot compute h3Crosscorrelation for M<" + str(self.support))
             return
 
         val = 0.0
@@ -646,10 +650,7 @@ class H3(BasisFunction):
 
     def h3PeriodicCrosscorrelation(self, n, M):
         if self.support > M:
-            raise ValueError(
-                "Cannot compute h3PeriodicCrosscorrelation for M<"
-                + str(self.support)
-            )
+            raise ValueError("Cannot compute h3PeriodicCrosscorrelation for M<" + str(self.support))
             return
 
         nmod = np.mod(n, M)
@@ -673,123 +674,86 @@ class HE3(BasisFunction):
         self.alpha = alpha
 
     def eval(self, x):
-        return np.array([self.he31(x), self.he32(x)])
+        return np.array([self._he31(x, self.alpha), self._he32(x, self.alpha)])
 
-    def he31(self, x):
-        val = 0.0
-        val = self.g1(x) if x >= 0 else self.g1(-x)
+    @staticmethod
+    @numba.vectorize([numba.float64(numba.float64, numba.float64)])
+    def _he31(x, alpha):
+        def _g1(x, alpha):
+            val = 0.0
+            if x >= 0 and x <= 1:
+                denom = (0.5 * alpha * np.cos(0.5 * alpha)) - np.sin(0.5 * alpha)
+                num = (
+                    (0.5 * ((alpha * np.cos(0.5 * alpha)) - np.sin(0.5 * alpha)))
+                    - (0.5 * alpha * np.cos(0.5 * alpha) * x)
+                    - (0.5 * np.sin(0.5 * alpha - (alpha * x)))
+                )
+                val = num / denom
+            return val
+
+        val = _g1(x, alpha) if x >= 0 else _g1(-x, alpha)
         return val
 
-    def g1(self, x):
-        val = 0.0
-        if x >= 0 and x <= 1:
-            denom = (0.5 * self.alpha * np.cos(0.5 * self.alpha)) - np.sin(
-                0.5 * self.alpha
-            )
-            num = (
-                (
-                    0.5
-                    * (
-                        (self.alpha * np.cos(0.5 * self.alpha))
-                        - np.sin(0.5 * self.alpha)
-                    )
+    @staticmethod
+    @numba.vectorize([numba.float64(numba.float64, numba.float64)])
+    def _he32(x, alpha):
+        def _g2(x, alpha):
+            val = 0.0
+            if x >= 0 and x <= 1:
+                denom = (
+                    ((0.5 * alpha * np.cos(0.5 * alpha)) - np.sin(0.5 * alpha)) * (4.0 * alpha) * np.sin(0.5 * alpha)
                 )
-                - (0.5 * self.alpha * np.cos(0.5 * self.alpha) * x)
-                - (0.5 * np.sin(0.5 * self.alpha - (self.alpha * x)))
-            )
-            val = num / denom
-        return val
+                num = (
+                    -((alpha * np.cos(alpha)) - np.sin(alpha))
+                    - (2.0 * alpha * np.sin(0.5 * alpha) * np.sin(0.5 * alpha) * x)
+                    - (2.0 * np.sin(0.5 * alpha) * np.cos(alpha * (x - 0.5)))
+                    + (alpha * np.cos(alpha * (x - 1)))
+                )
+                val = num / denom
+            return val
 
-    def he32(self, x):
-        val = 0.0
-        val = self.g2(x) if x >= 0 else -1.0 * self.g2(-x)
-        return val
-
-    def g2(self, x):
-        val = 0.0
-        if x >= 0 and x <= 1:
-            denom = (
-                (
-                    (0.5 * self.alpha * np.cos(0.5 * self.alpha))
-                    - np.sin(0.5 * self.alpha)
-                )
-                * (4.0 * self.alpha)
-                * np.sin(0.5 * self.alpha)
-            )
-            num = (
-                -((self.alpha * np.cos(self.alpha)) - np.sin(self.alpha))
-                - (
-                    2.0
-                    * self.alpha
-                    * np.sin(0.5 * self.alpha)
-                    * np.sin(0.5 * self.alpha)
-                    * x
-                )
-                - (
-                    2.0
-                    * np.sin(0.5 * self.alpha)
-                    * np.cos(self.alpha * (x - 0.5))
-                )
-                + (self.alpha * np.cos(self.alpha * (x - 1)))
-            )
-            val = num / denom
+        val = _g2(x, alpha) if x >= 0 else -1.0 * _g2(-x, alpha)
         return val
 
     def eval_1st_derivative(self, x):
-        return np.array([self.he31prime(x), self.he32prime(x)])
+        return np.array([self._he31prime(x, self.alpha), self._he32prime(x, self.alpha)])
 
-    def he31prime(self, x):
-        val = 0.0
-        val = self.g1pPrime(x) if x >= 0 else -1.0 * self.g1prime(-x)
+    @staticmethod
+    @numba.vectorize([numba.float64(numba.float64, numba.float64)])
+    def _he31prime(x, alpha):
+        def _g1prime(x, alpha):
+            val = 0.0
+            if x >= 0 and x <= 1:
+                denom = (0.5 * alpha * np.cos(0.5 * alpha)) - np.sin(0.5 * alpha)
+                num = -(0.5 * alpha * np.cos(0.5 * alpha)) + (0.5 * alpha * np.cos(0.5 * alpha - (alpha * x)))
+                val = num / denom
+            return val
+
+        val = _g1prime(x, alpha) if x >= 0 else -1.0 * _g1prime(-x, alpha)
         return val
 
-    def g1prime(self, x):
-        val = 0.0
-        if x >= 0 and x <= 1:
-            denom = (0.5 * self.alpha * np.cos(0.5 * self.alpha)) - np.sin(
-                0.5 * self.alpha
-            )
-            num = -(0.5 * self.alpha * np.cos(0.5 * self.alpha)) + (
-                0.5 * self.alpha * np.cos(0.5 * self.alpha - (self.alpha * x))
-            )
-            val = num / denom
-        return val
-
-    def he32prime(self, x):
-        val = 0.0
-        val = self.g2prime(x) if x >= 0 else self.g2prime(-x)
-        return val
-
-    def g2prime(self, x):
-        val = 0.0
-        if x >= 0 and x <= 1:
-            denom = (
-                (
-                    (0.5 * self.alpha * np.cos(0.5 * self.alpha))
-                    - np.sin(0.5 * self.alpha)
+    @staticmethod
+    @numba.vectorize([numba.float64(numba.float64, numba.float64)])
+    def _he32prime(x, alpha):
+        def _g2prime(x, alpha):
+            val = 0.0
+            if x >= 0 and x <= 1:
+                denom = (
+                    ((0.5 * alpha * np.cos(0.5 * alpha)) - np.sin(0.5 * alpha)) * (4.0 * alpha) * np.sin(0.5 * alpha)
                 )
-                * (4.0 * self.alpha)
-                * np.sin(0.5 * self.alpha)
-            )
-            num = (
-                -(
-                    2.0
-                    * self.alpha
-                    * np.sin(0.5 * self.alpha)
-                    * np.sin(0.5 * self.alpha)
+                num = (
+                    -(2.0 * alpha * np.sin(0.5 * alpha) * np.sin(0.5 * alpha))
+                    + (2.0 * alpha * np.sin(0.5 * alpha) * np.sin(alpha * (x - 0.5)))
+                    - (alpha * alpha * np.sin(alpha * (x - 1)))
                 )
-                + (
-                    2.0
-                    * self.alpha
-                    * np.sin(0.5 * self.alpha)
-                    * np.sin(self.alpha * (x - 0.5))
-                )
-                - (self.alpha * self.alpha * np.sin(self.alpha * (x - 1)))
-            )
-            val = num / denom
+                val = num / denom
+            return val
+
+        val = _g2prime(x, alpha) if x >= 0 else _g2prime(-x, alpha)
         return val
 
-    def eval_2nd_derivative(self, x):
+    @staticmethod
+    def eval_2nd_derivative(x):
         raise RuntimeError("HE3 isn't twice differentiable.")
         return
 
