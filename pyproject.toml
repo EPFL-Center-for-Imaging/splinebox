@@ -7,12 +7,12 @@ build-backend = "setuptools.build_meta"
 write_to = "src/splinebox/_version.py"
 
 [tool.black]
-line-length = 79
-target-version = ['py38', 'py39', 'py310']
+line-length = 120
+target-version = ['py38', 'py39', 'py310', 'py311']
 
 
 [tool.ruff]
-line-length = 79
+line-length = 120
 select = [
     "E", "F", "W", #flake8
     "UP", # pyupgrade
@@ -65,7 +65,7 @@ requires-python = ">= 3.8"
 authors = [
     {name = "Florian Aymanns", email = "florian.aymanns@epfl.ch"},
     {name = "Virginie Uhlmann", email = "uhlmann@ebi.ac.uk"},
-    {name = "Edward Ando", email = "edward.ando@epfl.ch"},
+    {name = "Edward Andò", email = "edward.ando@epfl.ch"},
 ]
 maintainers = [
     {name = "Florian Aymanns", email = "flroian.aymanns@epfl.ch"},
@@ -85,6 +85,7 @@ classifiers = [
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
     "Topic :: Scientific/Engineering",
 ]
 

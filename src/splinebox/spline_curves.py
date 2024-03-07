@@ -1,7 +1,6 @@
 import copy
 import itertools
 import warnings
-
 import numpy as np
 import scipy.integrate
 from skimage import measure
@@ -26,23 +25,23 @@ class Spline:
     _no_coefs_msg = "This model doesn't have any coefficients."
     _unimplemented_msg = "This function is not implemented."
 
-    def __init__(self, M, basis_function, closed, coefs=None):
+    def __init__(self, M, basis_function, closed=False, coefs=None):
         if basis_function.support <= M:
             self.M = M
         else:
-            raise RuntimeError(
-                "M must be greater or equal than the spline generator support size."
-            )
+            raise RuntimeError("M must be greater or equal than the spline generator support size.")
 
         self.basis_function = basis_function
         self.halfSupport = self.basis_function.support / 2.0
         self.closed = closed
         self.coefs = coefs
 
+
     def copy(self):
         return copy.deepcopy(self)
 
-    def sample(self, samplingRate):
+
+    def sample(self, samplingRate, dt=False):
         """
         Should be renamed to eval and take a vector of positions x
         as an argument instead of samplingRate.
@@ -59,13 +58,14 @@ class Spline:
                 N = (samplingRate * (self.M - 1)) + 1
 
             curve = [
-                self.parameterToWorld(float(i) / float(samplingRate))
+                self.parameterToWorld(float(i) / float(samplingRate), dt=dt)
                 for i in range(N)
             ]
         else:
             raise RuntimeError(self._wrong_array_size_msg)
 
         return np.stack(curve)
+
 
     def draw(self, dimensions):
         """
@@ -110,6 +110,7 @@ class Spline:
         else:
             raise RuntimeError("draw() can only be used with 2D curves.")
 
+
     def windingNumber(self, t):
         """
         ???
@@ -123,6 +124,7 @@ class Spline:
         r2 = np.linalg.norm(r) ** 2
         val = (1.0 / r2) * (r[0] * dr[1] - r[1] * dr[0])
         return val
+
 
     def isInside(self, point):
         """
@@ -156,6 +158,7 @@ class Spline:
                 "isInside() can only be used with closed curves."
             )
 
+
     def getKnotsFromCoefs(self):
         if len(self.coefs.shape) == 1:
             knots = np.zeros(self.M)
@@ -174,6 +177,7 @@ class Spline:
                 for k in range(-self.halfSupport, self.M + self.halfSupport):
                     knots[k] = self.parameterToWorld(k, dt=False)
         return knots
+
 
     def getCoefsFromKnots(self, knots):
         """
@@ -215,6 +219,7 @@ class Spline:
                 raise RuntimeError(self._wrong_dimension_msg)
         else:
             raise RuntimeError(self._wrong_array_size_msg)
+
 
     def getCoefsFromDenseContour(
         self, contourPoints, arcLengthParameterization=False
@@ -276,7 +281,7 @@ class Spline:
                 for k in range(self.M):
                     tval = self.wrapIndex(t, k)
                     if tval > -self.halfSupport and tval < self.halfSupport:
-                        basisFactor = self.basis_function.value(tval)
+                        basisFactor = self.basis_function.eval(tval)
                     else:
                         basisFactor = 0.0
                     phi[i, k] += basisFactor
@@ -284,7 +289,7 @@ class Spline:
                 for k in range(self.M + int(self.basis_function.support)):
                     tval = t - (k - self.halfSupport)
                     if tval > -self.halfSupport and tval < self.halfSupport:
-                        basisFactor = self.basis_function.value(tval)
+                        basisFactor = self.basis_function.eval(tval)
                     else:
                         basisFactor = 0.0
                     phi[i, k] += basisFactor
@@ -318,6 +323,7 @@ class Spline:
                 for k in range(self.M + int(self.basis_function.support)):
                     self.coefs[k] = np.array([cX[0][k], cY[0][k]])
 
+
     def getCoefsFromBinaryMask(self, binaryMask):
         """
         Same as getCoefsFromDenseContour, except the input
@@ -336,6 +342,7 @@ class Spline:
 
         c = contours[0] - 1
         self.getCoefsFromDenseContour(c)
+
 
     def arcLength(self, t0, tf=None):
         """
@@ -373,6 +380,7 @@ class Spline:
         )
 
         return integral[0]
+
 
     def lengthToParameterRecursion(
         self, s, currentValue, lowerBound, upperBound, precisionDecimals=4
@@ -422,6 +430,7 @@ class Spline:
                 s, midPointLength, midPoint, upperBound, precisionDecimals
             )
 
+
     def lengthToParameter(self, s):
         """
         Convert the arc length `s` to the coresponding value in parameter space.
@@ -435,6 +444,7 @@ class Spline:
             return self.lengthToParameterRecursion(s, 0, 0, self.M)
         else:
             return self.lengthToParameterRecursion(s, 0, 0, self.M - 1)
+
 
     def sampleArcLength(self, numSamples, dt=False):
         """
@@ -473,6 +483,7 @@ class Spline:
 
         return np.stack(curve)
 
+
     def parameterToWorld(self, t, dt=False):
         """
         Calculate the spline value at parameter t.
@@ -490,24 +501,21 @@ class Spline:
                 tval = self.wrapIndex(t, k)
                 if tval > -self.halfSupport and tval < self.halfSupport:
                     if dt:
-                        splineValue = self.basis_function.firstDerivativeValue(
-                            tval
-                        )
+                        splineValue = self.basis_function.eval_1st_derivative(tval)
                     else:
-                        splineValue = self.basis_function.value(tval)
+                        splineValue = self.basis_function.eval(tval)
                     value += self.coefs[k] * splineValue
         else:
             for k in range(self.M + int(self.basis_function.support)):
                 tval = t - (k - self.halfSupport)
                 if tval > -self.halfSupport and tval < self.halfSupport:
                     if dt:
-                        splineValue = self.basis_function.firstDerivativeValue(
-                            tval
-                        )
+                        splineValue = self.basis_function.eval_1st_derivative(tval)
                     else:
-                        splineValue = self.basis_function.value(tval)
+                        splineValue = self.basis_function.eval(tval)
                     value += self.coefs[k] * splineValue
         return value
+
 
     def wrapIndex(self, t, k):
         """
@@ -529,6 +537,7 @@ class Spline:
             wrappedT = t - (k - self.M)
         return wrappedT
 
+
     def centroid(self):
         """
         Does this correspond to the geometric centroid?
@@ -543,6 +552,7 @@ class Spline:
 
         return centroid / self.M
 
+
     def translate(self, translationVector):
         """
         Translates the spline by a vector.
@@ -550,6 +560,7 @@ class Spline:
         """
         for k in range(self.M):
             self.coefs[k] += translationVector
+
 
     def scale(self, scalingFactor):
         """
@@ -562,6 +573,7 @@ class Spline:
         for k in range(self.M):
             vectorToCentroid = self.coefs[k] - centroid
             self.coefs[k] = centroid + scalingFactor * vectorToCentroid
+
 
     def rotate(self, rotationMatrix):
         """
@@ -590,6 +602,7 @@ class HermiteSpline(Spline):
         "It looks like coefs and tangents have different shapes."
     )
 
+
     def __init__(self, M, basis_function, closed, coefs=None, tangents=None):
         if not basis_function.multigenerator:
             raise RuntimeError(
@@ -599,8 +612,10 @@ class HermiteSpline(Spline):
         super().__init__(M, basis_function, closed, coefs=coefs)
         self.tangents = tangents
 
+
     def copy(self):
         return copy.deepcopy(self)
+
 
     def getCoefsFromKnots(self, knots, tangentAtKnots):
         knots = np.array(knots)
@@ -620,6 +635,7 @@ class HermiteSpline(Spline):
                 raise RuntimeError(self._wrong_dimension_msg)
         else:
             raise RuntimeError(self._wrong_array_size_msg)
+
 
     def getCoefsFromDenseContour(
         self, contourPoints, arcLengthParameterization=False
@@ -669,7 +685,7 @@ class HermiteSpline(Spline):
             for k in range(self.M):
                 tval = self.wrapIndex(t, k) if self.closed else t - k
                 if tval > -self.halfSupport and tval < self.halfSupport:
-                    basisFactor = self.basis_function.value(tval)
+                    basisFactor = self.basis_function.eval(tval)
                 else:
                     basisFactor = [0.0, 0.0]
 
@@ -697,9 +713,11 @@ class HermiteSpline(Spline):
                     [cX[0][k + self.M], cY[0][k + self.M]]
                 )
 
+
     def getCoefsFromBinaryMask(self, binaryMask):
         # TODO: This was deleted by Virginie in her cleaned up version
         raise NotImplementedError(Spline._unimplemented_msg)
+
 
     def parameterToWorld(self, t, dt=False):
         if self.coefs is None:
@@ -710,22 +728,19 @@ class HermiteSpline(Spline):
             tval = self.wrapIndex(t, k) if self.closed else t - k
             if tval > -self.halfSupport and tval < self.halfSupport:
                 if dt:
-                    splineValue = self.basis_function.firstDerivativeValue(
-                        tval
-                    )
+                    splineValue = self.basis_function.eval_1st_derivative(tval)
                 else:
-                    splineValue = self.basis_function.value(tval)
-                value += (
-                    self.coefs[k] * splineValue[0]
-                    + self.tangents[k] * splineValue[1]
-                )
+                    splineValue = self.basis_function.eval(tval)
+                value += (self.coefs[k] * splineValue[0] + self.tangents[k] * splineValue[1])
         return value
+
 
     def scale(self, scalingFactor):
         Spline.scale(self, scalingFactor)
 
         for k in range(self.M):
             self.tangents[k] *= scalingFactor
+
 
     def rotate(self, rotationMatrix):
         Spline.rotate(self, rotationMatrix)

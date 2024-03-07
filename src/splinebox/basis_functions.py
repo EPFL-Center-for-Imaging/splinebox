@@ -3,7 +3,6 @@ This module provides spline basis functions.
 """
 
 import math
-
 import numpy as np
 
 
@@ -115,11 +114,14 @@ class B1(BasisFunction):
         return val
 
     def eval_1st_derivative(self, x):
-        val = 0.0
-        if x >= -1.0 and x < 0:
-            val = -1.0
-        elif x >= 0 and x <= 1:
+        val = 0
+        if x > -1.0 and x < 0:
             val = 1.0
+        elif x > 0 and x < 1:
+            val = -1.0
+        elif x == 0.0 or x == -1.0 or x == 1.0:
+            # This is the gradient you'll get at exactly 0
+            val = np.nan
         return val
 
     def eval_2nd_derivative(self, x):

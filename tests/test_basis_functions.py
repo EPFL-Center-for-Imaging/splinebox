@@ -20,7 +20,7 @@ def test_1st_derivatives(basis_function):
     )
 
     # Since the basis functions are not continously differentiable, the
-    # estimated_derivative is in accurate when ever there is a kink in the
+    # estimated_derivative is inaccurate whenever there is a kink in the
     # basis function. These should be isolated values since there are never
     # two kinks right next to each other.
     close = np.convolve(close, np.ones(2), mode="same")
