@@ -320,8 +320,18 @@ class B3(BasisFunction):
 
 
 class EM(BasisFunction):
-    """
+    r"""
     ???
+
+    .. math::
+        f(x) = \begin{cases}
+        \frac{L}{\alpha^2} 2 \sin(\frac{\alpha}{2} x) & \text{for } 0 \leq x < 1 \\
+        \frac{L}{\alpha^2} (\cos(\alpha (x - 2)) + \cos(\alpha (x - 1)) - 2 \cos(\alpha)) & \text{for } 1 \leq x < 2 \\
+        \frac{L}{\alpha^2} 2 \sin(\frac{\alpha}{2} (x- 3))^2 & \text{for } 2 \leq x \leq 3 \\
+        0 & \text{otherwise}\end{cases}
+
+    .. math::
+        \text{where } L=(\frac{\sin(\pi / M)}{\pi / M})^{-2}
     """
 
     def __init__(self, M, alpha):
