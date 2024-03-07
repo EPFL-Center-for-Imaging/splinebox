@@ -94,6 +94,9 @@ test = [
     "pytest",
     "pytest-cov",
 ]
+docs = [
+    "matplotlib",
+]
 
 [project.urls]
 Repository = "https://github.com/EPFL-Center-for-Imaging/splinebox"
