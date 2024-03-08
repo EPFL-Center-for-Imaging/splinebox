@@ -24,7 +24,7 @@ class BasisFunction:
         """
         self.support = support
 
-    def eval(self, x):
+    def eval(self, x, derivative=0):
         """
         Evaluate the function at position(s) `x`.
 
@@ -32,41 +32,32 @@ class BasisFunction:
         ----------
         x : numpy.array
             The points where the function should be evaluated.
-        """
-        raise NotImplementedError(BasisFunction._unimplemented_message)
-
-    def eval_1st_derivative(self, x):
-        """
-        Evaluate the first derivative of the function at position(s) `x`.
-
-        Parameters
-        ----------
-        x : numpy.array
-            The points where the function's first derivative should be
-            evaluated.
+        derivative : [0, 1, 2], default = 0
+            Whether to evaluate the function (0) or its first (1)
+            or second (2) derivative.
 
         Returns
         -------
         y : numpy.array
-            Values of the first derivative at position(s) `x`.
+            Values of the function or its first or second derivative
+            at position(s) `x`.
         """
+        if derivative == 0:
+            return self._func(x)
+        elif derivative == 1:
+            return self._derivative_1(x)
+        elif derivative == 2:
+            return self._derivative_2(x)
+        else:
+            raise ValueError(f"derivative has to be 0, 1, or 2 not {derivative}")
+
+    def _func(self, x):
         raise NotImplementedError(BasisFunction._unimplemented_message)
 
-    def eval_2nd_derivative(self, x):
-        """
-        Evaluate the second derivative of the function at position(s) `x`.
+    def _derivative_1(self, x):
+        raise NotImplementedError(BasisFunction._unimplemented_message)
 
-        Parameters
-        ----------
-        x : numpy.array
-            The points where the function's second derivative should be
-            evaluated.
-
-        Returns
-        -------
-        y : numpy.array
-            Values of the second derivative at position(s) `x`.
-        """
+    def _derivative_2(self, x):
         raise NotImplementedError(BasisFunction._unimplemented_message)
 
     def filterSymmetric(self, s):
@@ -111,7 +102,7 @@ class B1(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)])
-    def eval(x):
+    def _func(x):
         val = 0.0
         if abs(x) >= 0 and abs(x) < 1:
             val = 1.0 - abs(x)
@@ -119,7 +110,7 @@ class B1(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)])
-    def eval_1st_derivative(x):
+    def _derivative_1(x):
         val = 0
         if x > -1.0 and x < 0:
             val = 1.0
@@ -131,7 +122,7 @@ class B1(BasisFunction):
         return val
 
     @staticmethod
-    def eval_2nd_derivative(x):
+    def _derivative_2(x):
         raise RuntimeError("B1 isn't twice differentiable.")
 
     @staticmethod
@@ -162,7 +153,7 @@ class B2(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)])
-    def eval(x):
+    def _func(x):
         val = 0.0
         if x >= -1.5 and x <= -0.5:
             val = 0.5 * (x**2) + 1.5 * x + 1.125
@@ -174,7 +165,7 @@ class B2(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)])
-    def eval_1st_derivative(x):
+    def _derivative_1(x):
         val = 0.0
         if x >= -1.5 and x <= -0.5:
             val = x + 1.5
@@ -186,7 +177,7 @@ class B2(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)])
-    def eval_2nd_derivative(x):
+    def _derivative_2(x):
         val = 0.0
         if x >= -1.5 and x <= -0.5:
             val = 1.0
@@ -219,7 +210,7 @@ class B3(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)])
-    def eval(x):
+    def _func(x):
         val = 0.0
         if abs(x) >= 0 and abs(x) < 1:
             val = 2.0 / 3.0 - (abs(x) ** 2) + (abs(x) ** 3) / 2.0
@@ -229,7 +220,7 @@ class B3(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)])
-    def eval_1st_derivative(x):
+    def _derivative_1(x):
         val = 0.0
         if x >= 0 and x < 1:
             val = -2.0 * x + 1.5 * x * x
@@ -243,7 +234,7 @@ class B3(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)])
-    def eval_2nd_derivative(x):
+    def _derivative_2(x):
         val = 0.0
         if x >= 0 and x < 1:
             val = -2.0 + 3.0 * x
@@ -339,12 +330,12 @@ class Exponential(BasisFunction):
         self.M = M
         self.alpha = alpha
 
-    def eval(self, x):
-        return self._eval(x, self.support / 2, self.M, self.alpha)
+    def _func(self, x):
+        return self.__func(x, self.support / 2, self.M, self.alpha)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64, numba.float64, numba.float64)])
-    def _eval(x, half_support, M, alpha):
+    def __func(x, half_support, M, alpha):
         x += half_support
         L = (np.sin(np.pi / M) / (np.pi / M)) ** (-2)
 
@@ -358,12 +349,12 @@ class Exponential(BasisFunction):
 
         return (L * val) / (alpha * alpha)
 
-    def eval_1st_derivative(self, x):
-        return self._eval_1st_derivative(x, self.support / 2, self.M, self.alpha)
+    def _derivative_1(self, x):
+        return self.__derivative_1(x, self.support / 2, self.M, self.alpha)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64, numba.float64, numba.float64)])
-    def _eval_1st_derivative(x, half_support, M, alpha):
+    def __derivative_1(x, half_support, M, alpha):
         x += half_support
         L = (np.sin(np.pi / M) / (np.pi / M)) ** (-2)
 
@@ -377,12 +368,12 @@ class Exponential(BasisFunction):
 
         return (L * val) / (alpha * alpha)
 
-    def eval_2nd_derivative(self, x):
-        return self._eval_2nd_derivative(x, self.support / 2, self.M, self.alpha)
+    def _derivative_2(self, x):
+        return self.__derivative_2(x, self.support / 2, self.M, self.alpha)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64, numba.float64, numba.float64)])
-    def _eval_2nd_derivative(x, half_support, M, alpha):
+    def __derivative_2(x, half_support, M, alpha):
         x += half_support
         L = (np.sin(np.pi / M) / (np.pi / M)) ** (-2)
 
@@ -483,7 +474,7 @@ class CatmullRom(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)])
-    def eval(x):
+    def _func(x):
         val = 0.0
         if np.abs(x) >= 0 and np.abs(x) <= 1:
             val = (3.0 / 2.0) * (np.abs(x) ** 3) - (5.0 / 2.0) * (np.abs(x) ** 2) + 1
@@ -493,7 +484,7 @@ class CatmullRom(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)])
-    def eval_1st_derivative(x):
+    def _derivative_1(x):
         val = 0.0
         if x >= 0 and x <= 1:
             val = x * (4.5 * x - 5.0)
@@ -507,7 +498,7 @@ class CatmullRom(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)])
-    def eval_2nd_derivative(x):
+    def _derivative_2(x):
         val = 0.0
         if x >= 0 and x <= 1:
             val = 9.0 * x - 5.0
@@ -536,7 +527,7 @@ class CubicHermite(BasisFunction):
     def __init__(self):
         super().__init__(True, 2.0)
 
-    def eval(self, x):
+    def _func(self, x):
         return np.array([self.h31(x), self.h32(x)])
 
     @staticmethod
@@ -559,7 +550,7 @@ class CubicHermite(BasisFunction):
             val = x * (x + 1) * (x + 1)
         return val
 
-    def eval_1st_derivative(self, x):
+    def _derivative_1(self, x):
         return np.array([self.h31prime(x), self.h32prime(x)])
 
     @staticmethod
@@ -583,7 +574,7 @@ class CubicHermite(BasisFunction):
         return val
 
     @staticmethod
-    def eval_2nd_derivative(x):
+    def _derivative_2(x):
         raise RuntimeError("CubicHermite isn't twice differentiable.")
 
     def h31Autocorrelation(self, i, j, M):
@@ -683,7 +674,7 @@ class ExponentialHermite(BasisFunction):
         super().__init__(True, 2.0)
         self.alpha = alpha
 
-    def eval(self, x):
+    def _func(self, x):
         return np.array([self._he31(x, self.alpha), self._he32(x, self.alpha)])
 
     @staticmethod
@@ -725,7 +716,7 @@ class ExponentialHermite(BasisFunction):
         val = _g2(x, alpha) if x >= 0 else -1.0 * _g2(-x, alpha)
         return val
 
-    def eval_1st_derivative(self, x):
+    def _derivative_1(self, x):
         return np.array([self._he31prime(x, self.alpha), self._he32prime(x, self.alpha)])
 
     @staticmethod
@@ -763,7 +754,7 @@ class ExponentialHermite(BasisFunction):
         return val
 
     @staticmethod
-    def eval_2nd_derivative(x):
+    def _derivative_2(x):
         raise RuntimeError("ExponentialHermite isn't twice differentiable.")
         return
 
