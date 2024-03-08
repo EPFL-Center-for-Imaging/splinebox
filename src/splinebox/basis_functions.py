@@ -60,7 +60,7 @@ class BasisFunction:
     def _derivative_2(self, x):
         raise NotImplementedError(BasisFunction._unimplemented_message)
 
-    def filterSymmetric(self, s):
+    def filter_symmetric(self, s):
         """
         ???
 
@@ -71,7 +71,7 @@ class BasisFunction:
         """
         raise NotImplementedError(BasisFunction._unimplemented_message)
 
-    def filterPeriodic(self, s):
+    def filter_periodic(self, s):
         """
         ???
 
@@ -82,7 +82,7 @@ class BasisFunction:
         """
         raise NotImplementedError(BasisFunction._unimplemented_message)
 
-    def refinementMask(self):
+    def refinement_mask(self):
         """
         ???
         """
@@ -126,14 +126,14 @@ class B1(BasisFunction):
         raise RuntimeError("B1 isn't twice differentiable.")
 
     @staticmethod
-    def filterSymmetric(s):
+    def filter_symmetric(s):
         return s
 
     @staticmethod
-    def filterPeriodic(s):
+    def filter_periodic(s):
         return s
 
-    def refinementMask(self):
+    def refinement_mask(self):
         order = int(self.support)
         mask = np.zeros(order + 1)
         _multinomial(order, 2, np.zeros(2), 0, 2, order, mask)
@@ -187,7 +187,7 @@ class B2(BasisFunction):
             val = 1.0
         return val
 
-    def refinementMask(self):
+    def refinement_mask(self):
         order = int(self.support)
         mask = np.zeros(order + 1)
         _multinomial(order, 2, np.zeros(2), 0, 2, order, mask)
@@ -247,7 +247,7 @@ class B3(BasisFunction):
         return val
 
     @staticmethod
-    def filterSymmetric(s):
+    def filter_symmetric(s):
         M = len(s)
         pole = -2.0 + np.sqrt(3.0)
 
@@ -275,7 +275,7 @@ class B3(BasisFunction):
         return c
 
     @staticmethod
-    def filterPeriodic(s):
+    def filter_periodic(s):
         M = len(s)
         pole = -2.0 + np.sqrt(3.0)
 
@@ -303,7 +303,7 @@ class B3(BasisFunction):
         c[np.where(abs(c) < eps)] = 0.0
         return c
 
-    def refinementMask(self):
+    def refinement_mask(self):
         order = int(self.support)
         mask = np.zeros(order + 1)
         _multinomial(order, 2, np.zeros(2), 0, 2, order, mask)
@@ -387,7 +387,7 @@ class Exponential(BasisFunction):
 
         return (L * val) / (alpha * alpha)
 
-    def filterSymmetric(self, s):
+    def filter_symmetric(self, s):
         self.M = len(s)
         b0 = self.value(0)
         b1 = self.value(1)
@@ -421,7 +421,7 @@ class Exponential(BasisFunction):
         c[np.where(np.abs(c) < eps)] = 0.0
         return c
 
-    def filterPeriodic(self, s):
+    def filter_periodic(self, s):
         self.M = len(s)
         b0 = self.value(0)
         pole = (-b0 + np.sqrt(2.0 * b0 - 1.0)) / (1.0 - b0)
@@ -451,7 +451,7 @@ class Exponential(BasisFunction):
         c[np.where(np.abs(c) < eps)] = 0.0
         return c
 
-    def refinementMask(self):
+    def refinement_mask(self):
         order = int(self.support)
         mask = np.zeros(order + 1)
 
@@ -511,11 +511,11 @@ class CatmullRom(BasisFunction):
         return val
 
     @staticmethod
-    def filterSymmetric(s):
+    def filter_symmetric(s):
         return s
 
     @staticmethod
-    def filterPeriodic(s):
+    def filter_periodic(s):
         return s
 
 
