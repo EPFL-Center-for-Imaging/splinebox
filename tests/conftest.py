@@ -35,6 +35,10 @@ def closed(request):
 def spline_curve(basis_function, M, closed):
     if hasattr(basis_function, "M"):
         M = basis_function.M
+    if isinstance(
+        basis_function, (splinebox.basis_functions.CubicHermite, splinebox.basis_functions.ExponentialHermite)
+    ):
+        return splinebox.spline_curves.HermiteSpline(M, basis_function, closed=closed)
     return splinebox.spline_curves.Spline(M, basis_function, closed=closed)
 
 

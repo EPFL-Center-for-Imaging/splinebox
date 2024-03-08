@@ -8,11 +8,24 @@ def _is_interpolating(spline_curve):
 
 
 def _not_differentiable_twice(spline_curve):
-    return spline_curve.basis_function in [
-        splinebox.basis_functions.B1,
-        splinebox.basis_functions.CubicHermite,
-        splinebox.basis_functions.ExponentialHermite,
-    ]
+    return isinstance(
+        spline_curve.basis_function,
+        (
+            splinebox.basis_functions.B1,
+            splinebox.basis_functions.CubicHermite,
+            splinebox.basis_functions.ExponentialHermite,
+        ),
+    )
+
+
+def _is_hermite_spline(spline_curve):
+    return isinstance(
+        spline_curve.basis_function,
+        (
+            splinebox.basis_functions.CubicHermite,
+            splinebox.basis_functions.ExponentialHermite,
+        ),
+    )
 
 
 def test_eval(spline_curve, coef_gen, derivative, eval_positions):
@@ -26,6 +39,12 @@ def test_eval(spline_curve, coef_gen, derivative, eval_positions):
 
     # Set coefficients
     spline_curve.coefs = coef_gen(spline_curve.M, support, closed)
+
+    if _is_hermite_spline(spline_curve):
+        with pytest.raises(RuntimeError):
+            # Tangents have not been set
+            spline_curve.eval(eval_positions, derivative=derivative)
+        spline_curve.tangents = coef_gen(spline_curve.M, support, closed)
 
     if _is_interpolating(spline_curve) and derivative == 0:
         values = spline_curve.eval(np.arange(spline_curve.M), derivative=derivative)
@@ -48,5 +67,10 @@ def test_set_coefs(spline_curve):
         if len(coefs) != expected:
             with pytest.raises(RuntimeError):
                 spline_curve.coefs = coefs
+            if _is_hermite_spline(spline_curve):
+                with pytest.raises(RuntimeError):
+                    spline_curve.tangents = coefs
         else:
             spline_curve.coefs = coefs
+            if _is_hermite_spline(spline_curve):
+                spline_curve.tangents = coefs
