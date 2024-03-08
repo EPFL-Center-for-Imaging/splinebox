@@ -52,7 +52,10 @@ def eval_positions(request):
 def coef_gen():
     rng = np.random.default_rng(seed=1492)
 
-    def _point_gen(M, support):
-        return rng.random(M + support) * 100
+    def _point_gen(M, support, closed):
+        if closed:
+            return rng.random(M) * 100
+        else:
+            return rng.random(M + support) * 100
 
     return _point_gen
