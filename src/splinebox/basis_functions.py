@@ -103,6 +103,8 @@ class B1(BasisFunction):
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
     def _func(x):
+        if np.isnan(x):
+            return 0
         val = 0
         if abs(x) >= 0 and abs(x) < 1:
             val = 1 - abs(x)
@@ -505,6 +507,8 @@ class CatmullRom(BasisFunction):
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
     def _derivative_2(x):
+        if np.isnan(x):
+            return 0
         val = 0
         if x >= 0 and x <= 1:
             val = 9 * x - 5

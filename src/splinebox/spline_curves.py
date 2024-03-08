@@ -1,7 +1,9 @@
+import collections
 import copy
 import itertools
 import warnings
 
+import numba
 import numpy as np
 import scipy.integrate
 from skimage import measure
@@ -39,23 +41,6 @@ class Spline:
 
     def copy(self):
         return copy.deepcopy(self)
-
-    def sample(self, samplingRate, dt=False):
-        """
-        Should be renamed to eval and take a vector of positions x
-        as an argument instead of samplingRate.
-        """
-        if self.coefs is None:
-            raise RuntimeError(self._no_coefs_msg)
-
-        if len(self.coefs.shape) == 1 or (len(self.coefs.shape) == 2 and self.coefs.shape[1] == 2):
-            N = samplingRate * self.M if self.closed else samplingRate * (self.M - 1) + 1
-
-            curve = [self.parameterToWorld(float(i) / float(samplingRate), dt=dt) for i in range(N)]
-        else:
-            raise RuntimeError(self._wrong_array_size_msg)
-
-        return np.stack(curve)
 
     def draw(self, dimensions):
         """
@@ -423,51 +408,79 @@ class Spline:
 
         return np.stack(curve)
 
-    def parameterToWorld(self, t, dt=False):
+    def eval(self, t, derivative=0):
         """
-        Calculate the spline value at parameter t.
-        Maybe there should be two functions for the
-        value and the derivative instead of a dt parameter.
+        Evalute the spline or one of its derivatives at
+        parameter value(s) `t`.
 
-        Rename to `eval`?
+        Parameters
+        ----------
+        t : numpy.array, float
+            A 1D numpy array or a single float value.
+        derivative : int
+            Can be 0, 1, 2 for the spline, and its
+            first and second derivative respectively.
         """
         if self.coefs is None:
             raise RuntimeError(self._no_coefs_msg)
-
-        value = 0.0
-        if self.closed:
-            for k in range(self.M):
-                tval = self.wrapIndex(t, k)
-                if tval > -self.halfSupport and tval < self.halfSupport:
-                    if dt:
-                        splineValue = self.basis_function.eval_1st_derivative(tval)
-                    else:
-                        splineValue = self.basis_function.eval(tval)
-                    value += self.coefs[k] * splineValue
-        else:
-            for k in range(self.M + int(self.basis_function.support)):
-                tval = t - (k - self.halfSupport)
-                if tval > -self.halfSupport and tval < self.halfSupport:
-                    if dt:
-                        splineValue = self.basis_function.eval_1st_derivative(tval)
-                    else:
-                        splineValue = self.basis_function.eval(tval)
-                    value += self.coefs[k] * splineValue
+        # Get values at which the basis functions have to be evaluated
+        tval = self._get_tval(t)
+        basis_function_values = self.basis_function.eval(tval, derivative=derivative)
+        value = np.nansum(basis_function_values * self.coefs[np.newaxis, :], axis=1)
         return value
 
-    def wrapIndex(self, t, k):
+    def _get_tval(self, t):
         """
-        ???
+        This is a helper method for `eval`. It is its own method
+        to allow :class:`splinebox.spline_curves.HermiteSpline` to
+        overwrite the `eval` method using `_get_tval`.
+        """
+        if not isinstance(t, collections.abc.Iterable):
+            t = np.array([t])
+        if self.closed:
+            # all knot indices
+            k = np.arange(self.M)
+            # output array for the helper function _wrap_index
+            tval = np.full((len(t), len(k)), np.nan)
+            # compute the positions at which the basis functions have to be evaluated
+            # and save them in tval
+            self._wrap_index(t, k, self.halfSupport, self.M, tval)
+        else:
+            # take into account the padding with additional basis functions
+            # for non-closed splines
+            k = np.arange(self.M + int(self.basis_function.support))
+            k = k[np.newaxis, :]
+            t = t[:, np.newaxis]
+            # positions at which the basis functions have to be evaluated
+            tval = t - (k - self.halfSupport)
+        return tval
 
-        Should this be private?
+    @staticmethod
+    @numba.guvectorize(
+        [(numba.float64[:], numba.float64[:], numba.float64, numba.int64, numba.float64[:, :])], "(n),(m),(),()->(n,m)"
+    )
+    def _wrap_index(ts, ks, halfSupport, M, wrapped_tval):
         """
-        wrappedT = t - k
-        if k < t - self.halfSupport:
-            if k + self.M >= t - self.halfSupport and k + self.M <= t + self.halfSupport:
-                wrappedT = t - (k + self.M)
-        elif k > t + self.halfSupport and (k - self.M >= t - self.halfSupport and k - self.M <= t + self.halfSupport):
-            wrappedT = t - (k - self.M)
-        return wrappedT
+        Fill the wrapped_tval array whenever a value t
+        is affected by the basis function at knot k, taking
+        into account that basis functions at the begging/end
+        affect positions on the opposite end for closed splines.
+        """
+        for i, k in enumerate(ks):
+            for j, t in enumerate(ts):
+                if t >= M + k - halfSupport:
+                    # t is close enough to the end to be affected by
+                    # the k-th basis function from the beginning
+                    wrapped_tval[j, i] = t - M - k
+                elif t <= halfSupport - (M - k):
+                    # t is close enough to the beginning to be affected
+                    # by the k-th basis function, which is close to the end
+                    wrapped_tval[j, i] = t + M - k
+                elif t > k + halfSupport or t < k - halfSupport:
+                    # t is outside the support of the k-th basis function
+                    continue
+                else:
+                    wrapped_tval[j, i] = t - k
 
     def centroid(self):
         """
@@ -536,9 +549,6 @@ class HermiteSpline(Spline):
 
         super().__init__(M, basis_function, closed, coefs=coefs)
         self.tangents = tangents
-
-    def copy(self):
-        return copy.deepcopy(self)
 
     def getCoefsFromKnots(self, knots, tangentAtKnots):
         knots = np.array(knots)
@@ -630,16 +640,29 @@ class HermiteSpline(Spline):
         # TODO: This was deleted by Virginie in her cleaned up version
         raise NotImplementedError(Spline._unimplemented_msg)
 
-    def parameterToWorld(self, t, dt=False):
+    def eval(self, t, derivative=0):
+        """
+        Evalute the spline or one of its derivatives at
+        parameter value(s) `t`.
+
+        Parameters
+        ----------
+        t : numpy.array, float
+            A 1D numpy array or a single float value.
+        derivative : int
+            Can be 0, 1, 2 for the spline, and its
+            first and second derivative respectively.
+        """
         if self.coefs is None:
             raise RuntimeError(self._no_coefs_msg)
+        if self.tangents is None:
+            raise RuntimeError(self._no_tangents_msg)
 
-        value = 0.0
-        for k in range(self.M):
-            tval = self.wrapIndex(t, k) if self.closed else t - k
-            if tval > -self.halfSupport and tval < self.halfSupport:
-                splineValue = self.basis_function.eval_1st_derivative(tval) if dt else self.basis_function.eval(tval)
-                value += self.coefs[k] * splineValue[0] + self.tangents[k] * splineValue[1]
+        tval = self._get_tval(t)
+        basis_function_values = self.basis_function.eval(tval, derivative=derivative)
+        value = np.nansum(basis_function_values * self.coefs[np.newaxis, :], axis=1) + np.nansum(
+            basis_function_values * self.tangents[np.newaxis, :]
+        )
         return value
 
     def scale(self, scalingFactor):
