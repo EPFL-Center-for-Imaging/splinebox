@@ -101,7 +101,7 @@ class B1(BasisFunction):
         super().__init__(False, 2.0)
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)])
+    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
     def _func(x):
         val = 0.0
         if abs(x) >= 0 and abs(x) < 1:
@@ -109,7 +109,7 @@ class B1(BasisFunction):
         return val
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)])
+    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
     def _derivative_1(x):
         val = 0
         if x > -1.0 and x < 0:
@@ -152,7 +152,7 @@ class B2(BasisFunction):
         super().__init__(False, 3.0)
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)])
+    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
     def _func(x):
         val = 0.0
         if x >= -1.5 and x <= -0.5:
@@ -164,7 +164,7 @@ class B2(BasisFunction):
         return val
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)])
+    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
     def _derivative_1(x):
         val = 0.0
         if x >= -1.5 and x <= -0.5:
@@ -176,7 +176,7 @@ class B2(BasisFunction):
         return val
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)])
+    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
     def _derivative_2(x):
         val = 0.0
         if x >= -1.5 and x <= -0.5:
@@ -209,7 +209,7 @@ class B3(BasisFunction):
         super().__init__(False, 4.0)
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)])
+    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
     def _func(x):
         val = 0.0
         if abs(x) >= 0 and abs(x) < 1:
@@ -219,7 +219,7 @@ class B3(BasisFunction):
         return val
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)])
+    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
     def _derivative_1(x):
         val = 0.0
         if x >= 0 and x < 1:
@@ -233,7 +233,7 @@ class B3(BasisFunction):
         return val
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)])
+    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
     def _derivative_2(x):
         val = 0.0
         if x >= 0 and x < 1:
@@ -334,7 +334,9 @@ class Exponential(BasisFunction):
         return self.__func(x, self.support / 2, self.M, self.alpha)
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64, numba.float64, numba.float64, numba.float64)])
+    @numba.vectorize(
+        [numba.float64(numba.float64, numba.float64, numba.float64, numba.float64)], nopython=True, cache=True
+    )
     def __func(x, half_support, M, alpha):
         x += half_support
         L = (np.sin(np.pi / M) / (np.pi / M)) ** (-2)
@@ -353,7 +355,9 @@ class Exponential(BasisFunction):
         return self.__derivative_1(x, self.support / 2, self.M, self.alpha)
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64, numba.float64, numba.float64, numba.float64)])
+    @numba.vectorize(
+        [numba.float64(numba.float64, numba.float64, numba.float64, numba.float64)], nopython=True, cache=True
+    )
     def __derivative_1(x, half_support, M, alpha):
         x += half_support
         L = (np.sin(np.pi / M) / (np.pi / M)) ** (-2)
@@ -372,7 +376,9 @@ class Exponential(BasisFunction):
         return self.__derivative_2(x, self.support / 2, self.M, self.alpha)
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64, numba.float64, numba.float64, numba.float64)])
+    @numba.vectorize(
+        [numba.float64(numba.float64, numba.float64, numba.float64, numba.float64)], nopython=True, cache=True
+    )
     def __derivative_2(x, half_support, M, alpha):
         x += half_support
         L = (np.sin(np.pi / M) / (np.pi / M)) ** (-2)
@@ -473,7 +479,7 @@ class CatmullRom(BasisFunction):
         super().__init__(False, 4.0)
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)])
+    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
     def _func(x):
         val = 0.0
         if np.abs(x) >= 0 and np.abs(x) <= 1:
@@ -483,7 +489,7 @@ class CatmullRom(BasisFunction):
         return val
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)])
+    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
     def _derivative_1(x):
         val = 0.0
         if x >= 0 and x <= 1:
@@ -497,7 +503,7 @@ class CatmullRom(BasisFunction):
         return val
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)])
+    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
     def _derivative_2(x):
         val = 0.0
         if x >= 0 and x <= 1:
@@ -531,7 +537,7 @@ class CubicHermite(BasisFunction):
         return np.array([self.h31(x), self.h32(x)])
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)])
+    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
     def h31(x):
         val = 0.0
         if x >= 0 and x <= 1:
@@ -541,7 +547,7 @@ class CubicHermite(BasisFunction):
         return val
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)])
+    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
     def h32(x):
         val = 0.0
         if x >= 0 and x <= 1:
@@ -554,7 +560,7 @@ class CubicHermite(BasisFunction):
         return np.array([self.h31prime(x), self.h32prime(x)])
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)])
+    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
     def h31prime(x):
         val = 0.0
         if x >= 0 and x <= 1:
@@ -564,7 +570,7 @@ class CubicHermite(BasisFunction):
         return val
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)])
+    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
     def h32prime(x):
         val = 0.0
         if x >= 0 and x <= 1:
@@ -678,7 +684,7 @@ class ExponentialHermite(BasisFunction):
         return np.array([self._he31(x, self.alpha), self._he32(x, self.alpha)])
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64, numba.float64)])
+    @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
     def _he31(x, alpha):
         def _g1(x, alpha):
             val = 0.0
@@ -696,7 +702,7 @@ class ExponentialHermite(BasisFunction):
         return val
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64, numba.float64)])
+    @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
     def _he32(x, alpha):
         def _g2(x, alpha):
             val = 0.0
@@ -720,7 +726,7 @@ class ExponentialHermite(BasisFunction):
         return np.array([self._he31prime(x, self.alpha), self._he32prime(x, self.alpha)])
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64, numba.float64)])
+    @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
     def _he31prime(x, alpha):
         def _g1prime(x, alpha):
             val = 0.0
@@ -734,7 +740,7 @@ class ExponentialHermite(BasisFunction):
         return val
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64, numba.float64)])
+    @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
     def _he32prime(x, alpha):
         def _g2prime(x, alpha):
             val = 0.0
