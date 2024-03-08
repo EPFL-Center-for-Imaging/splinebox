@@ -397,8 +397,8 @@ class Exponential(BasisFunction):
 
     def filter_symmetric(self, s):
         self.M = len(s)
-        b0 = self.value(0)
-        b1 = self.value(1)
+        b0 = self._func(0)
+        b1 = self._func(1)
         pole = (-b0 + np.sqrt(2 * b0 - 1)) / (1 - b0)
 
         cp = np.zeros(self.M)
@@ -431,7 +431,7 @@ class Exponential(BasisFunction):
 
     def filter_periodic(self, s):
         self.M = len(s)
-        b0 = self.value(0)
+        b0 = self._func(0)
         pole = (-b0 + np.sqrt(2 * b0 - 1)) / (1 - b0)
 
         cp = np.zeros(self.M)
