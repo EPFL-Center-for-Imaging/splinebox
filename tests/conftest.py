@@ -21,7 +21,7 @@ def basis_function(request):
     return basis_function(**params)
 
 
-@pytest.fixture(params=[3, 5, 8])
+@pytest.fixture(params=[4, 5, 8])
 def M(request):
     return request.param
 
@@ -38,11 +38,21 @@ def spline_curve(basis_function, M, closed):
     return splinebox.spline_curves.Spline(M, basis_function, closed=closed)
 
 
+@pytest.fixture(params=[0, 1, 2])
+def derivative(request):
+    return request.param
+
+
+@pytest.fixture(params=[1.5, np.linspace(0, 10, 1000)])
+def eval_positions(request):
+    return request.param
+
+
 @pytest.fixture
 def coef_gen():
     rng = np.random.default_rng(seed=1492)
 
-    def _point_gen(M):
-        return rng.random(M) * 100
+    def _point_gen(M, support):
+        return rng.random(M + support) * 100
 
     return _point_gen

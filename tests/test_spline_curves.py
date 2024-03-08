@@ -15,20 +15,21 @@ def _not_differentiable_twice(spline_curve):
     ]
 
 
-def test_eval(spline_curve, coef_gen):
-    for derivative in range(3):
-        for x in [1.5, np.linspace(0, spline_curve.M, 1000)]:
-            with pytest.raises(RuntimeError):
-                # coefficients have not been set
-                spline_curve.eval(x, derivative=derivative)
+def test_eval(spline_curve, coef_gen, derivative, eval_positions):
+    support = spline_curve.basis_function.support
+    half_support = support / 2
 
-            # Set coefficients
-            spline_curve.coefs = coef_gen(spline_curve.M)
+    with pytest.raises(RuntimeError):
+        # coefficients have not been set
+        spline_curve.eval(eval_positions, derivative=derivative)
 
-            if _is_interpolating(spline_curve) and derivative == 0:
-                values = spline_curve.eval(np.arange(spline_curve.M + 1), derivative=derivative)
-                assert np.all_close(values, spline_curve.coefs)
+    # Set coefficients
+    spline_curve.coefs = coef_gen(spline_curve.M, support)
 
-            if derivative == 2 and _not_differentiable_twice(spline_curve):
-                with pytest.raises(RuntimeError):
-                    spline_curve.eval(x, derivative=derivative)
+    if _is_interpolating(spline_curve) and derivative == 0:
+        values = spline_curve.eval(np.arange(spline_curve.M), derivative=derivative)
+        assert np.allclose(values, spline_curve.coefs[int(half_support) : -int(half_support)])
+
+    if derivative == 2 and _not_differentiable_twice(spline_curve):
+        with pytest.raises(RuntimeError):
+            spline_curve.eval(eval_positions, derivative=derivative)
