@@ -74,3 +74,21 @@ def test_set_coefs(spline_curve):
             spline_curve.coefs = coefs
             if _is_hermite_spline(spline_curve):
                 spline_curve.tangents = coefs
+
+
+def test_spline_with_hermite_basis(hermite_basis_function):
+    """
+    Test that you cannot use a Hermite basis function for a
+    normal spline.
+    """
+    with pytest.raises(ValueError):
+        splinebox.spline_curves.Spline(hermite_basis_function)
+
+
+def test_hermite_spline_with_normal_basis(non_hermite_basis_function):
+    """
+    Test that you can only construct a hermite spline with a hermite basis
+    function.
+    """
+    with pytest.raises(ValueError):
+        splinebox.spline_curves.Spline(non_hermite_basis_function)
