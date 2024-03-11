@@ -59,6 +59,18 @@ class Spline:
                 )
         self._coefs = values
 
+    @property
+    def basis_function(self):
+        return self._basis_function
+
+    @basis_function.setter
+    def basis_function(self, value):
+        if value.multigenerator:
+            raise ValueError(
+                "You are trying to construct a Hermite spline using the ordinary `Spline` class. Use the `HermiteSpline` class instead."
+            )
+        self._basis_function = value
+
     def copy(self):
         return copy.deepcopy(self)
 
@@ -562,12 +574,7 @@ class HermiteSpline(Spline):
     _coef_tangent_mismatch_msg = "It looks like coefs and tangents have different shapes."
     _no_tangents_msg = "This spline doesn't have any tangents."
 
-    def __init__(self, M, basis_function, closed, coefs=None, tangents=None):
-        if not basis_function.multigenerator:
-            raise RuntimeError(
-                "It looks like you are trying to use a single generator to build a multigenerator spline model."
-            )
-
+    def __init__(self, M, basis_function, closed=False, coefs=None, tangents=None):
         super().__init__(M, basis_function, closed, coefs=coefs)
         self.tangents = tangents
 
@@ -590,6 +597,18 @@ class HermiteSpline(Spline):
                     f"Non-closed splines are padded at the ends with additional knots, i.e. the effective number of knots is M + support of the basis function. You provided {n} tangents for a spline with M={self.M} and a basis function with support={support}, expected {padded_M}."
                 )
         self._tangents = values
+
+    @property
+    def basis_function(self):
+        return self._basis_function
+
+    @basis_function.setter
+    def basis_function(self, value):
+        if not value.multigenerator:
+            raise ValueError(
+                "It looks like you are trying to use a single generator to build a multigenerator spline model."
+            )
+        self._basis_function = value
 
     def getCoefsFromKnots(self, knots, tangentAtKnots):
         knots = np.array(knots)

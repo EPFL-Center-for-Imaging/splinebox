@@ -60,6 +60,9 @@ def test_eval(spline_curve, coef_gen, derivative, eval_positions):
 
 
 def test_set_coefs(spline_curve):
+    """
+    Test that you can only set coefficients and tangents of the right length.
+    """
     expected = spline_curve.M if spline_curve.closed else int(spline_curve.M + spline_curve.basis_function.support)
 
     for i in range(expected - 2, expected + 2):
@@ -76,19 +79,19 @@ def test_set_coefs(spline_curve):
                 spline_curve.tangents = coefs
 
 
-def test_spline_with_hermite_basis(hermite_basis_function):
+def test_spline_with_hermite_basis(hermite_basis_function, M):
     """
     Test that you cannot use a Hermite basis function for a
     normal spline.
     """
     with pytest.raises(ValueError):
-        splinebox.spline_curves.Spline(hermite_basis_function)
+        splinebox.spline_curves.Spline(M, hermite_basis_function)
 
 
-def test_hermite_spline_with_normal_basis(non_hermite_basis_function):
+def test_hermite_spline_with_normal_basis(non_hermite_basis_function, M):
     """
     Test that you can only construct a hermite spline with a hermite basis
     function.
     """
     with pytest.raises(ValueError):
-        splinebox.spline_curves.Spline(non_hermite_basis_function)
+        splinebox.spline_curves.HermiteSpline(M, non_hermite_basis_function)
