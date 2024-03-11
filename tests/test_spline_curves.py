@@ -60,15 +60,15 @@ def test_eval(spline_curve, coef_gen, derivative, eval_positions):
 
 
 def test_set_coefs(spline_curve):
-    expected = spline_curve.M if spline_curve.closed else int(spline_curve.M - spline_curve.basis_function.support)
+    expected = spline_curve.M if spline_curve.closed else int(spline_curve.M + spline_curve.basis_function.support)
 
     for i in range(expected - 2, expected + 2):
         coefs = np.arange(i)
         if len(coefs) != expected:
-            with pytest.raises(RuntimeError):
+            with pytest.raises(ValueError):
                 spline_curve.coefs = coefs
             if _is_hermite_spline(spline_curve):
-                with pytest.raises(RuntimeError):
+                with pytest.raises(ValueError):
                     spline_curve.tangents = coefs
         else:
             spline_curve.coefs = coefs

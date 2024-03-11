@@ -39,6 +39,26 @@ class Spline:
         self.closed = closed
         self.coefs = coefs
 
+    @property
+    def coefs(self):
+        return self._coefs
+
+    @coefs.setter
+    def coefs(self, values):
+        if values is not None:
+            n = len(values)
+            if self.closed and n != self.M:
+                raise ValueError(
+                    f"The number of coefficients must match the number of knots for a closed spline. You provided {n} coefficients for a spline with M={self.M} knots."
+                )
+            support = self.basis_function.support
+            padded_M = int(self.M + support)
+            if not self.closed and n != padded_M:
+                raise ValueError(
+                    f"Non-closed splines are padded at the ends with additional knots, i.e. the effective number of knots is M + support of the basis function. You provided {n} coefficients for a spline with M={self.M} and a basis function with support={support}, expected {padded_M}."
+                )
+        self._coefs = values
+
     def copy(self):
         return copy.deepcopy(self)
 
@@ -550,6 +570,26 @@ class HermiteSpline(Spline):
 
         super().__init__(M, basis_function, closed, coefs=coefs)
         self.tangents = tangents
+
+    @property
+    def tangents(self):
+        return self._tangents
+
+    @tangents.setter
+    def tangents(self, values):
+        if values is not None:
+            n = len(values)
+            if self.closed and n != self.M:
+                raise ValueError(
+                    f"The number of tangents must match the number of knots for a closed spline. You provided {n} tangents for a spline with M={self.M} knots."
+                )
+            support = self.basis_function.support
+            padded_M = int(self.M + support)
+            if not self.closed and n != padded_M:
+                raise ValueError(
+                    f"Non-closed splines are padded at the ends with additional knots, i.e. the effective number of knots is M + support of the basis function. You provided {n} tangents for a spline with M={self.M} and a basis function with support={support}, expected {padded_M}."
+                )
+        self._tangents = values
 
     def getCoefsFromKnots(self, knots, tangentAtKnots):
         knots = np.array(knots)
