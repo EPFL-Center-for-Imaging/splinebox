@@ -6,7 +6,6 @@ import warnings
 import numba
 import numpy as np
 import scipy.integrate
-from skimage import measure
 
 
 class Spline:
@@ -303,23 +302,6 @@ class Spline:
                 self.coefs = np.zeros([self.M + int(self.basis_function.support), 2])
                 for k in range(self.M + int(self.basis_function.support)):
                     self.coefs[k] = np.array([cX[0][k], cY[0][k]])
-
-    def getCoefsFromBinaryMask(self, binaryMask):
-        """
-        Same as getCoefsFromDenseContour, except the input
-        is a binary mask.
-        """
-        binaryMask_padded = np.zeros((binaryMask.shape[0] + 2, binaryMask.shape[1] + 2))
-        binaryMask_padded[1:-1, 1:-1] = binaryMask
-        contours = measure.find_contours(binaryMask_padded, 0)
-
-        if len(contours) > 1:
-            raise RuntimeWarning(
-                "Multiple objects were found on the binary mask. Only the first one will be processed."
-            )
-
-        c = contours[0] - 1
-        self.getCoefsFromDenseContour(c)
 
     def arcLength(self, t0, tf=None):
         """
@@ -695,10 +677,6 @@ class HermiteSpline(Spline):
             for k in range(self.M):
                 self.coefs[k] = np.array([cX[0][k], cY[0][k]])
                 self.tangents[k] = np.array([cX[0][k + self.M], cY[0][k + self.M]])
-
-    def getCoefsFromBinaryMask(self, binaryMask):
-        # TODO: This was deleted by Virginie in her cleaned up version
-        raise NotImplementedError(Spline._unimplemented_msg)
 
     def eval(self, t, derivative=0):
         """

@@ -59,7 +59,6 @@ dynamic = ["version"]
 dependencies = [
     "numpy",
     "scipy",
-    "scikit-image",
     "numba",
 ]
 requires-python = ">= 3.8"
