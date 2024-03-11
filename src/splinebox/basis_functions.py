@@ -22,6 +22,7 @@ class BasisFunction:
             The support of the function, i.e. the size of the area
             being mapped to non-zero values.
         """
+        self.multigenerator = multigenerator
         self.support = support
 
     def eval(self, x, derivative=0):
