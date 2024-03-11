@@ -540,6 +540,7 @@ class HermiteSpline(Spline):
     """
 
     _coef_tangent_mismatch_msg = "It looks like coefs and tangents have different shapes."
+    _no_tangents_msg = "This spline doesn't have any tangents."
 
     def __init__(self, M, basis_function, closed, coefs=None, tangents=None):
         if not basis_function.multigenerator:
