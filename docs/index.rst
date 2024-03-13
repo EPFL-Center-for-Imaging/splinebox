@@ -12,6 +12,7 @@ Welcome to splinebox's documentation!
 
    basis_functions
    spline_curves
+   auto_examples/index.rst
 
 .. math::
    f(x) = \sum_{k=0}^{M-1} c[k]\phi(x-k)

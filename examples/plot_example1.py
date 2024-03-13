@@ -1,3 +1,10 @@
+"""
+Closed interpolating splines
+============================
+
+This example shows different closed interpolating splines.
+"""
+
 import math
 
 import matplotlib.pyplot as plt

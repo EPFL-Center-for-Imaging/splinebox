@@ -97,6 +97,7 @@ test = [
 ]
 docs = [
     "matplotlib",
+    "sphinx-gallery",
 ]
 
 [project.urls]
