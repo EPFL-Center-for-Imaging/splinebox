@@ -9,7 +9,7 @@ basis = splinebox.basis_functions.CubicHermite()
 x = np.linspace(-3, 3, 100)
 
 basis_0th = basis.eval(x)
-basis_1st = basis.eval_1st_derivative(x)
+basis_1st = basis.eval(x, derivative=1)
 
 fig.suptitle("H3 basis function and its derivatives")
 axes[0][0].plot(x, basis_0th[0], label=r"$f_1(x)$")

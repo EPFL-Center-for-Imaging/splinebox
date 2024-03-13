@@ -9,8 +9,8 @@ b2 = splinebox.basis_functions.B2()
 x = np.linspace(-2, 2, 100)
 
 b2_0th = b2.eval(x)
-b2_1st = b2.eval_1st_derivative(x)
-b2_2nd = b2.eval_2nd_derivative(x)
+b2_1st = b2.eval(x, derivative=1)
+b2_2nd = b2.eval(x, derivative=2)
 
 
 fig.suptitle("B2 basis function and its derivatives")

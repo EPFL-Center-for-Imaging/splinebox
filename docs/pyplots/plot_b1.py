@@ -9,7 +9,7 @@ b1 = splinebox.basis_functions.B1()
 x = np.linspace(-2, 2, 100)
 
 b1_0th = b1.eval(x)
-b1_1st = b1.eval_1st_derivative(x)
+b1_1st = b1.eval(x, derivative=1)
 
 fig.suptitle("B1 basis function and its derivatives")
 axes[0].plot(x, b1_0th, label=r"$f(x)$")

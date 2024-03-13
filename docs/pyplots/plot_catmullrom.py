@@ -9,8 +9,8 @@ basis = splinebox.basis_functions.CatmullRom()
 x = np.linspace(-3, 3, 100)
 
 basis_0th = basis.eval(x)
-basis_1st = basis.eval_1st_derivative(x)
-basis_2nd = basis.eval_2nd_derivative(x)
+basis_1st = basis.eval(x, derivative=1)
+basis_2nd = basis.eval(x, derivative=2)
 
 fig.suptitle("Keys basis function and its derivatives")
 axes[0].plot(x, basis_0th, label=r"$f(x)$")

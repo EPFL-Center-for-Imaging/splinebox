@@ -10,7 +10,7 @@ basis = splinebox.basis_functions.ExponentialHermite(alpha=alpha)
 x = np.linspace(-3, 3, 100)
 
 basis_0th = basis.eval(x)
-basis_1st = basis.eval_1st_derivative(x)
+basis_1st = basis.eval(x, derivative=1)
 
 fig.suptitle(f"HE3 basis function and its derivatives for $\\alpha={alpha}$")
 axes[0][0].plot(x, basis_0th[0], label=r"$f_1(x)$")
