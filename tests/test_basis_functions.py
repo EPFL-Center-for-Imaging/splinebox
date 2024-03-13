@@ -21,6 +21,13 @@ def test_base_class_filters_and_refinement_mask():
         basis_function.refinement_mask()
 
 
+def test_filters(basis_function, is_interpolating, knot_gen):
+    s = knot_gen()
+    if is_interpolating(basis_function):
+        assert np.allclose(basis_function.filter_symmetric(s), s)
+        assert np.allclose(basis_function.filter_periodic(s), s)
+
+
 def test_derivatives(basis_function, derivative):
     if derivative == 0:
         return

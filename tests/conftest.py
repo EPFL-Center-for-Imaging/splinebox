@@ -106,18 +106,38 @@ def coef_gen(codomain_dimensionality):
 
 
 @pytest.fixture
-def is_interpolating():
-    def _is_interpolating(spline_curve):
-        return np.allclose(spline_curve.basis_function.eval(0), 1)
+def knot_gen(codomain_dimensionality):
+    rng = np.random.default_rng(seed=2657)
+
+    def _knot_gen():
+        return rng.random((100, codomain_dimensionality))
+
+    return _knot_gen
+
+
+@pytest.fixture
+def is_spline():
+    def _is_spline(obj):
+        return isinstance(obj, (splinebox.spline_curves.Spline, splinebox.spline_curves.HermiteSpline))
+
+    return _is_spline
+
+
+@pytest.fixture
+def is_interpolating(is_spline):
+    def _is_interpolating(obj):
+        basis_function = obj.basis_function if is_spline(obj) else obj
+        return np.allclose(basis_function.eval(0), 1)
 
     return _is_interpolating
 
 
 @pytest.fixture
-def not_differentiable_twice():
-    def _not_differentiable_twice(spline_curve):
+def not_differentiable_twice(is_spline):
+    def _not_differentiable_twice(obj):
+        basis_function = obj.basis_function if is_spline(obj) else obj
         return isinstance(
-            spline_curve.basis_function,
+            basis_function,
             (
                 splinebox.basis_functions.B1,
                 splinebox.basis_functions.CubicHermite,
@@ -132,11 +152,8 @@ def not_differentiable_twice():
 def is_hermite_spline():
     def _is_hermite_spline(spline_curve):
         return isinstance(
-            spline_curve.basis_function,
-            (
-                splinebox.basis_functions.CubicHermite,
-                splinebox.basis_functions.ExponentialHermite,
-            ),
+            spline_curve,
+            splinebox.spline_curves.HermiteSpline,
         )
 
     return _is_hermite_spline
