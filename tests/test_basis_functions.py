@@ -3,6 +3,24 @@ import pytest
 import splinebox.basis_functions
 
 
+def test_base_class_eval(derivative):
+    basis_function = splinebox.basis_functions.BasisFunction(False, 2)
+    x = np.arange(10)
+    with pytest.raises(NotImplementedError):
+        basis_function.eval(x, derivative=derivative)
+
+
+def test_base_class_filters_and_refinement_mask():
+    basis_function = splinebox.basis_functions.BasisFunction(False, 2)
+    s = np.arange(10)
+    with pytest.raises(NotImplementedError):
+        basis_function.filter_symmetric(s)
+    with pytest.raises(NotImplementedError):
+        basis_function.filter_periodic(s)
+    with pytest.raises(NotImplementedError):
+        basis_function.refinement_mask()
+
+
 def test_derivatives(basis_function, derivative):
     if derivative == 0:
         return
