@@ -440,7 +440,7 @@ class Spline:
         # Get values at which the basis functions have to be evaluated
         tval = self._get_tval(t)
         basis_function_values = self.basis_function.eval(tval, derivative=derivative)
-        value = np.nansum(basis_function_values * self.coefs[np.newaxis, :], axis=1)
+        value = np.matmul(basis_function_values, self.coefs)
         return value
 
     def _get_tval(self, t):
@@ -480,6 +480,7 @@ class Spline:
         into account that basis functions at the begging/end
         affect positions on the opposite end for closed splines.
         """
+        outside_tvalue = halfSupport + 1
         for i, k in enumerate(ks):
             for j, t in enumerate(ts):
                 if t >= M + k - halfSupport:
@@ -492,7 +493,8 @@ class Spline:
                     wrapped_tval[j, i] = t + M - k
                 elif t > k + halfSupport or t < k - halfSupport:
                     # t is outside the support of the k-th basis function
-                    continue
+                    # this can be any value outside the support
+                    wrapped_tval[j, i] = outside_tvalue
                 else:
                     wrapped_tval[j, i] = t - k
 
@@ -698,9 +700,7 @@ class HermiteSpline(Spline):
 
         tval = self._get_tval(t)
         basis_function_values = self.basis_function.eval(tval, derivative=derivative)
-        value = np.nansum(basis_function_values * self.coefs[np.newaxis, :], axis=1) + np.nansum(
-            basis_function_values * self.tangents[np.newaxis, :]
-        )
+        value = np.matmul(basis_function_values, self.coefs) + np.matmul(basis_function_values, self.tangents)
         return value
 
     def scale(self, scalingFactor):
