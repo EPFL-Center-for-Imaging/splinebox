@@ -103,3 +103,40 @@ def coef_gen(codomain_dimensionality):
         return np.squeeze(points)
 
     return _point_gen
+
+
+@pytest.fixture
+def is_interpolating():
+    def _is_interpolating(spline_curve):
+        return np.allclose(spline_curve.basis_function.eval(0), 1)
+
+    return _is_interpolating
+
+
+@pytest.fixture
+def not_differentiable_twice():
+    def _not_differentiable_twice(spline_curve):
+        return isinstance(
+            spline_curve.basis_function,
+            (
+                splinebox.basis_functions.B1,
+                splinebox.basis_functions.CubicHermite,
+                splinebox.basis_functions.ExponentialHermite,
+            ),
+        )
+
+    return _not_differentiable_twice
+
+
+@pytest.fixture
+def is_hermite_spline():
+    def _is_hermite_spline(spline_curve):
+        return isinstance(
+            spline_curve.basis_function,
+            (
+                splinebox.basis_functions.CubicHermite,
+                splinebox.basis_functions.ExponentialHermite,
+            ),
+        )
+
+    return _is_hermite_spline
