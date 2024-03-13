@@ -171,3 +171,7 @@ cython_debug/
 
 # virtual environment for development
 venv_splinebox
+
+# example gallery files
+docs/auto_examples
+docs/sg_execution_times.rst
