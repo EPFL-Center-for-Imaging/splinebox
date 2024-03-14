@@ -91,7 +91,7 @@ def codomain_dimensionality(request):
 
 
 @pytest.fixture
-def coef_gen(codomain_dimensionality):
+def coeff_gen(codomain_dimensionality):
     rng = np.random.default_rng(seed=1492)
 
     def _point_gen(M, support, closed):

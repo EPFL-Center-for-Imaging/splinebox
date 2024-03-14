@@ -4,7 +4,7 @@ import splinebox.basis_functions
 
 
 def test_eval(
-    spline_curve, coef_gen, derivative, eval_positions, is_hermite_spline, not_differentiable_twice, is_interpolating
+    spline_curve, coeff_gen, derivative, eval_positions, is_hermite_spline, not_differentiable_twice, is_interpolating
 ):
     support = spline_curve.basis_function.support
     half_support = support / 2
@@ -15,17 +15,17 @@ def test_eval(
         spline_curve.eval(eval_positions, derivative=derivative)
 
     # Set coefficients
-    spline_curve.coefs = coef_gen(spline_curve.M, support, closed)
+    spline_curve.coeffs = coeff_gen(spline_curve.M, support, closed)
 
     if is_hermite_spline(spline_curve):
         with pytest.raises(RuntimeError):
             # Tangents have not been set
             spline_curve.eval(eval_positions, derivative=derivative)
-        spline_curve.tangents = coef_gen(spline_curve.M, support, closed)
+        spline_curve.tangents = coeff_gen(spline_curve.M, support, closed)
 
     if is_interpolating(spline_curve) and derivative == 0:
         values = spline_curve.eval(np.arange(spline_curve.M), derivative=derivative)
-        expected = spline_curve.coefs if closed else spline_curve.coefs[int(half_support) : -int(half_support)]
+        expected = spline_curve.coeffs if closed else spline_curve.coeffs[int(half_support) : -int(half_support)]
         assert np.allclose(values, expected)
 
     elif derivative == 2 and not_differentiable_twice(spline_curve):
@@ -36,24 +36,24 @@ def test_eval(
         spline_curve.eval(eval_positions, derivative=derivative)
 
 
-def test_set_coefs(spline_curve, is_hermite_spline):
+def test_set_coeffs(spline_curve, is_hermite_spline):
     """
     Test that you can only set coefficients and tangents of the right length.
     """
     expected = spline_curve.M if spline_curve.closed else int(spline_curve.M + spline_curve.basis_function.support)
 
     for i in range(expected - 2, expected + 2):
-        coefs = np.arange(i)
-        if len(coefs) != expected:
+        coeffs = np.arange(i)
+        if len(coeffs) != expected:
             with pytest.raises(ValueError):
-                spline_curve.coefs = coefs
+                spline_curve.coeffs = coeffs
             if is_hermite_spline(spline_curve):
                 with pytest.raises(ValueError):
-                    spline_curve.tangents = coefs
+                    spline_curve.tangents = coeffs
         else:
-            spline_curve.coefs = coefs
+            spline_curve.coeffs = coeffs
             if is_hermite_spline(spline_curve):
-                spline_curve.tangents = coefs
+                spline_curve.tangents = coeffs
 
 
 def test_spline_with_hermite_basis(hermite_basis_function, M):

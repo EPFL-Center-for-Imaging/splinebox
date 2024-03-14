@@ -22,12 +22,12 @@ class Spline:
         Whether or not the spline is closed, i.e. the two ends connect.
     """
 
-    _wrong_dimension_msg = "It looks like coefs is a 2D array with second dimension different than two. I don't know how to handle this yet."
-    _wrong_array_size_msg = "It looks like coefs is neither a 1 nor a 2D array. I don't know how to handle this yet."
-    _no_coefs_msg = "This model doesn't have any coefficients."
+    _wrong_dimension_msg = "It looks like coeffs is a 2D array with second dimension different than two. I don't know how to handle this yet."
+    _wrong_array_size_msg = "It looks like coeffs is neither a 1 nor a 2D array. I don't know how to handle this yet."
+    _no_coeffs_msg = "This model doesn't have any coefficients."
     _unimplemented_msg = "This function is not implemented."
 
-    def __init__(self, M, basis_function, closed=False, coefs=None):
+    def __init__(self, M, basis_function, closed=False, coeffs=None):
         if basis_function.support <= M:
             self.M = M
         else:
@@ -35,15 +35,17 @@ class Spline:
 
         self.basis_function = basis_function
         self.halfSupport = self.basis_function.support / 2.0
+        print(f"Spline.__init__(): making {self.halfSupport=} an int → {int(self.halfSupport)}")
+        self.halfSupport = int(self.halfSupport)
         self.closed = closed
-        self.coefs = coefs
+        self.coeffs = coeffs
 
     @property
-    def coefs(self):
-        return self._coefs
+    def coeffs(self):
+        return self._coeffs
 
-    @coefs.setter
-    def coefs(self, values):
+    @coeffs.setter
+    def coeffs(self, values):
         if values is not None:
             n = len(values)
             if self.closed and n != self.M:
@@ -56,7 +58,7 @@ class Spline:
                 raise ValueError(
                     f"Non-closed splines are padded at the ends with additional knots, i.e. the effective number of knots is M + support of the basis function. You provided {n} coefficients for a spline with M={self.M} and a basis function with support={support}, expected {padded_M}."
                 )
-        self._coefs = values
+        self._coeffs = values
 
     @property
     def basis_function(self):
@@ -82,10 +84,10 @@ class Spline:
         of asking for the dimensions. Like that the user can choose how densly
         they want to sample the grid.
         """
-        if self.coefs is None:
-            raise RuntimeError(self._no_coefs_msg)
+        if self.coeffs is None:
+            raise RuntimeError(self._no_coeffs_msg)
 
-        if len(self.coefs.shape) == 2 and self.coefs.shape[1] == 2:
+        if len(self.coeffs.shape) == 2 and self.coeffs.shape[1] == 2:
             if self.closed:
                 warnings.warn(
                     "draw() will take ages, go get yourself a coffee.",
@@ -121,8 +123,8 @@ class Spline:
         Number that can be integrated along the entire spline
         to determine where it wraps around the origin or not.
         """
-        r = self.parameterToWorld(t)
-        dr = self.parameterToWorld(t, dt=True)
+        r = self.eval(t)
+        dr = self.eval(t, dt=True)
 
         r2 = np.linalg.norm(r) ** 2
         val = (1.0 / r2) * (r[0] * dr[1] - r[1] * dr[0])
@@ -141,12 +143,12 @@ class Spline:
         point : numpy.array
         """
         if self.closed:
-            originalCoefs = copy.deepcopy(self.coefs)
-            self.coefs = originalCoefs - point
+            originalCoefs = copy.deepcopy(self.coeffs)
+            self.coeffs = originalCoefs - point
 
             res = scipy.integrate.quad(self.windingNumber, 0, self.M)
 
-            self.coefs = originalCoefs
+            self.coeffs = originalCoefs
 
             val = res[0]
             if np.abs(val - 2.0 * np.pi) < 1e-6:
@@ -159,22 +161,24 @@ class Spline:
             raise RuntimeError("isInside() can only be used with closed curves.")
 
     def getKnotsFromCoefs(self):
-        if len(self.coefs.shape) == 1:
-            knots = np.zeros(self.M)
+        if len(self.coeffs.shape) == 1:
             if self.closed:
+                knots = np.zeros(self.M)
                 for k in range(self.M):
-                    knots[k] = self.parameterToWorld(k, dt=False)
+                    knots[k] = self.eval(k)
             else:
-                for k in range(-self.halfSupport, self.M + self.halfSupport):
-                    knots[k] = self.parameterToWorld(k, dt=False)
-        elif len(self.coefs.shape) == 2 and (self.coefs.shape[1] == 2):
-            knots = np.zeros((self.M, 2))
+                knots = np.zeros(self.M + 2*self.halfSupport)
+                for kn, k in enumerate(range(-self.halfSupport, self.M + self.halfSupport)):
+                    knots[kn] = self.eval(k)
+        elif len(self.coeffs.shape) == 2 and (self.coeffs.shape[1] == 2):
             if self.closed:
+                knots = np.zeros((self.M, 2))
                 for k in range(self.M):
-                    knots[k] = self.parameterToWorld(k, dt=False)
+                    knots[k] = self.eval(k)
             else:
-                for k in range(-self.halfSupport, self.M + self.halfSupport):
-                    knots[k] = self.parameterToWorld(k, dt=False)
+                knots = np.zeros((self.M + 2*self.halfSupport, 2))
+                for kn, k in enumerate(range(-self.halfSupport, self.M + self.halfSupport)):
+                    knots[kn] = self.eval(k)
         return knots
 
     def getCoefsFromKnots(self, knots):
@@ -188,29 +192,31 @@ class Spline:
         knots = np.array(knots)
         if len(knots.shape) == 1:
             if self.closed:
-                self.coefs = self.basis_function.filter_periodic(knots)
+                self.coeffs = self.basis_function.filter_periodic(knots)
             else:
                 for _i in range(int(self.halfSupport)):
+                    # knots = np.append(knots, knots[-1-_i] + (knots[-1-_i]-knots[-(_i+1)*2]) )
                     knots = np.append(knots, knots[-1])
                 for _i in range(int(self.halfSupport)):
+                    # knots = np.append(knots[0+_i] + (knots[0+_i]-knots[2*(_i+1)-1]), knots)
                     knots = np.append(knots[0], knots)
-                self.coefs = self.basis_function.filter_symmetric(knots)
+                self.coeffs = self.basis_function.filter_symmetric(knots)
         elif len(knots.shape) == 2:
             if knots.shape[1] == 2:
                 if self.closed:
-                    coefsX = self.basis_function.filter_periodic(knots[:, 0])
-                    coefsY = self.basis_function.filter_periodic(knots[:, 1])
+                    coeffsX = self.basis_function.filter_periodic(knots[:, 0])
+                    coeffsY = self.basis_function.filter_periodic(knots[:, 1])
                 else:
                     for _i in range(int(self.halfSupport)):
                         knots = np.vstack((knots, knots[-1]))
                     for _i in range(int(self.halfSupport)):
                         knots = np.vstack((knots[0], knots))
-                    coefsX = self.basis_function.filter_symmetric(knots[:, 0])
-                    coefsY = self.basis_function.filter_symmetric(knots[:, 1])
-                self.coefs = np.hstack(
+                    coeffsX = self.basis_function.filter_symmetric(knots[:, 0])
+                    coeffsY = self.basis_function.filter_symmetric(knots[:, 1])
+                self.coeffs = np.hstack(
                     (
-                        np.array([coefsX]).transpose(),
-                        np.array([coefsY]).transpose(),
+                        np.array([coeffsX]).transpose(),
+                        np.array([coeffsY]).transpose(),
                     )
                 )
             else:
@@ -282,26 +288,26 @@ class Spline:
             c = np.linalg.lstsq(phi, r, rcond=None)
 
             if self.closed:
-                self.coefs = np.zeros([self.M])
+                self.coeffs = np.zeros([self.M])
                 for k in range(self.M):
-                    self.coefs[k] = c[0][k]
+                    self.coeffs[k] = c[0][k]
             else:
-                self.coefs = np.zeros([self.M + int(self.basis_function.support)])
+                self.coeffs = np.zeros([self.M + int(self.basis_function.support)])
                 for k in range(self.M + int(self.basis_function.support)):
-                    self.coefs[k] = c[0][k]
+                    self.coeffs[k] = c[0][k]
 
         elif len(contourPoints.shape) == 2 and contourPoints.shape[1] == 2:
             cX = np.linalg.lstsq(phi, r[:, 0], rcond=None)
             cY = np.linalg.lstsq(phi, r[:, 1], rcond=None)
 
             if self.closed:
-                self.coefs = np.zeros([self.M, 2])
+                self.coeffs = np.zeros([self.M, 2])
                 for k in range(self.M):
-                    self.coefs[k] = np.array([cX[0][k], cY[0][k]])
+                    self.coeffs[k] = np.array([cX[0][k], cY[0][k]])
             else:
-                self.coefs = np.zeros([self.M + int(self.basis_function.support), 2])
+                self.coeffs = np.zeros([self.M + int(self.basis_function.support), 2])
                 for k in range(self.M + int(self.basis_function.support)):
-                    self.coefs[k] = np.array([cX[0][k], cY[0][k]])
+                    self.coeffs[k] = np.array([cX[0][k], cY[0][k]])
 
     def arcLength(self, t0, tf=None):
         """
@@ -329,7 +335,7 @@ class Spline:
             t0 = temp
 
         integral = scipy.integrate.quad(
-            lambda t: np.linalg.norm(self.parameterToWorld(t, dt=True)),
+            lambda t: np.linalg.norm(self.eval(t, dt=True)),
             t0,
             tf,
             epsabs=1e-6,
@@ -396,10 +402,10 @@ class Spline:
         Perhaps it makes sense to ask the user to provide an array of distances
         instead of the numSamples.
         """
-        if self.coefs is None:
+        if self.coeffs is None:
             raise RuntimeError(self.noCoefsMessage)
 
-        if len(self.coefs.shape) == 1 or (len(self.coefs.shape) == 2 and self.coefs.shape[1] == 2):
+        if len(self.coeffs.shape) == 1 or (len(self.coeffs.shape) == 2 and self.coeffs.shape[1] == 2):
             N = numSamples if self.closed else numSamples - 1
             L = self.arcLength(0)
 
@@ -413,9 +419,9 @@ class Spline:
             else:
                 ts.append(self.M - 1)
 
-            curve = np.array([self.parameterToWorld(t, dt=dt) for t in ts])
+            curve = np.array([self.eval(t, dt=dt) for t in ts])
 
-            curve = curve[~np.all(curve == 0)] if len(self.coefs.shape) == 1 else curve[~np.all(curve == 0, axis=1)]
+            curve = curve[~np.all(curve == 0)] if len(self.coeffs.shape) == 1 else curve[~np.all(curve == 0, axis=1)]
 
         else:
             raise RuntimeError(self.wrongArraySizeMessage)
@@ -435,12 +441,12 @@ class Spline:
             Can be 0, 1, 2 for the spline, and its
             first and second derivative respectively.
         """
-        if self.coefs is None:
-            raise RuntimeError(self._no_coefs_msg)
+        if self.coeffs is None:
+            raise RuntimeError(self._no_coeffs_msg)
         # Get values at which the basis functions have to be evaluated
         tval = self._get_tval(t)
         basis_function_values = self.basis_function.eval(tval, derivative=derivative)
-        value = np.matmul(basis_function_values, self.coefs)
+        value = np.matmul(basis_function_values, self.coeffs)
         return value
 
     def _get_tval(self, t):
@@ -508,7 +514,7 @@ class Spline:
         centroid = np.zeros(2)
 
         for k in range(self.M):
-            centroid += self.coefs[k]
+            centroid += self.coeffs[k]
 
         return centroid / self.M
 
@@ -518,7 +524,7 @@ class Spline:
         Is vector the right name here or can it also be a scalar?
         """
         for k in range(self.M):
-            self.coefs[k] += translationVector
+            self.coeffs[k] += translationVector
 
     def scale(self, scalingFactor):
         """
@@ -529,8 +535,8 @@ class Spline:
         centroid = self.centroid()
 
         for k in range(self.M):
-            vectorToCentroid = self.coefs[k] - centroid
-            self.coefs[k] = centroid + scalingFactor * vectorToCentroid
+            vectorToCentroid = self.coeffs[k] - centroid
+            self.coeffs[k] = centroid + scalingFactor * vectorToCentroid
 
     def rotate(self, rotationMatrix):
         """
@@ -538,7 +544,7 @@ class Spline:
         Should the dimensionality be checked here?
         """
         for k in range(self.M):
-            self.coefs[k] = np.matmul(rotationMatrix, self.coefs[k])
+            self.coeffs[k] = np.matmul(rotationMatrix, self.coeffs[k])
 
 
 class HermiteSpline(Spline):
@@ -555,11 +561,11 @@ class HermiteSpline(Spline):
         Whether or not the spline is closed, i.e. the two ends connect.
     """
 
-    _coef_tangent_mismatch_msg = "It looks like coefs and tangents have different shapes."
+    _coef_tangent_mismatch_msg = "It looks like coeffs and tangents have different shapes."
     _no_tangents_msg = "This spline doesn't have any tangents."
 
-    def __init__(self, M, basis_function, closed=False, coefs=None, tangents=None):
-        super().__init__(M, basis_function, closed, coefs=coefs)
+    def __init__(self, M, basis_function, closed=False, coeffs=None, tangents=None):
+        super().__init__(M, basis_function, closed, coeffs=coeffs)
         self.tangents = tangents
 
     @property
@@ -602,11 +608,11 @@ class HermiteSpline(Spline):
             raise RuntimeError(self.coefTangentMismatchMessage)
 
         if len(knots.shape) == 1:
-            self.coefs = knots
+            self.coeffs = knots
             self.tangents = tangentAtKnots
         elif len(knots.shape) == 2:
             if knots.shape[1] == 2:
-                self.coefs = knots
+                self.coeffs = knots
                 self.tangents = tangentAtKnots
             else:
                 raise RuntimeError(self._wrong_dimension_msg)
@@ -664,20 +670,20 @@ class HermiteSpline(Spline):
         if len(contourPoints.shape) == 1:
             c = np.linalg.lstsq(phi, r, rcond=None)
 
-            self.coefs = np.zeros([self.M])
+            self.coeffs = np.zeros([self.M])
             self.tangents = np.zeros([self.M])
             for k in range(self.M):
-                self.coefs[k] = c[0][k]
+                self.coeffs[k] = c[0][k]
                 self.tangents[k] = c[0][k + self.M]
 
         elif len(contourPoints.shape) == 2 and (contourPoints.shape[1] == 2):
             cX = np.linalg.lstsq(phi, r[:, 0], rcond=None)
             cY = np.linalg.lstsq(phi, r[:, 1], rcond=None)
 
-            self.coefs = np.zeros([self.M, 2])
+            self.coeffs = np.zeros([self.M, 2])
             self.tangents = np.zeros([self.M, 2])
             for k in range(self.M):
-                self.coefs[k] = np.array([cX[0][k], cY[0][k]])
+                self.coeffs[k] = np.array([cX[0][k], cY[0][k]])
                 self.tangents[k] = np.array([cX[0][k + self.M], cY[0][k + self.M]])
 
     def eval(self, t, derivative=0):
@@ -693,14 +699,14 @@ class HermiteSpline(Spline):
             Can be 0, 1, 2 for the spline, and its
             first and second derivative respectively.
         """
-        if self.coefs is None:
-            raise RuntimeError(self._no_coefs_msg)
+        if self.coeffs is None:
+            raise RuntimeError(self._no_coeffs_msg)
         if self.tangents is None:
             raise RuntimeError(self._no_tangents_msg)
 
         tval = self._get_tval(t)
         basis_function_values = self.basis_function.eval(tval, derivative=derivative)
-        value = np.matmul(basis_function_values, self.coefs) + np.matmul(basis_function_values, self.tangents)
+        value = np.matmul(basis_function_values, self.coeffs) + np.matmul(basis_function_values, self.tangents)
         return value
 
     def scale(self, scalingFactor):
