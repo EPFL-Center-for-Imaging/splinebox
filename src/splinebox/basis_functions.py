@@ -802,3 +802,112 @@ def _multinomial(
             )
 
     return
+
+
+@numba.vectorize([numba.float64(numba.float64, numba.int64)], nopython=True, cache=True)
+def b1_eval(x, derivative):
+    val = 0
+    if derivative == 0:
+        if np.abs(x) >= 0 and np.abs(x) < 1:
+            val = 1 - np.abs(x)
+    elif derivative == 1:
+        if x > -1 and x < 0:
+            val = 1
+        elif x > 0 and x < 1:
+            val = -1
+        elif x == 0 or x == -1 or x == 1:
+            # This is the gradient you'll get at exactly 0
+            val = np.nan
+    elif derivative > 1:
+        raise RuntimeError("B1 isn't twice differentiable.")
+    return val
+
+
+@numba.vectorize([numba.float64(numba.float64, numba.int64)], nopython=True, cache=True)
+def b3_eval(x, derivative):
+    val = 0
+    if derivative == 0:
+        if abs(x) >= 0 and abs(x) < 1:
+            val = 2 / 3 - (abs(x) ** 2) + (abs(x) ** 3) / 2
+        elif abs(x) >= 1 and abs(x) <= 2:
+            val = ((2 - abs(x)) ** 3) / 6
+    elif derivative == 1:
+        if x >= 0 and x < 1:
+            val = -2 * x + 1.5 * x * x
+        elif x > -1 and x < 0:
+            val = -2 * x - 1.5 * x * x
+        elif x >= 1 and x <= 2:
+            val = -0.5 * ((2 - x) ** 2)
+        elif x >= -2 and x <= -1:
+            val = 0.5 * ((2 + x) ** 2)
+    elif derivative == 2:
+        if x >= 0 and x < 1:
+            val = -2 + 3 * x
+        elif x > -1 and x < 0:
+            val = -2 - 3 * x
+        elif x >= 1 and x <= 2:
+            val = 2 - x
+        elif x >= -2 and x <= -1:
+            val = 2 + x
+    return val
+
+
+@numba.vectorize([numba.float64(numba.float64, numba.int64)], nopython=True, cache=True)
+def catmullrom_eval(x, derivative):
+    val = 0
+    if derivative == 0:
+        if np.abs(x) >= 0 and np.abs(x) <= 1:
+            val = (3 / 2) * (np.abs(x) ** 3) - (5 / 2) * (np.abs(x) ** 2) + 1
+        elif np.abs(x) > 1 and np.abs(x) <= 2:
+            val = (-1 / 2) * (np.abs(x) ** 3) + (5 / 2) * (np.abs(x) ** 2) - 4 * np.abs(x) + 2
+    elif derivative == 1:
+        if x >= 0 and x <= 1:
+            val = x * (4.5 * x - 5)
+        elif x >= -1 and x < 0:
+            val = -x * (4.5 * x + 5)
+        elif x > 1 and x <= 2:
+            val = -1.5 * x * x + 5 * x - 4
+        elif x >= -2 and x < -1:
+            val = 1.5 * x * x + 5 * x + 4
+    elif derivative == 2:
+        if x >= 0 and x <= 1:
+            val = 9 * x - 5
+        elif x >= -1 and x < 0:
+            val = -9 * x - 5
+        elif x > 1 and x <= 2:
+            val = -3 * x + 5
+        elif x >= -2 and x < -1:
+            val = 3 * x + 5
+    return val
+
+
+@numba.vectorize(
+    [numba.float64(numba.float64, numba.int64, numba.int64, numba.float64, numba.float64)], nopython=True, cache=True
+)
+def exponential_eval(x, derivative, M, alpha, half_support):
+    val = 0
+    x += half_support
+    L = (np.sin(np.pi / M) / (np.pi / M)) ** (-2)
+    if derivative == 0:
+        if x >= 0 and x < 1:
+            val = 2 * np.sin(alpha * 0.5 * x) * np.sin(alpha * 0.5 * x)
+        elif x >= 1 and x < 2:
+            val = np.cos(alpha * (x - 2)) + np.cos(alpha * (x - 1)) - 2 * np.cos(alpha)
+        elif x >= 2 and x <= 3:
+            val = 2 * np.sin(alpha * 0.5 * (x - 3)) * np.sin(alpha * 0.5 * (x - 3))
+    elif derivative == 1:
+        if x >= 0 and x <= 1:
+            val = alpha * np.sin(alpha * x)
+        elif x > 1 and x <= 2:
+            val = alpha * (np.sin(alpha * (1 - x)) + np.sin(alpha * (2 - x)))
+        elif x > 2 and x <= 3:
+            val = alpha * np.sin(alpha * (x - 3))
+    elif derivative == 2:
+        if x >= 0 and x <= 1:
+            val = alpha * alpha * np.cos(alpha * x)
+        elif x > 1 and x <= 2:
+            val = alpha * alpha * (-np.cos(alpha * (1 - x)) - np.cos(alpha * (2 - x)))
+        elif x > 2 and x <= 3:
+            val = alpha * alpha * np.cos(alpha * (x - 3))
+
+    return (L * val) / (alpha * alpha)

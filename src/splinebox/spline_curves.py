@@ -1,11 +1,15 @@
 import collections
 import copy
+import functools
 import itertools
+import math
 import warnings
 
 import numba
 import numpy as np
 import scipy.integrate
+
+import splinebox.basis_functions
 
 
 class Spline:
@@ -34,9 +38,7 @@ class Spline:
             raise RuntimeError("M must be greater or equal than the spline generator support size.")
 
         self.basis_function = basis_function
-        self.halfSupport = self.basis_function.support / 2.0
-        print(f"Spline.__init__(): making {self.halfSupport=} an int → {int(self.halfSupport)}")
-        self.halfSupport = int(self.halfSupport)
+        self.halfSupport = math.ceil(self.basis_function.support / 2)
         self.closed = closed
         self.coeffs = coeffs
 
@@ -53,7 +55,9 @@ class Spline:
                     f"The number of coefficients must match the number of knots for a closed spline. You provided {n} coefficients for a spline with M={self.M} knots."
                 )
             support = self.basis_function.support
-            padded_M = int(self.M + support)
+            # use half support here instead of support, because it accounts for
+            # the necessary round up for odd numbered supports
+            padded_M = int(self.M + 2 * self.halfSupport)
             if not self.closed and n != padded_M:
                 raise ValueError(
                     f"Non-closed splines are padded at the ends with additional knots, i.e. the effective number of knots is M + support of the basis function. You provided {n} coefficients for a spline with M={self.M} and a basis function with support={support}, expected {padded_M}."
@@ -167,7 +171,7 @@ class Spline:
                 for k in range(self.M):
                     knots[k] = self.eval(k)
             else:
-                knots = np.zeros(self.M + 2*self.halfSupport)
+                knots = np.zeros(self.M + 2 * self.halfSupport)
                 for kn, k in enumerate(range(-self.halfSupport, self.M + self.halfSupport)):
                     knots[kn] = self.eval(k)
         elif len(self.coeffs.shape) == 2 and (self.coeffs.shape[1] == 2):
@@ -176,7 +180,7 @@ class Spline:
                 for k in range(self.M):
                     knots[k] = self.eval(k)
             else:
-                knots = np.zeros((self.M + 2*self.halfSupport, 2))
+                knots = np.zeros((self.M + 2 * self.halfSupport, 2))
                 for kn, k in enumerate(range(-self.halfSupport, self.M + self.halfSupport)):
                     knots[kn] = self.eval(k)
         return knots
@@ -194,10 +198,10 @@ class Spline:
             if self.closed:
                 self.coeffs = self.basis_function.filter_periodic(knots)
             else:
-                for _i in range(int(self.halfSupport)):
+                for _i in range(self.halfSupport):
                     # knots = np.append(knots, knots[-1-_i] + (knots[-1-_i]-knots[-(_i+1)*2]) )
                     knots = np.append(knots, knots[-1])
-                for _i in range(int(self.halfSupport)):
+                for _i in range(self.halfSupport):
                     # knots = np.append(knots[0+_i] + (knots[0+_i]-knots[2*(_i+1)-1]), knots)
                     knots = np.append(knots[0], knots)
                 self.coeffs = self.basis_function.filter_symmetric(knots)
@@ -449,6 +453,54 @@ class Spline:
         value = np.matmul(basis_function_values, self.coeffs)
         return value
 
+    def eval_jit(self, t, derivative=0):
+        if self.coeffs is None:
+            raise RuntimeError(self._no_coeffs_msg)
+        if isinstance(self.basis_function, splinebox.basis_functions.B1):
+            basis_function_eval = splinebox.basis_functions.b1_eval
+        elif isinstance(self.basis_function, splinebox.basis_functions.B2):
+            basis_function_eval = splinebox.basis_functions.b2_eval
+        elif isinstance(self.basis_function, splinebox.basis_functions.B3):
+            basis_function_eval = splinebox.basis_functions.b3_eval
+        elif isinstance(self.basis_function, splinebox.basis_functions.CatmullRom):
+            basis_function_eval = splinebox.basis_functions.catmullrom_eval
+        elif isinstance(self.basis_function, splinebox.basis_functions.Exponential):
+            basis_function_eval = functools.partial(
+                splinebox.basis_functions.exponential_eval,
+                M=self.M,
+                alpha=2 * np.pi / self.M,
+                half_support=self.basis_function.support / 2,
+            )
+
+        @numba.njit(parallel=True, cache=True)
+        def _eval(t, derivative, coeffs, closed, half_support, M):
+            if coeffs.ndim == 1:
+                val = np.zeros(len(t))
+            elif coeffs.ndim == 2:
+                val = np.zeros((len(t), coeffs.shape[1]))
+            else:
+                raise ValueError("coeffs should only be 2D")
+            k_range = np.arange(-half_support, half_support + 1)
+            for i in numba.prange(len(t)):
+                ks = round(t[i]) + k_range
+                x = t[i] - ks
+                if closed:
+                    mask = ks > M - 1
+                    ks[mask] = ks[mask] - M
+                else:
+                    ks += half_support
+                if coeffs.ndim == 2:
+                    out = np.zeros(coeffs.shape[1])
+                    np.dot(basis_function_eval(x, derivative), coeffs[ks], out=out)
+                    val[i] += out
+                else:
+                    val[i] += np.dot(basis_function_eval(x, derivative), coeffs[ks])
+            return val
+
+        return _eval(
+            t.astype(np.float64), derivative, self.coeffs.astype(np.float64), self.closed, self.halfSupport, self.M
+        )
+
     def _get_tval(self, t):
         """
         This is a helper method for `eval`. It is its own method
@@ -468,7 +520,9 @@ class Spline:
         else:
             # take into account the padding with additional basis functions
             # for non-closed splines
-            k = np.arange(self.M + int(self.basis_function.support))
+            # use halfSupport here because it accounts for the necessary
+            # round up for odd numbered supports
+            k = np.arange(self.M + 2 * self.halfSupport)
             k = k[np.newaxis, :]
             t = t[:, np.newaxis]
             # positions at which the basis functions have to be evaluated
