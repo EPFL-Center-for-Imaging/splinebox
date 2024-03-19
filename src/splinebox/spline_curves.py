@@ -1,6 +1,7 @@
 import collections
 import copy
 import itertools
+import math
 import warnings
 
 import numba
@@ -34,9 +35,10 @@ class Spline:
             raise RuntimeError("M must be greater or equal than the spline generator support size.")
 
         self.basis_function = basis_function
-        self.halfSupport = self.basis_function.support / 2.0
-        print(f"Spline.__init__(): making {self.halfSupport=} an int → {int(self.halfSupport)}")
-        self.halfSupport = int(self.halfSupport)
+        self.halfSupport = self.basis_function.support / 2
+        # Number of additional knots used for padding the ends
+        # of an open spline
+        self.pad = math.ceil(self.halfSupport)
         self.closed = closed
         self.coeffs = coeffs
 
@@ -167,8 +169,8 @@ class Spline:
                 for k in range(self.M):
                     knots[k] = self.eval(k)
             else:
-                knots = np.zeros(self.M + 2*self.halfSupport)
-                for kn, k in enumerate(range(-self.halfSupport, self.M + self.halfSupport)):
+                knots = np.zeros(self.M + 2 * self.pad)
+                for kn, k in enumerate(range(-self.pad, self.M + self.pad)):
                     knots[kn] = self.eval(k)
         elif len(self.coeffs.shape) == 2 and (self.coeffs.shape[1] == 2):
             if self.closed:
@@ -176,8 +178,8 @@ class Spline:
                 for k in range(self.M):
                     knots[k] = self.eval(k)
             else:
-                knots = np.zeros((self.M + 2*self.halfSupport, 2))
-                for kn, k in enumerate(range(-self.halfSupport, self.M + self.halfSupport)):
+                knots = np.zeros((self.M + 2 * self.pad, 2))
+                for kn, k in enumerate(range(-self.pad, self.M + self.pad)):
                     knots[kn] = self.eval(k)
         return knots
 
@@ -194,10 +196,10 @@ class Spline:
             if self.closed:
                 self.coeffs = self.basis_function.filter_periodic(knots)
             else:
-                for _i in range(int(self.halfSupport)):
+                for _i in range(int(self.pad)):
                     # knots = np.append(knots, knots[-1-_i] + (knots[-1-_i]-knots[-(_i+1)*2]) )
                     knots = np.append(knots, knots[-1])
-                for _i in range(int(self.halfSupport)):
+                for _i in range(int(self.pad)):
                     # knots = np.append(knots[0+_i] + (knots[0+_i]-knots[2*(_i+1)-1]), knots)
                     knots = np.append(knots[0], knots)
                 self.coeffs = self.basis_function.filter_symmetric(knots)
@@ -207,9 +209,9 @@ class Spline:
                     coeffsX = self.basis_function.filter_periodic(knots[:, 0])
                     coeffsY = self.basis_function.filter_periodic(knots[:, 1])
                 else:
-                    for _i in range(int(self.halfSupport)):
+                    for _i in range(int(self.pad)):
                         knots = np.vstack((knots, knots[-1]))
-                    for _i in range(int(self.halfSupport)):
+                    for _i in range(int(self.pad)):
                         knots = np.vstack((knots[0], knots))
                     coeffsX = self.basis_function.filter_symmetric(knots[:, 0])
                     coeffsY = self.basis_function.filter_symmetric(knots[:, 1])
