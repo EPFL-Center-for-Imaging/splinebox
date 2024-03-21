@@ -39,6 +39,10 @@ for i, (name, basis_function) in enumerate(
     discreteContour_jit_parallel = curve.eval_jit_parallel(x)
     discreteContour_jit2 = curve.eval_jit2(x)
     discreteContour_jit2_parallel = curve.eval_jit2_parallel(x)
+    discreteContour_jit_no_vectorize = curve.eval_jit_no_vectorize(x)
+    discreteContour_jit_parallel_no_vectorize = curve.eval_jit_parallel_no_vectorize(x)
+    discreteContour_jit2_no_vectorize = curve.eval_jit2_no_vectorize(x)
+    discreteContour_jit2_parallel_no_vectorize = curve.eval_jit2_parallel_no_vectorize(x)
 
     axes[i // n, i % n].plot(discreteContour[:, 0], discreteContour[:, 1])
     axes[i // n, i % n].plot(discreteContour_jit[:, 0], discreteContour_jit[:, 1])
@@ -46,7 +50,18 @@ for i, (name, basis_function) in enumerate(
     axes[i // n, i % n].plot(discreteContour_jit2[:, 0], discreteContour_jit2[:, 1])
     axes[i // n, i % n].plot(discreteContour_jit2_parallel[:, 0], discreteContour_jit2_parallel[:, 1])
     axes[i // n, i % n].plot(discreteContour_original[:, 0], discreteContour_original[:, 1])
+
+    axes[i // n, i % n].plot(discreteContour_jit_no_vectorize[:, 0], discreteContour_jit_no_vectorize[:, 1])
+    axes[i // n, i % n].plot(
+        discreteContour_jit_parallel_no_vectorize[:, 0], discreteContour_jit_parallel_no_vectorize[:, 1]
+    )
+    axes[i // n, i % n].plot(discreteContour_jit2_no_vectorize[:, 0], discreteContour_jit2_no_vectorize[:, 1])
+    axes[i // n, i % n].plot(
+        discreteContour_jit2_parallel_no_vectorize[:, 0], discreteContour_jit2_parallel_no_vectorize[:, 1]
+    )
+
     axes[i // n, i % n].set_title(name)
     axes[i // n, i % n].set_aspect("equal", adjustable="box")
 
+plt.savefig("example1.pdf")
 plt.show()

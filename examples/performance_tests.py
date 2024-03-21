@@ -33,6 +33,16 @@ for M in [4, 10, 100, 1000]:
                     "vectorize basis function eval + parallel jit spline eval loop over knots",
                     spline.eval_jit2_parallel,
                 ),
+                ("original basis function eval + jit spline eval loop over samples", spline.eval_jit_no_vectorize),
+                (
+                    "original basis function eval + parallel jit spline eval loop over samples",
+                    spline.eval_jit_parallel_no_vectorize,
+                ),
+                ("original basis function eval + jit spline eval loop over knots", spline.eval_jit2_no_vectorize),
+                (
+                    "original basis function eval + parallel jit spline eval loop over knots",
+                    spline.eval_jit2_parallel_no_vectorize,
+                ),
             ]:
                 for replica in range(6):
                     print(f"M={M} {bf_name} #samples {n_samples} replica {replica}")
@@ -69,4 +79,5 @@ g.map(sns.lineplot, "# samples", "time [s]", "implementation")
 g.set(xscale="log")
 g.set(yscale="log")
 g.add_legend()
+plt.savefig("performance_run1.pdf")
 plt.show()

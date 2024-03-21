@@ -542,6 +542,78 @@ class Spline:
             t.astype(np.float64), derivative, self.coeffs.astype(np.float64), self.closed, self.halfSupport, self.M
         )
 
+    def eval_jit_no_vectorize(self, t, derivative=0):
+        if self.coeffs is None:
+            raise RuntimeError(self._no_coeffs_msg)
+        if isinstance(self.basis_function, splinebox.basis_functions.B1):
+            basis_function_eval = splinebox.basis_functions.b1_original_eval
+        elif isinstance(self.basis_function, splinebox.basis_functions.B2):
+            basis_function_eval = splinebox.basis_functions.b2_original_eval
+        elif isinstance(self.basis_function, splinebox.basis_functions.B3):
+            basis_function_eval = splinebox.basis_functions.b3_original_eval
+        elif isinstance(self.basis_function, splinebox.basis_functions.CatmullRom):
+            basis_function_eval = splinebox.basis_functions.catmullrom_original_eval
+
+        @numba.njit(parallel=False, cache=True)
+        def _eval(t, derivative, coeffs, closed, half_support, M):
+            if coeffs.ndim == 1:
+                val = np.zeros(len(t))
+            elif coeffs.ndim == 2:
+                val = np.zeros((len(t), coeffs.shape[1]))
+            else:
+                raise ValueError("coeffs should only be 2D")
+            k_range = np.arange(-math.ceil(half_support), math.ceil(half_support) + 1)
+            for i in numba.prange(len(t)):
+                ks = round(t[i]) + k_range
+                for k in ks:
+                    x = t[i] - k
+                    if closed and k > M - 1:
+                        k = k - M
+                    elif not closed:
+                        k += math.ceil(half_support)
+                    val[i] += basis_function_eval(x) * coeffs[k]
+            return val
+
+        return _eval(
+            t.astype(np.float64), derivative, self.coeffs.astype(np.float64), self.closed, self.halfSupport, self.M
+        )
+
+    def eval_jit_parallel_no_vectorize(self, t, derivative=0):
+        if self.coeffs is None:
+            raise RuntimeError(self._no_coeffs_msg)
+        if isinstance(self.basis_function, splinebox.basis_functions.B1):
+            basis_function_eval = splinebox.basis_functions.b1_original_eval
+        elif isinstance(self.basis_function, splinebox.basis_functions.B2):
+            basis_function_eval = splinebox.basis_functions.b2_original_eval
+        elif isinstance(self.basis_function, splinebox.basis_functions.B3):
+            basis_function_eval = splinebox.basis_functions.b3_original_eval
+        elif isinstance(self.basis_function, splinebox.basis_functions.CatmullRom):
+            basis_function_eval = splinebox.basis_functions.catmullrom_original_eval
+
+        @numba.njit(parallel=True, cache=True)
+        def _eval(t, derivative, coeffs, closed, half_support, M):
+            if coeffs.ndim == 1:
+                val = np.zeros(len(t))
+            elif coeffs.ndim == 2:
+                val = np.zeros((len(t), coeffs.shape[1]))
+            else:
+                raise ValueError("coeffs should only be 2D")
+            k_range = np.arange(-math.ceil(half_support), math.ceil(half_support) + 1)
+            for i in numba.prange(len(t)):
+                ks = round(t[i]) + k_range
+                for k in ks:
+                    x = t[i] - k
+                    if closed and k > M - 1:
+                        k = k - M
+                    elif not closed:
+                        k += math.ceil(half_support)
+                    val[i] += basis_function_eval(x) * coeffs[k]
+            return val
+
+        return _eval(
+            t.astype(np.float64), derivative, self.coeffs.astype(np.float64), self.closed, self.halfSupport, self.M
+        )
+
     def eval_jit_parallel(self, t, derivative=0):
         if self.coeffs is None:
             raise RuntimeError(self._no_coeffs_msg)
@@ -553,14 +625,6 @@ class Spline:
             basis_function_eval = splinebox.basis_functions.b3_eval
         elif isinstance(self.basis_function, splinebox.basis_functions.CatmullRom):
             basis_function_eval = splinebox.basis_functions.catmullrom_eval
-        # elif isinstance(self.basis_function, splinebox.basis_functions.Exponential):
-        #     M = self.M
-        #     alpha = 2 * np.pi / self.M
-        #     half_support = self.halfSupport
-
-        #     @numba.njit(cache=True)
-        #     def basis_function_eval(x, derivative):
-        #         return splinebox.basis_functions.exponential_eval(x, derivative, M=M, alpha=alpha, half_support=half_support)
 
         @numba.njit(parallel=True, cache=True)
         def _eval(t, derivative, coeffs, closed, half_support, M):
@@ -634,6 +698,80 @@ class Spline:
                     val += basis_function_eval(x, derivative)[:, np.newaxis] * coeffs[k]
                 else:
                     val += basis_function_eval(x, derivative) * coeffs[k]
+            return val
+
+        return _eval(
+            t.astype(np.float64), derivative, self.coeffs.astype(np.float64), self.closed, self.halfSupport, self.M
+        )
+
+    def eval_jit2_no_vectorize(self, t, derivative=0):
+        if self.coeffs is None:
+            raise RuntimeError(self._no_coeffs_msg)
+        if isinstance(self.basis_function, splinebox.basis_functions.B1):
+            basis_function_eval = splinebox.basis_functions.b1_original_eval
+        elif isinstance(self.basis_function, splinebox.basis_functions.B2):
+            basis_function_eval = splinebox.basis_functions.b2_original_eval
+        elif isinstance(self.basis_function, splinebox.basis_functions.B3):
+            basis_function_eval = splinebox.basis_functions.b3_original_eval
+        elif isinstance(self.basis_function, splinebox.basis_functions.CatmullRom):
+            basis_function_eval = splinebox.basis_functions.catmullrom_original_eval
+
+        @numba.njit(parallel=False, cache=True)
+        def _eval(t, derivative, coeffs, closed, half_support, M):
+            if coeffs.ndim == 1:
+                val = np.zeros(len(t))
+            elif coeffs.ndim == 2:
+                val = np.zeros((len(t), coeffs.shape[1]))
+            else:
+                raise ValueError("coeffs should only be 2D")
+            n_knots = M if closed else M + 2 * math.ceil(half_support)
+            for k in numba.prange(n_knots):
+                for i in range(len(t)):
+                    x = t[i] - k
+                    if closed and k < half_support and x > M - 1 - half_support:
+                        x = x - M
+                    elif closed and k > (M - 1) - half_support and x < -(M - 1) + half_support:
+                        x = x + M
+                    elif not closed:
+                        x = x + math.ceil(half_support)
+                    val[i] += basis_function_eval(x) * coeffs[k]
+            return val
+
+        return _eval(
+            t.astype(np.float64), derivative, self.coeffs.astype(np.float64), self.closed, self.halfSupport, self.M
+        )
+
+    def eval_jit2_parallel_no_vectorize(self, t, derivative=0):
+        if self.coeffs is None:
+            raise RuntimeError(self._no_coeffs_msg)
+        if isinstance(self.basis_function, splinebox.basis_functions.B1):
+            basis_function_eval = splinebox.basis_functions.b1_original_eval
+        elif isinstance(self.basis_function, splinebox.basis_functions.B2):
+            basis_function_eval = splinebox.basis_functions.b2_original_eval
+        elif isinstance(self.basis_function, splinebox.basis_functions.B3):
+            basis_function_eval = splinebox.basis_functions.b3_original_eval
+        elif isinstance(self.basis_function, splinebox.basis_functions.CatmullRom):
+            basis_function_eval = splinebox.basis_functions.catmullrom_original_eval
+
+        @numba.njit(parallel=True, cache=True)
+        def _eval(t, derivative, coeffs, closed, half_support, M):
+            if coeffs.ndim == 1:
+                val = np.zeros(len(t))
+            elif coeffs.ndim == 2:
+                val = np.zeros((len(t), coeffs.shape[1]))
+            else:
+                raise ValueError("coeffs should only be 2D")
+            n_knots = M if closed else M + 2 * math.ceil(half_support)
+            for k in numba.prange(n_knots):
+                for i in range(len(t)):
+                    x = t[i] - k
+                    if closed and k < half_support and x > M - 1 - half_support:
+                        x = x - M
+                    elif closed and k > (M - 1) - half_support and x < -(M - 1) + half_support:
+                        x = x + M
+                    elif not closed:
+                        x = x + math.ceil(half_support)
+                    val[i] += basis_function_eval(x) * coeffs[k]
             return val
 
         return _eval(
