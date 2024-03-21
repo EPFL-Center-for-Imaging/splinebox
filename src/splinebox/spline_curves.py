@@ -38,7 +38,8 @@ class Spline:
             raise RuntimeError("M must be greater or equal than the spline generator support size.")
 
         self.basis_function = basis_function
-        self.halfSupport = math.ceil(self.basis_function.support / 2)
+        self.halfSupport = self.basis_function.support / 2
+        self.pad = math.ceil(self.halfSupport)
         self.closed = closed
         self.coeffs = coeffs
 
@@ -57,7 +58,7 @@ class Spline:
             support = self.basis_function.support
             # use half support here instead of support, because it accounts for
             # the necessary round up for odd numbered supports
-            padded_M = int(self.M + 2 * self.halfSupport)
+            padded_M = int(self.M + 2 * self.pad)
             if not self.closed and n != padded_M:
                 raise ValueError(
                     f"Non-closed splines are padded at the ends with additional knots, i.e. the effective number of knots is M + support of the basis function. You provided {n} coefficients for a spline with M={self.M} and a basis function with support={support}, expected {padded_M}."
@@ -171,8 +172,8 @@ class Spline:
                 for k in range(self.M):
                     knots[k] = self.eval(k)
             else:
-                knots = np.zeros(self.M + 2 * self.halfSupport)
-                for kn, k in enumerate(range(-self.halfSupport, self.M + self.halfSupport)):
+                knots = np.zeros(self.M + 2 * self.pad)
+                for kn, k in enumerate(range(-self.pad, self.M + self.pad)):
                     knots[kn] = self.eval(k)
         elif len(self.coeffs.shape) == 2 and (self.coeffs.shape[1] == 2):
             if self.closed:
@@ -180,8 +181,8 @@ class Spline:
                 for k in range(self.M):
                     knots[k] = self.eval(k)
             else:
-                knots = np.zeros((self.M + 2 * self.halfSupport, 2))
-                for kn, k in enumerate(range(-self.halfSupport, self.M + self.halfSupport)):
+                knots = np.zeros((self.M + 2 * self.pad, 2))
+                for kn, k in enumerate(range(-self.pad, self.M + self.pad)):
                     knots[kn] = self.eval(k)
         return knots
 
@@ -198,10 +199,10 @@ class Spline:
             if self.closed:
                 self.coeffs = self.basis_function.filter_periodic(knots)
             else:
-                for _i in range(self.halfSupport):
+                for _i in range(self.pad):
                     # knots = np.append(knots, knots[-1-_i] + (knots[-1-_i]-knots[-(_i+1)*2]) )
                     knots = np.append(knots, knots[-1])
-                for _i in range(self.halfSupport):
+                for _i in range(self.pad):
                     # knots = np.append(knots[0+_i] + (knots[0+_i]-knots[2*(_i+1)-1]), knots)
                     knots = np.append(knots[0], knots)
                 self.coeffs = self.basis_function.filter_symmetric(knots)
@@ -211,9 +212,9 @@ class Spline:
                     coeffsX = self.basis_function.filter_periodic(knots[:, 0])
                     coeffsY = self.basis_function.filter_periodic(knots[:, 1])
                 else:
-                    for _i in range(int(self.halfSupport)):
+                    for _i in range(self.pad):
                         knots = np.vstack((knots, knots[-1]))
-                    for _i in range(int(self.halfSupport)):
+                    for _i in range(self.pad):
                         knots = np.vstack((knots[0], knots))
                     coeffsX = self.basis_function.filter_symmetric(knots[:, 0])
                     coeffsY = self.basis_function.filter_symmetric(knots[:, 1])
@@ -432,6 +433,45 @@ class Spline:
 
         return np.stack(curve)
 
+    def original_eval(self, x, derivative=0):
+        curve = [self.parameterToWorld(t, dt=derivative) for t in x]
+        return np.stack(curve)
+
+    def parameterToWorld(self, t, dt=False):
+        if self.coeffs is None:
+            raise RuntimeError(self.noCoefsMessage)
+            return
+
+        value = 0.0
+        if self.closed:
+            for k in range(self.M):
+                tval = self.original_wrapIndex(t, k)
+                if tval > -self.halfSupport and tval < self.halfSupport:
+                    if dt:
+                        splineValue = self.basis_function.firstDerivativeValue(tval)
+                    else:
+                        splineValue = self.basis_function.original_eval(tval)
+                    value += self.coeffs[k] * splineValue
+        else:
+            for k in range(self.M + int(self.basis_function.support)):
+                tval = t - (k - self.halfSupport)
+                if tval > -self.halfSupport and tval < self.halfSupport:
+                    if dt:
+                        splineValue = self.basis_function.firstDerivativeValue(tval)
+                    else:
+                        splineValue = self.basis_function.original_eval(tval)
+                    value += self.coeffs[k] * splineValue
+        return value
+
+    def original_wrapIndex(self, t, k):
+        wrappedT = t - k
+        if k < t - self.halfSupport:
+            if k + self.M >= t - self.halfSupport and k + self.M <= t + self.halfSupport:
+                wrappedT = t - (k + self.M)
+        elif k > t + self.halfSupport and k - self.M >= t - self.halfSupport and k - self.M <= t + self.halfSupport:
+            wrappedT = t - (k - self.M)
+        return wrappedT
+
     def eval(self, t, derivative=0):
         """
         Evalute the spline or one of its derivatives at
@@ -464,6 +504,153 @@ class Spline:
             basis_function_eval = splinebox.basis_functions.b3_eval
         elif isinstance(self.basis_function, splinebox.basis_functions.CatmullRom):
             basis_function_eval = splinebox.basis_functions.catmullrom_eval
+        # elif isinstance(self.basis_function, splinebox.basis_functions.Exponential):
+        #     M = self.M
+        #     alpha = 2 * np.pi / self.M
+        #     half_support = self.halfSupport
+
+        #     @numba.njit(cache=True)
+        #     def basis_function_eval(x, derivative):
+        #         return splinebox.basis_functions.exponential_eval(x, derivative, M=M, alpha=alpha, half_support=half_support)
+
+        @numba.njit(parallel=False, cache=True)
+        def _eval(t, derivative, coeffs, closed, half_support, M):
+            if coeffs.ndim == 1:
+                val = np.zeros(len(t))
+            elif coeffs.ndim == 2:
+                val = np.zeros((len(t), coeffs.shape[1]))
+            else:
+                raise ValueError("coeffs should only be 2D")
+            k_range = np.arange(-math.ceil(half_support), math.ceil(half_support) + 1)
+            for i in numba.prange(len(t)):
+                ks = round(t[i]) + k_range
+                x = t[i] - ks
+                if closed:
+                    mask = ks > M - 1
+                    ks[mask] = ks[mask] - M
+                else:
+                    ks += math.ceil(half_support)
+                if coeffs.ndim == 2:
+                    out = np.zeros(coeffs.shape[1])
+                    np.dot(basis_function_eval(x, derivative), coeffs[ks], out=out)
+                    val[i] += out
+                else:
+                    val[i] += np.dot(basis_function_eval(x, derivative), coeffs[ks])
+            return val
+
+        return _eval(
+            t.astype(np.float64), derivative, self.coeffs.astype(np.float64), self.closed, self.halfSupport, self.M
+        )
+
+    def eval_jit_parallel(self, t, derivative=0):
+        if self.coeffs is None:
+            raise RuntimeError(self._no_coeffs_msg)
+        if isinstance(self.basis_function, splinebox.basis_functions.B1):
+            basis_function_eval = splinebox.basis_functions.b1_eval
+        elif isinstance(self.basis_function, splinebox.basis_functions.B2):
+            basis_function_eval = splinebox.basis_functions.b2_eval
+        elif isinstance(self.basis_function, splinebox.basis_functions.B3):
+            basis_function_eval = splinebox.basis_functions.b3_eval
+        elif isinstance(self.basis_function, splinebox.basis_functions.CatmullRom):
+            basis_function_eval = splinebox.basis_functions.catmullrom_eval
+        # elif isinstance(self.basis_function, splinebox.basis_functions.Exponential):
+        #     M = self.M
+        #     alpha = 2 * np.pi / self.M
+        #     half_support = self.halfSupport
+
+        #     @numba.njit(cache=True)
+        #     def basis_function_eval(x, derivative):
+        #         return splinebox.basis_functions.exponential_eval(x, derivative, M=M, alpha=alpha, half_support=half_support)
+
+        @numba.njit(parallel=True, cache=True)
+        def _eval(t, derivative, coeffs, closed, half_support, M):
+            if coeffs.ndim == 1:
+                val = np.zeros(len(t))
+            elif coeffs.ndim == 2:
+                val = np.zeros((len(t), coeffs.shape[1]))
+            else:
+                raise ValueError("coeffs should only be 2D")
+            k_range = np.arange(-math.ceil(half_support), math.ceil(half_support) + 1)
+            for i in numba.prange(len(t)):
+                ks = round(t[i]) + k_range
+                x = t[i] - ks
+                if closed:
+                    mask = ks > M - 1
+                    ks[mask] = ks[mask] - M
+                else:
+                    ks += math.ceil(half_support)
+                if coeffs.ndim == 2:
+                    out = np.zeros(coeffs.shape[1])
+                    np.dot(basis_function_eval(x, derivative), coeffs[ks], out=out)
+                    val[i] += out
+                else:
+                    val[i] += np.dot(basis_function_eval(x, derivative), coeffs[ks])
+            return val
+
+        return _eval(
+            t.astype(np.float64), derivative, self.coeffs.astype(np.float64), self.closed, self.halfSupport, self.M
+        )
+
+    def eval_jit2(self, t, derivative=0):
+        if self.coeffs is None:
+            raise RuntimeError(self._no_coeffs_msg)
+        if isinstance(self.basis_function, splinebox.basis_functions.B1):
+            basis_function_eval = splinebox.basis_functions.b1_eval
+        elif isinstance(self.basis_function, splinebox.basis_functions.B2):
+            basis_function_eval = splinebox.basis_functions.b2_eval
+        elif isinstance(self.basis_function, splinebox.basis_functions.B3):
+            basis_function_eval = splinebox.basis_functions.b3_eval
+        elif isinstance(self.basis_function, splinebox.basis_functions.CatmullRom):
+            basis_function_eval = splinebox.basis_functions.catmullrom_eval
+        elif isinstance(self.basis_function, splinebox.basis_functions.Exponential):
+            basis_function_eval = functools.partial(
+                splinebox.basis_functions.exponential_eval,
+                M=self.M,
+                alpha=2 * np.pi / self.M,
+                half_support=self.basis_function.support / 2,
+            )
+
+        @numba.njit(parallel=False, cache=True)
+        def _eval(t, derivative, coeffs, closed, half_support, M):
+            if coeffs.ndim == 1:
+                val = np.zeros(len(t))
+            elif coeffs.ndim == 2:
+                val = np.zeros((len(t), coeffs.shape[1]))
+            else:
+                raise ValueError("coeffs should only be 2D")
+            n_knots = M if closed else M + 2 * math.ceil(half_support)
+            for k in numba.prange(n_knots):
+                if closed:
+                    x = t - k
+                    if k < half_support:
+                        mask = x > M - 1 - half_support
+                        x[mask] = x[mask] - M
+                    elif k > (M - 1) - half_support:
+                        mask = x < -(M - 1) + half_support
+                        x[mask] = x[mask] + M
+                else:
+                    x = t - k + math.ceil(half_support)
+                if coeffs.ndim == 2:
+                    val += basis_function_eval(x, derivative)[:, np.newaxis] * coeffs[k]
+                else:
+                    val += basis_function_eval(x, derivative) * coeffs[k]
+            return val
+
+        return _eval(
+            t.astype(np.float64), derivative, self.coeffs.astype(np.float64), self.closed, self.halfSupport, self.M
+        )
+
+    def eval_jit2_parallel(self, t, derivative=0):
+        if self.coeffs is None:
+            raise RuntimeError(self._no_coeffs_msg)
+        if isinstance(self.basis_function, splinebox.basis_functions.B1):
+            basis_function_eval = splinebox.basis_functions.b1_eval
+        elif isinstance(self.basis_function, splinebox.basis_functions.B2):
+            basis_function_eval = splinebox.basis_functions.b2_eval
+        elif isinstance(self.basis_function, splinebox.basis_functions.B3):
+            basis_function_eval = splinebox.basis_functions.b3_eval
+        elif isinstance(self.basis_function, splinebox.basis_functions.CatmullRom):
+            basis_function_eval = splinebox.basis_functions.catmullrom_eval
         elif isinstance(self.basis_function, splinebox.basis_functions.Exponential):
             basis_function_eval = functools.partial(
                 splinebox.basis_functions.exponential_eval,
@@ -480,21 +667,22 @@ class Spline:
                 val = np.zeros((len(t), coeffs.shape[1]))
             else:
                 raise ValueError("coeffs should only be 2D")
-            k_range = np.arange(-half_support, half_support + 1)
-            for i in numba.prange(len(t)):
-                ks = round(t[i]) + k_range
-                x = t[i] - ks
+            n_knots = M if closed else M + 2 * math.ceil(half_support)
+            for k in numba.prange(n_knots):
                 if closed:
-                    mask = ks > M - 1
-                    ks[mask] = ks[mask] - M
+                    x = t - k
+                    if k < half_support:
+                        mask = x > M - 1 - half_support
+                        x[mask] = x[mask] - M
+                    elif k > (M - 1) - half_support:
+                        mask = x < -(M - 1) + half_support
+                        x[mask] = x[mask] + M
                 else:
-                    ks += half_support
+                    x = t - k + math.ceil(half_support)
                 if coeffs.ndim == 2:
-                    out = np.zeros(coeffs.shape[1])
-                    np.dot(basis_function_eval(x, derivative), coeffs[ks], out=out)
-                    val[i] += out
+                    val += basis_function_eval(x, derivative)[:, np.newaxis] * coeffs[k]
                 else:
-                    val[i] += np.dot(basis_function_eval(x, derivative), coeffs[ks])
+                    val += basis_function_eval(x, derivative) * coeffs[k]
             return val
 
         return _eval(
@@ -522,7 +710,7 @@ class Spline:
             # for non-closed splines
             # use halfSupport here because it accounts for the necessary
             # round up for odd numbered supports
-            k = np.arange(self.M + 2 * self.halfSupport)
+            k = np.arange(self.M + 2 * self.pad)
             k = k[np.newaxis, :]
             t = t[:, np.newaxis]
             # positions at which the basis functions have to be evaluated

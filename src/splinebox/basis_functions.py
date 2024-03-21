@@ -101,6 +101,12 @@ class B1(BasisFunction):
     def __init__(self):
         super().__init__(False, 2)
 
+    def original_eval(self, x):
+        val = 0.0
+        if abs(x) >= 0 and abs(x) < 1:
+            val = 1.0 - abs(x)
+        return val
+
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
     def _func(x):
@@ -151,6 +157,16 @@ class B2(BasisFunction):
 
     def __init__(self):
         super().__init__(False, 3)
+
+    def original_eval(self, x):
+        val = 0.0
+        if x >= -1.5 and x <= -0.5:
+            val = 0.5 * (x**2) + 1.5 * x + 1.125
+        elif x > -0.5 and x <= 0.5:
+            val = -x * x + 0.75
+        elif x > 0.5 and x <= 1.5:
+            val = 0.5 * (x**2) - 1.5 * x + 1.125
+        return val
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
@@ -208,6 +224,14 @@ class B3(BasisFunction):
 
     def __init__(self):
         super().__init__(False, 4)
+
+    def original_eval(self, x):
+        val = 0.0
+        if abs(x) >= 0 and abs(x) < 1:
+            val = 2.0 / 3.0 - (abs(x) ** 2) + (abs(x) ** 3) / 2.0
+        elif abs(x) >= 1 and abs(x) <= 2:
+            val = ((2.0 - abs(x)) ** 3) / 6.0
+        return val
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
@@ -330,6 +354,20 @@ class Exponential(BasisFunction):
         super().__init__(False, 3)
         self.M = M
         self.alpha = alpha
+
+    def original_eval(self, x):
+        x += self.support / 2.0
+        L = (np.sin(np.pi / self.M) / (np.pi / self.M)) ** (-2)
+
+        val = 0.0
+        if x >= 0 and x < 1:
+            val = 2.0 * np.sin(self.alpha * 0.5 * x) * np.sin(self.alpha * 0.5 * x)
+        elif x >= 1 and x < 2:
+            val = np.cos(self.alpha * (x - 2)) + np.cos(self.alpha * (x - 1)) - 2.0 * np.cos(self.alpha)
+        elif x >= 2 and x <= 3:
+            val = 2.0 * np.sin(self.alpha * 0.5 * (x - 3)) * np.sin(self.alpha * 0.5 * (x - 3))
+
+        return (L * val) / (self.alpha * self.alpha)
 
     def _func(self, x):
         return self.__func(x, self.support / 2, self.M, self.alpha)
@@ -478,6 +516,14 @@ class CatmullRom(BasisFunction):
 
     def __init__(self):
         super().__init__(False, 4)
+
+    def original_eval(self, x):
+        val = 0.0
+        if np.abs(x) >= 0 and np.abs(x) <= 1:
+            val = (3.0 / 2.0) * (np.abs(x) ** 3) - (5.0 / 2.0) * (np.abs(x) ** 2) + 1
+        elif np.abs(x) > 1 and np.abs(x) <= 2:
+            val = (-1.0 / 2.0) * (np.abs(x) ** 3) + (5.0 / 2.0) * (np.abs(x) ** 2) - 4.0 * np.abs(x) + 2.0
+        return val
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)

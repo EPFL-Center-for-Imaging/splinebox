@@ -19,57 +19,54 @@ for M in [4, 10, 100, 1000]:
         spline.getCoefsFromKnots(knots)
         for n_samples in [10, 100, 1000, 10000, 100000]:
             x = np.linspace(0, M - 1, n_samples)
-            for replica in range(6):
-                print(f"M={M} {bf_name} #samples {n_samples} replica {replica}")
-                print("eval")
-                start = time.process_time()
-                y = spline.eval(x)
-                dt = time.process_time() - start
-                current_df_eval = pd.DataFrame(
-                    {
-                        "# knots": [
-                            M,
-                        ],
-                        "# samples": [
-                            n_samples,
-                        ],
-                        "Basis function": [
-                            bf_name,
-                        ],
-                        "implementation": "eval",
-                        "time [s]": dt,
-                    }
-                )
 
-                print("eval_jit")
-                start = time.process_time()
-                y = spline.eval_jit(x)
-                dt = time.process_time() - start
-                current_df_eval_jit = pd.DataFrame(
-                    {
-                        "# knots": [
-                            M,
-                        ],
-                        "# samples": [
-                            n_samples,
-                        ],
-                        "Basis function": [
-                            bf_name,
-                        ],
-                        "implementation": "eval_jit",
-                        "time [s]": dt,
-                    }
-                )
-                if replica > 0:
-                    df = pd.concat([df, current_df_eval, current_df_eval_jit])
+            for implementation, spline_eval in [
+                ("original", spline.original_eval),
+                ("vectorize basis function eval only", spline.eval),
+                ("vectorize basis function eval + jit spline eval loop over samples", spline.eval_jit),
+                (
+                    "vectorize basis function eval + parallel jit spline eval loop over samples",
+                    spline.eval_jit_parallel,
+                ),
+                ("vectorize basis function eval + jit spline eval loop over knots", spline.eval_jit2),
+                (
+                    "vectorize basis function eval + parallel jit spline eval loop over knots",
+                    spline.eval_jit2_parallel,
+                ),
+            ]:
+                for replica in range(6):
+                    print(f"M={M} {bf_name} #samples {n_samples} replica {replica}")
+                    print(implementation)
+                    start = time.perf_counter()
+                    y = spline_eval(x)
+                    dt = time.perf_counter() - start
+                    current_df = pd.DataFrame(
+                        {
+                            "# knots": [
+                                M,
+                            ],
+                            "# samples": [
+                                n_samples,
+                            ],
+                            "Basis function": [
+                                bf_name,
+                            ],
+                            "implementation": implementation,
+                            "time [s]": dt,
+                        }
+                    )
+                    if replica > 0:
+                        df = pd.concat([df, current_df])
 
 df.to_csv("performance.csv")
 
 df = pd.read_csv("performance.csv")
+# df = df.loc[df["# knots"] != 1000, :]
 print(df)
 
 g = sns.FacetGrid(df, col="# knots", row="Basis function")
 g.map(sns.lineplot, "# samples", "time [s]", "implementation")
 g.set(xscale="log")
+g.set(yscale="log")
 g.add_legend()
 plt.show()
