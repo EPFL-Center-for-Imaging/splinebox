@@ -69,6 +69,28 @@ def spline_curve(basis_function, M, closed):
     return splinebox.spline_curves.Spline(M, basis_function, closed=closed)
 
 
+@pytest.fixture
+def closed_spline_curve(basis_function, M):
+    if hasattr(basis_function, "M"):
+        M = basis_function.M
+    if isinstance(
+        basis_function, (splinebox.basis_functions.CubicHermite, splinebox.basis_functions.ExponentialHermite)
+    ):
+        return splinebox.spline_curves.HermiteSpline(M, basis_function, closed=True)
+    return splinebox.spline_curves.Spline(M, basis_function, closed=True)
+
+
+@pytest.fixture
+def open_spline_curve(basis_function, M):
+    if hasattr(basis_function, "M"):
+        M = basis_function.M
+    if isinstance(
+        basis_function, (splinebox.basis_functions.CubicHermite, splinebox.basis_functions.ExponentialHermite)
+    ):
+        return splinebox.spline_curves.HermiteSpline(M, basis_function, closed=False)
+    return splinebox.spline_curves.Spline(M, basis_function, closed=False)
+
+
 @pytest.fixture(params=[0, 1, 2])
 def derivative(request):
     return request.param

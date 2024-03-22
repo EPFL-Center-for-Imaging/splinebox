@@ -72,3 +72,18 @@ def test_hermite_spline_with_normal_basis(non_hermite_basis_function, M):
     """
     with pytest.raises(ValueError):
         splinebox.spline_curves.HermiteSpline(M, non_hermite_basis_function)
+
+
+def test_closed_splines(closed_spline_curve, derivative, coeff_gen, is_hermite_spline, not_differentiable_twice):
+    M = closed_spline_curve.M
+    support = closed_spline_curve.basis_function.support
+    closed_spline_curve.coeffs = coeff_gen(M, support, closed=True)
+    if is_hermite_spline(closed_spline_curve):
+        closed_spline_curve.tangents = coeff_gen(M, support, closed=True)
+    if not_differentiable_twice(closed_spline_curve) and derivative == 2:
+        return
+    assert np.allclose(
+        closed_spline_curve.eval(0, derivative=derivative),
+        closed_spline_curve.eval(M, derivative=derivative),
+        equal_nan=True,
+    )
