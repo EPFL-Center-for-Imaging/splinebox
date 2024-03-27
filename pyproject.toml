@@ -99,6 +99,7 @@ test = [
 docs = [
     "matplotlib",
     "sphinx-gallery",
+    "scikit-image",
 ]
 
 [project.urls]
