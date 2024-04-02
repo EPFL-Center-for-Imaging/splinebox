@@ -6,6 +6,7 @@ This example shows a basic active contours implementation using splinebox.
 The goal is to segments the astronaut's head in the example image.
 """
 
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy
@@ -18,7 +19,7 @@ import splinebox.spline_curves
 img = skimage.data.astronaut()
 
 # %%
-# We want our contours to stick to the edges, so we have to
+# We want our contour to stick to the edges, so we have to
 # compute an edge map. To do that we first convert the image
 # to gray scale, smooth it to make the edge map less noisy, and
 # apply the sobel filter for edge detection.
@@ -28,47 +29,40 @@ edge = skimage.filters.sobel(smooth)
 
 
 # %%
-# To make calculating the image gradients on the edge map easier
+# To make calculating the edge energy at non integer locations easier
 # we use a surface spline on a regular grid.
-external_energy = scipy.interpolate.RectBivariateSpline(
-    np.arange(edge.shape[1]), np.arange(edge.shape[0]), edge.T, kx=2, ky=2, s=1
+# This returns a callable object that we can interogate as follows:
+# `edge_energy(x, y)`
+edge_energy = scipy.interpolate.RectBivariateSpline(
+    np.arange(edge.shape[1]), np.arange(edge.shape[0]), edge, kx=2, ky=2, s=1
 )
 
 
 # %%
-# The external force on our spline is the gradient of the edge map.
-def external_force(knots):
-    y = knots[:, 0]
-    x = knots[:, 1]
-    force_x = external_energy(x, y, dx=1, grid=False)
-    force_y = external_energy(x, y, dy=1, grid=False)
-    return np.stack((force_y, force_x), axis=-1)
+# In order to regularize the curvature of our spline we can define an internal energy function
+# that scales with the first and second derivative.
+def internal_energy(spline, t, alpha, beta):
+    return 0.5 * (alpha * spline.eval(t, derivative=1) ** 2 + beta * spline.eval(t, derivative=2) ** 2)
 
 
 # %%
 # Let's initialize our spline with 50 knots that form a circle
 # around the astronouts head.
-s = np.linspace(0, 2 * np.pi, 50)
-s = s[:-1]
+M = 50
+s = np.linspace(0, 2 * np.pi, M + 1)[:-1]
 y = 100 + 100 * np.sin(s)
 x = 220 + 100 * np.cos(s)
 knots = np.array([y, x]).T
 
 # %%
-# Now, we can construct a B3 spline and adjust its control points (coefficients)
-# using the knots we generated above.
-spline = splinebox.spline_curves.Spline(M=len(knots), basis_function=splinebox.basis_functions.B3(), closed=True)
-spline.getCoefsFromKnots(knots)
-
+# We keep a copy of the initial knots so we can plot them later.
+initial_knots = knots.copy()
 
 # %%
-# The internal force on our spline tries to keep it straight to keep its shape
-# simple. This is done by minimizing its first and second derivative at the knots.
-def internal_force(alpha, beta):
-    t = np.arange(spline.M)
-    second_derivative = spline.eval(t, derivative=2)
-    fourth_derivative = 0  # spline.eval(t, derivative=4)
-    return alpha * second_derivative + beta * fourth_derivative
+# Now, we can construct a B3 spline and adjust its control points (coefficients)
+# using the knots we generated above.
+spline = splinebox.spline_curves.Spline(M=M, basis_function=splinebox.basis_functions.B3(), closed=True)
+spline.getCoefsFromKnots(knots)
 
 
 # %%
@@ -76,36 +70,49 @@ def internal_force(alpha, beta):
 #
 # * :math:`\alpha` controls the contribution of the first derivative to the internal force
 # * :math:`\beta` controls the contribution of the second derivative to the internal force
-# * :math:`\gamma` scales the forces
-# * `max_step` in the maximum allowed step size per iteration in pixels
-alpha = 0.0007
-beta = 0
-gamma = 300
-max_step = 2
+alpha = 0
+beta = 0.005
+
+contours = []
+external_energies = []
+
+
+def energy_function(coeffs, spline, t, alpha, beta):
+    coeffs = coeffs.reshape((spline.M, -1))
+    spline.coeffs = coeffs
+    contour = spline.eval(t)
+    contours.append(contour.copy())
+    edge_energy_value = np.sum(edge_energy(contour[:, 0], contour[:, 1], grid=False))
+    external_energies.append(-edge_energy_value)
+    internal_energy_value = np.sum(internal_energy(spline, t, alpha, beta))
+    return -edge_energy_value + internal_energy_value
+
 
 # %%
-# We keep a copy of the initial knots so we can plot them later.
-initial_knots = knots.copy()
-
-# %%
-# The active contours approach consists of iteratively updating our knots and control points according
-# to the internal and external forces on the knots.
-for _i in range(2000):
-    knots = spline.getKnotsFromCoefs()
-    delta = max_step * np.tanh(gamma * (internal_force(alpha, beta) + external_force(knots)))
-    new_knots = knots + delta
-    spline.getCoefsFromKnots(new_knots)
+# The active contours approach consists of iteratively updating our control points (coefficients)
+# to minimize the energy.
+initial_coeffs = spline.coeffs.copy()
+t = np.linspace(0, M, 400)
+result = scipy.optimize.minimize(
+    energy_function, initial_coeffs.flatten(), method="Powell", args=(spline, t, alpha, beta)
+)
 
 # %%
 # Inorder to plot the spline as a smooth line, we have to evaluate it
 # more densly than just at the knots.
 samples = spline.eval(np.linspace(0, len(knots), 400))
 
+final_knots = spline.eval(np.arange(M))
+
 # %%
 # Finaly, we can plot the result.
 plt.imshow(img)
 plt.scatter(initial_knots[:, 1], initial_knots[:, 0], marker="x", color="black", label="initial knots")
-plt.scatter(knots[:, 1], knots[:, 0], marker="o", color="blue", label="final knots")
-plt.plot(samples[:, 1], samples[:, 0], label="spline")
+contours = contours[::2000]
+colors = matplotlib.colormaps["viridis"](np.linspace(0, 1, len(contours)))
+for contour, color in zip(contours, colors):
+    plt.plot(contour[:, 1], contour[:, 0], color=color, alpha=0.2)
+plt.scatter(final_knots[:, 1], final_knots[:, 0], marker="o", color="red", label="final final_knots")
+plt.plot(samples[:, 1], samples[:, 0], label="spline", color="red")
 plt.legend()
 plt.show()
