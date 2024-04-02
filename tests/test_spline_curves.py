@@ -87,3 +87,17 @@ def test_closed_splines(closed_spline_curve, derivative, coeff_gen, is_hermite_s
         closed_spline_curve.eval(M, derivative=derivative),
         equal_nan=True,
     )
+
+
+def test_draw():
+    spline = splinebox.spline_curves.Spline(M=4, basis_function=splinebox.basis_functions.B1())
+    knots = np.array([[1, 1], [1, 2], [2, 2], [2, 1]])
+    spline.getCoefsFromKnots(knots)
+
+    x = np.linspace(0, 3, 301)
+    y = np.linspace(0, 3, 301)
+
+    expected = np.zeros((len(x), len(y)), dtype=bool)
+    expected[100:201, 100:201] = True
+
+    assert np.allclose(spline.draw(x, y), expected)
