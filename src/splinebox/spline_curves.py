@@ -1,8 +1,6 @@
 import collections
 import copy
-import itertools
 import math
-import warnings
 
 import numba
 import numpy as np
@@ -77,7 +75,7 @@ class Spline:
     def copy(self):
         return copy.deepcopy(self)
 
-    def draw(self, dimensions):
+    def draw(self, x, y):
         """
         Computes a whether a point is inside or outside a closed
         spline on a regular grid of points.
@@ -89,78 +87,95 @@ class Spline:
         if self.coeffs is None:
             raise RuntimeError(self._no_coeffs_msg)
 
-        if len(self.coeffs.shape) == 2 and self.coeffs.shape[1] == 2:
-            if self.closed:
-                warnings.warn(
-                    "draw() will take ages, go get yourself a coffee.",
-                    stacklevel=1,
-                )
+        if self.coeffs.ndim != 2 or self.coeffs.shape[1] != 2:
+            raise RuntimeError("draw() can only be used with 2D curves")
 
-                if len(dimensions) != 2:
-                    raise RuntimeError("dimensions must be a triplet.")
+        if not self.closed:
+            raise RuntimeError("draw() can only be used with closed curves.")
 
-                xvals = range(dimensions[1])
-                yvals = range(dimensions[0])
-                pointsList = list(itertools.product(xvals, yvals))
+        xx, yy = np.meshgrid(x, y)
+        result = self.is_inside(xx.flatten(), yy.flatten())
+        return result.reshape(xx.shape)
 
-                vals = [self.isInside(p) for p in pointsList]
-                vals = np.asarray(vals)
+    def dtheta(self, t):
+        r"""
+        Helper function for calculating the winding number.
 
-                area = np.zeros(dimensions, dtype=np.int8)
-                for i in range(len(pointsList)):
-                    p = pointsList[i]
-                    area[p[1], p[0]] = int(255 * vals[i])
+        `dtheta` is the derivative of the polar coordinate :math:`\theta(t)`
 
-                return area
+        .. math::
+            \theta(t) = arctan \left( \frac{y(t)}{x(t)} \right)
 
-            else:
-                raise RuntimeError("draw() can only be used with closed curves.")
-        else:
-            raise RuntimeError("draw() can only be used with 2D curves.")
+        Differentiation yields:
 
-    def windingNumber(self, t):
-        """
-        ???
-
-        Number that can be integrated along the entire spline
-        to determine where it wraps around the origin or not.
+        .. math::
+            \frac{d \theta}{dt} = \frac{1}{r^2} \left( x\frac{dy}{dt} - y\frac{dx}{dt} \right) \text{, where } r^2 = x^2 + y^2
         """
         r = self.eval(t)
-        dr = self.eval(t, dt=True)
+        dr = self.eval(t, derivative=1)
 
-        r2 = np.linalg.norm(r) ** 2
-        val = (1.0 / r2) * (r[0] * dr[1] - r[1] * dr[0])
-        return val
+        r2 = np.linalg.norm(r, axis=1) ** 2
+        if np.any(np.isnan(dr)) or np.isclose(r2, 0):
+            # Happens the the spline is not differentiable in this location
+            # or when the point is at the origin
+            # The solution to return 0 is a bit of a hack but works in practice with
+            # the numerical integration
+            return np.squeeze(np.zeros(r.shape[0]))
+        val = (1.0 / r2) * (r[:, 0] * dr[:, 1] - r[:, 1] * dr[:, 0])
+        return np.squeeze(val)
 
-    def isInside(self, point):
-        """
-        Determines if a point is inside the closed spline
-        or not. Is it fair game to change the coeff of the
-        object or should it be cloned first?
-        The :meth:`splinebox.splines.Spline.translate` method should
-        be used instead of subtracting the point.
+    def is_inside(self, x, y):
+        r"""
+        Determines if a point with coordinates `x`, `y` is inside the spline.
+        Only works for closed 2D curves.
+
+        To determine whether a point is inside or outside the spline, the winding number
+        is used:
+
+        .. math::
+            wind(\gamma, 0) = \frac{1}{2\pi} \oint_\gamma d\theta = \frac{1}{2\pi} \oint_\gamma \left( \frac{x}{r^2}dy - \frac{y}{r^2}dx \right).
+
+        For a description of :math:`d\theta` check :meth:`splinebox.splines_curves.Spline.dtheta`.
 
         Parameters
         ----------
-        point : numpy.array
+        x : numpy.ndarray or float
+            x coordinate(s) of point(s)
+        y : numpy.ndarray or float
+            y coordinate(s) of point(s)
+
+        Returns
+        -------
+        val : float
+            1 if the point is inside, 0.5 if its on the curve and 0 if it is outside the curve.
         """
-        if self.closed:
-            originalCoefs = copy.deepcopy(self.coeffs)
-            self.coeffs = originalCoefs - point
-
-            res = scipy.integrate.quad(self.windingNumber, 0, self.M)
-
-            self.coeffs = originalCoefs
-
-            val = res[0]
-            if np.abs(val - 2.0 * np.pi) < 1e-6:
-                return 1
-            elif np.abs(val - np.pi) < 1e-6:
-                return 0.5
-            else:
-                return 0
-        else:
+        if not self.closed:
             raise RuntimeError("isInside() can only be used with closed curves.")
+        if self.coeffs.ndim != 2 or self.coeffs.shape[1] != 2:
+            raise RuntimeError("isInside() can only be used with 2D curves.")
+
+        if isinstance(x, float):
+            x = np.array([x])
+        if isinstance(y, float):
+            y = np.array([y])
+        if not np.allclose(x.shape, y.shape):
+            raise ValueError("x and y need to have the same shape")
+
+        results = np.zeros(x.shape)
+        for coord, point in enumerate(np.stack([x, y], axis=-1)):
+            spline_copy = self.copy()
+            spline_copy.translate(-point)
+            winding_number = scipy.integrate.quad(spline_copy.dtheta, 0, spline_copy.M)[0]
+            for ref in np.array([[1, 1], [1, 2], [2, 2], [2, 1]]):
+                if np.allclose(point, ref):
+                    print(ref, winding_number)
+            if np.abs(np.abs(winding_number) - 2 * np.pi) < 1e-6:
+                results[coord] = 1
+            elif np.abs(winding_number) > 1e-6:
+                results[coord] = 0.5
+            else:
+                results[coord] = 0
+        return np.squeeze(results)
 
     def getKnotsFromCoefs(self):
         if len(self.coeffs.shape) == 1:
@@ -356,7 +371,7 @@ class Spline:
 
         Some intelegent default can probably be set so the user only has to provide s.
         Or this function should be made private entirely,
-        because there is :meth:`splinebox.splines.Spline.lengthToParameter`
+        because there is :meth:`splinebox.spline_curves.Spline.lengthToParameter`
 
         Parameters
         ----------
@@ -520,18 +535,21 @@ class Spline:
 
         return centroid / self.M
 
-    def translate(self, translationVector):
+    def translate(self, vector):
         """
-        Translates the spline by a vector.
-        Is vector the right name here or can it also be a scalar?
+        Translates the spline by a `vector`.
+
+        Parameters
+        ----------
+        vector : numpy.ndarray
+            Displacement vector added to the coefficients.
         """
-        for k in range(self.M):
-            self.coeffs[k] += translationVector
+        self.coeffs = self.coeffs + vector
 
     def scale(self, scalingFactor):
         """
         Enlarge or shrink the spline.
-        This should probably use :meth:`splinebox.splines.Spline.translate`
+        This should probably use :meth:`splinebox.spline_curves.Spline.translate`
         `scalingFactor` can be renamed to `factor`.
         """
         centroid = self.centroid()
