@@ -174,17 +174,10 @@ def test_arc_length_to_parameter():
     assert np.allclose(spline.arc_length_to_parameter(ls), expected)
 
 
-def test_translate(spline_curve, coeff_gen, translation_vector, is_hermite_spline):
-    support = spline_curve.basis_function.support
-    closed = spline_curve.closed
-    M = spline_curve.M
-
-    spline_curve.coeffs = coeff_gen(M, support, closed)
-    if is_hermite_spline(spline_curve):
-        spline_curve.tangents = coeff_gen(spline_curve.M, support, closed)
-
-    spline_curve_copy = spline_curve.copy()
-    spline_curve_copy.translate(translation_vector)
-    t = np.linspace(0, M - 1, 100) if closed else np.linspace(0, M, 100)
-    expected = spline_curve.eval(t) + translation_vector
-    assert np.allclose(spline_curve_copy.eval(t), expected)
+def test_translate(initialized_spline_curve, translation_vector):
+    spline = initialized_spline_curve
+    spline_copy = spline.copy()
+    spline_copy.translate(translation_vector)
+    t = np.linspace(0, spline.M - 1, 100) if spline.closed else np.linspace(0, spline.M, 100)
+    expected = spline.eval(t) + translation_vector
+    assert np.allclose(spline_copy.eval(t), expected)

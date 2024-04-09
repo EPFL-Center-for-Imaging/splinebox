@@ -186,3 +186,16 @@ def is_hermite_spline():
 @pytest.fixture
 def translation_vector(codomain_dimensionality):
     return np.random.rand(codomain_dimensionality) * 10 - 5
+
+
+@pytest.fixture
+def initialized_spline_curve(spline_curve, is_hermite_spline, coeff_gen):
+    support = spline_curve.basis_function.support
+    closed = spline_curve.closed
+    M = spline_curve.M
+
+    spline_curve.coeffs = coeff_gen(M, support, closed)
+    if is_hermite_spline(spline_curve):
+        spline_curve.tangents = coeff_gen(spline_curve.M, support, closed)
+
+    return spline_curve
