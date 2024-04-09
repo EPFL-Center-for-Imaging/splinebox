@@ -52,11 +52,10 @@ class Spline:
                 raise ValueError(
                     f"The number of coefficients must match the number of knots for a closed spline. You provided {n} coefficients for a spline with M={self.M} knots."
                 )
-            support = self.basis_function.support
-            padded_M = int(self.M + support)
+            padded_M = self.M + 2 * self.pad
             if not self.closed and n != padded_M:
                 raise ValueError(
-                    f"Non-closed splines are padded at the ends with additional knots, i.e. the effective number of knots is M + support of the basis function. You provided {n} coefficients for a spline with M={self.M} and a basis function with support={support}, expected {padded_M}."
+                    f"Non-closed splines are padded at the ends with additional knots, i.e. the effective number of knots is M + 2 * ceil(support/2) of the basis function. You provided {n} coefficients for a spline with M={self.M} and a basis function with support={self.basis_function.support}, expected {padded_M}."
                 )
         self._coeffs = values
 
