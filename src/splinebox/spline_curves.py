@@ -252,7 +252,7 @@ class Spline:
         """
         N = len(contourPoints)
 
-        phi = np.zeros((N, self.M)) if self.closed else np.zeros((N, self.M + int(self.basis_function.support)))
+        phi = np.zeros((N, self.M)) if self.closed else np.zeros((N, self.M + 2 * self.pad))
 
         if len(contourPoints.shape) == 1:
             r = np.zeros(N)
@@ -292,7 +292,7 @@ class Spline:
                         basisFactor = 0.0
                     phi[i, k] += basisFactor
             else:
-                for k in range(self.M + int(self.basis_function.support)):
+                for k in range(self.M + 2 * self.pad):
                     tval = t - (k - self.halfSupport)
                     if tval > -self.halfSupport and tval < self.halfSupport:
                         basisFactor = self.basis_function.eval(tval)
@@ -308,8 +308,8 @@ class Spline:
                 for k in range(self.M):
                     self.coeffs[k] = c[0][k]
             else:
-                self.coeffs = np.zeros([self.M + int(self.basis_function.support)])
-                for k in range(self.M + int(self.basis_function.support)):
+                self.coeffs = np.zeros([self.M + 2 * self.pad])
+                for k in range(self.M + 2 * self.pad):
                     self.coeffs[k] = c[0][k]
 
         elif len(contourPoints.shape) == 2 and contourPoints.shape[1] == 2:
@@ -321,8 +321,8 @@ class Spline:
                 for k in range(self.M):
                     self.coeffs[k] = np.array([cX[0][k], cY[0][k]])
             else:
-                self.coeffs = np.zeros([self.M + int(self.basis_function.support), 2])
-                for k in range(self.M + int(self.basis_function.support)):
+                self.coeffs = np.zeros([self.M + 2 * self.pad, 2])
+                for k in range(self.M + 2 * self.pad):
                     self.coeffs[k] = np.array([cX[0][k], cY[0][k]])
 
     def arcLength(self, t0, tf=None):
@@ -484,7 +484,7 @@ class Spline:
         else:
             # take into account the padding with additional basis functions
             # for non-closed splines
-            k = np.arange(self.M + int(self.basis_function.support))
+            k = np.arange(self.M + 2 * self.pad)
             k = k[np.newaxis, :]
             t = t[:, np.newaxis]
             # positions at which the basis functions have to be evaluated
@@ -600,7 +600,7 @@ class HermiteSpline(Spline):
                     f"The number of tangents must match the number of knots for a closed spline. You provided {n} tangents for a spline with M={self.M} knots."
                 )
             support = self.basis_function.support
-            padded_M = int(self.M + support)
+            padded_M = self.M + 2 * self.pad
             if not self.closed and n != padded_M:
                 raise ValueError(
                     f"Non-closed splines are padded at the ends with additional knots, i.e. the effective number of knots is M + support of the basis function. You provided {n} tangents for a spline with M={self.M} and a basis function with support={support}, expected {padded_M}."

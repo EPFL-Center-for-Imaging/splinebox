@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import pytest
 import splinebox.basis_functions
@@ -120,7 +122,7 @@ def coeff_gen(codomain_dimensionality):
         if closed:
             points = rng.random((M, codomain_dimensionality)) * 100
         else:
-            points = rng.random((M + support, codomain_dimensionality)) * 100
+            points = rng.random((M + 2 * math.ceil(support / 2), codomain_dimensionality)) * 100
         # remove superfluos dimension if codomain_dimensionlity is 1
         return np.squeeze(points)
 
