@@ -131,3 +131,44 @@ def test_arc_length():
     expected = np.linspace(0, 2 * np.pi, 100)
 
     assert np.allclose(arc_lengths, expected)
+
+
+def test_arc_length_to_parameter():
+    # Create circular spline with radius sqrt(2)
+    M = 5
+    basis_function = splinebox.basis_functions.Exponential(
+        M,
+        2.0 * numpy.pi / M,
+    )
+    spline = splinebox.spline_curves.Spline(M=M, basis_function=basis_function, closed=True)
+    knots = []
+    for t in np.linspace(0, 2 * np.pi, M + 1)[:-1]:
+        knots.append([np.sin(t), np.cos(t)])
+    knots = np.array(knots)
+    spline.getCoefsFromKnots(knots)
+
+    ls = np.linspace(0, 2 * np.pi, 15)
+    expected = ls / 2 / np.pi * M
+    assert np.allclose(spline.arc_length_to_parameter(ls), expected)
+
+    # Create a sawtooth spline
+    M = 7
+    basis_function = splinebox.basis_functions.B1()
+    spline = splinebox.spline_curves.Spline(M=M, basis_function=basis_function, closed=False)
+    knots = np.array([[0, 0], [1, 1], [1, 0], [2, 1], [2, 0], [3, 1], [3, 0]])
+    spline.getCoefsFromKnots(knots)
+
+    rising_length = np.sqrt(2)
+    tooth_length = rising_length + 1
+    total_length = 3 * tooth_length
+    ls = np.linspace(0, total_length, 15)
+
+    def to_param(length):
+        n_tooth = length // tooth_length
+        residual = length % tooth_length
+        partial_tooth_param = residual / rising_length if residual < rising_length else 1 + residual - rising_length
+        # there are two knots per tooth
+        return n_tooth * 2 + partial_tooth_param
+
+    expected = map(to_param, ls)
+    assert np.allclose(spline.arc_length_to_parameter(ls), expected)
