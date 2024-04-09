@@ -12,7 +12,7 @@ basis_0th = basis.eval(x)
 basis_1st = basis.eval(x, derivative=1)
 basis_2nd = basis.eval(x, derivative=2)
 
-fig.suptitle("Keys basis function and its derivatives")
+fig.suptitle("Catmull Rom basis function and its derivatives")
 axes[0].plot(x, basis_0th, label=r"$f(x)$")
 axes[0].legend()
 axes[1].plot(x, basis_1st, label=r"$\frac{df}{dx}(x)$")
