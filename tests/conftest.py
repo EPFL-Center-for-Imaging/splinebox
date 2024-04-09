@@ -181,3 +181,8 @@ def is_hermite_spline():
         )
 
     return _is_hermite_spline
+
+
+@pytest.fixture
+def translation_vector(codomain_dimensionality):
+    return np.random.rand(codomain_dimensionality) * 10 - 5
