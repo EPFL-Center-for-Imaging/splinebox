@@ -1,3 +1,4 @@
+import numpy
 import numpy as np
 import pytest
 import splinebox.basis_functions
@@ -106,3 +107,22 @@ def test_draw():
 
     output = spline.draw(x, y)
     assert np.allclose(output, expected)
+
+
+def test_arc_length():
+    # Create circular spline with radius sqrt(2)
+    M = 4
+    basis_function = splinebox.basis_functions.Exponential(
+        M,
+        2.0 * numpy.pi / M,
+    )
+    spline = splinebox.spline_curves.Spline(M=M, basis_function=basis_function, closed=True)
+    knots = np.array([[-1, -1], [-1, 1], [1, 1], [1, -1]])
+    spline.getCoefsFromKnots(knots)
+
+    t = np.linspace(0, M - 1, 100)
+    arc_lengths = spline.arc_length(t)
+
+    expected = np.linspace(0, 2 * np.pi, 100)
+
+    assert np.allclose(arc_lengths, expected)
