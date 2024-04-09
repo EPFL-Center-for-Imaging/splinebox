@@ -1,3 +1,5 @@
+import math
+
 import numpy
 import numpy as np
 import pytest
@@ -41,7 +43,10 @@ def test_set_coeffs(spline_curve, is_hermite_spline):
     """
     Test that you can only set coefficients and tangents of the right length.
     """
-    expected = spline_curve.M if spline_curve.closed else int(spline_curve.M + spline_curve.basis_function.support)
+    if spline_curve.closed:
+        expected = spline_curve.M
+    else:
+        expected = spline_curve.M + 2 * math.ceil(spline_curve.basis_function.support / 2)
 
     for i in range(expected - 2, expected + 2):
         coeffs = np.arange(i)
