@@ -177,25 +177,8 @@ class Spline:
         return np.squeeze(results)
 
     def getKnotsFromCoefs(self):
-        if len(self.coeffs.shape) == 1:
-            if self.closed:
-                knots = np.zeros(self.M)
-                for k in range(self.M):
-                    knots[k] = self.eval(k)
-            else:
-                knots = np.zeros(self.M + 2 * self.pad)
-                for kn, k in enumerate(range(-self.pad, self.M + self.pad)):
-                    knots[kn] = self.eval(k)
-        elif len(self.coeffs.shape) == 2 and (self.coeffs.shape[1] == 2):
-            if self.closed:
-                knots = np.zeros((self.M, 2))
-                for k in range(self.M):
-                    knots[k] = self.eval(k)
-            else:
-                knots = np.zeros((self.M + 2 * self.pad, 2))
-                for kn, k in enumerate(range(-self.pad, self.M + self.pad)):
-                    knots[kn] = self.eval(k)
-        return knots
+        t = np.arange(self.M) if self.closed else np.arange(-self.pad, self.M + self.pad)
+        return self.eval(t)
 
     def getCoefsFromKnots(self, knots):
         """
