@@ -181,3 +181,23 @@ def test_translate(initialized_spline_curve, translation_vector):
     t = np.linspace(0, spline.M - 1, 100) if spline.closed else np.linspace(0, spline.M, 100)
     expected = spline.eval(t) + translation_vector
     assert np.allclose(spline_copy.eval(t), expected)
+
+
+def test_rotate(initialized_spline_curve, rotation_matrix, is_hermite_spline):
+    spline = initialized_spline_curve
+    spline_copy = spline.copy()
+    if spline.coeffs.ndim == 1:
+        with pytest.raises(RuntimeError):
+            spline_copy.rotate(rotation_matrix)
+    else:
+        spline_copy.rotate(rotation_matrix)
+        t = np.linspace(0, spline.M - 1, 100) if spline.closed else np.linspace(0, spline.M, 100)
+        vals = spline.eval(t)
+        if is_hermite_spline(spline):
+            expected = []
+            for i in range(2):
+                expected.append((rotation_matrix @ vals[i].T).T)
+            expected = np.stack(expected)
+        else:
+            expected = (rotation_matrix @ vals.T).T
+        assert np.allclose(spline_copy.eval(t), expected)

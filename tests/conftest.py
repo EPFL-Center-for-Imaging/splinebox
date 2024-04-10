@@ -1,3 +1,4 @@
+import itertools
 import math
 
 import numpy as np
@@ -199,3 +200,25 @@ def initialized_spline_curve(spline_curve, is_hermite_spline, coeff_gen):
         spline_curve.tangents = coeff_gen(spline_curve.M, support, closed)
 
     return spline_curve
+
+
+@pytest.fixture
+def rotation_matrix(codomain_dimensionality):
+    rng = np.random.default_rng(seed=9577)
+
+    R = np.eye(codomain_dimensionality)
+    if codomain_dimensionality == 1:
+        print(R.shape)
+        return R
+    # Get the axis of all possible rotation planes aligned with the axis
+    plane_indices = list(itertools.combinations(np.arange(codomain_dimensionality), 2))
+    # randomly choose an angle between -pi and pi for each rotation plane
+    thetas = rng.random(len(plane_indices)) * 2 * np.pi - np.pi
+    for (i, j), theta in zip(plane_indices, thetas):
+        R_theta = np.eye(codomain_dimensionality)
+        R_theta[i, i] = np.cos(theta)
+        R_theta[i, j] = np.sin(theta)
+        R_theta[j, i] = -np.sin(theta)
+        R_theta[j, j] = np.cos(theta)
+        R = R @ R_theta
+    return R
