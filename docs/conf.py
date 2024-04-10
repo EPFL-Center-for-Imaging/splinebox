@@ -49,7 +49,56 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = "alabaster"
+html_theme = "pydata_sphinx_theme"
+html_title = "Splinebox Documentation"
+html_logo = "_static/logo.png"
+html_favicon = "_static/favicon.png"
+html_sourcelink_suffix = ""
+html_short_title = "Splinebox"
+
+html_theme_options = {
+    "header_links_before_dropdown": 6,
+    "icon_links": [
+        {
+            "name": "GitHub",
+            "url": "https://github.com/EPFL-Center-for-Imaging/splinebox",
+            "icon": "fa-brands fa-github",
+        },
+        {
+            "name": "PyPI",
+            "url": "https://pypi.org/project/splinebox/",
+            "icon": "fa-brands fa-python",
+        },
+        {
+            "name": "Contact",
+            "url": "mailto: florian.aymanns@epfl.ch",
+            "icon": "fa-brands fa-telegram",
+        },
+        {
+            "name": "EPFL Center for Imaging",
+            "url": "https://imaging.epfl.ch/",
+            "icon": "_static/imaging.png",
+            "type": "local",
+        },
+    ],
+    "use_edit_page_button": True,
+    "show_toc_level": 2,
+    "navbar_align": "content",  # [left, content, right] For testing that the navbar items align properly
+    "navbar_center": ["navbar-nav"],
+    "navbar_start": ["navbar-logo"],
+    "navbar_end": ["version-switcher", "navbar-icon-links"],
+    "secondary_sidebar_items": ["page-toc", "searchbox", "edit-this-page", "sourcelink"],
+    "footer_start": ["copyright"],
+    "pygment_light_style": "tango",
+}
+
+html_context = {
+    "github_user": "EPFL-Center-for-Imaging",
+    "github_repo": "splinebox",
+    "github_version": "main",
+    "doc_path": "doc",
+    "default_mode": "light",
+}
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
