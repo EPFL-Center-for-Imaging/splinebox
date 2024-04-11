@@ -1,0 +1,6 @@
+B3
+==
+
+.. autoclass:: splinebox.basis_functions.B3
+
+.. plot:: pyplots/plot_b3.py

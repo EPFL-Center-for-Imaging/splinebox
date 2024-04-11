@@ -5,4 +5,8 @@ Spline curves
    :members:
    :undoc-members:
 
-.. autoclass:: splinebox.spline_curves.HermiteSpline
+.. toctree::
+   :maxdepth: 1
+   :hidden:
+
+   hermite_spline_curves.rst
