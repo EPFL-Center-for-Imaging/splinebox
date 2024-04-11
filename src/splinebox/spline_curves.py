@@ -510,12 +510,7 @@ class Spline:
         Why is centroid always 2D? Should there be a check for
         dimensionality here?
         """
-        centroid = np.zeros(2)
-
-        for k in range(self.M):
-            centroid += self.coeffs[k]
-
-        return centroid / self.M
+        return np.mean(self.coeffs, axis=0)
 
     def translate(self, vector):
         """
