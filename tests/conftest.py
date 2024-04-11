@@ -119,7 +119,7 @@ def codomain_dimensionality(request):
 def coeff_gen(codomain_dimensionality):
     rng = np.random.default_rng(seed=1492)
 
-    def _point_gen(M, support, closed):
+    def _coeff_gen(M, support, closed):
         if closed:
             points = rng.random((M, codomain_dimensionality)) * 100
         else:
@@ -127,7 +127,7 @@ def coeff_gen(codomain_dimensionality):
         # remove superfluos dimension if codomain_dimensionlity is 1
         return np.squeeze(points)
 
-    return _point_gen
+    return _coeff_gen
 
 
 @pytest.fixture
@@ -135,7 +135,7 @@ def knot_gen(codomain_dimensionality):
     rng = np.random.default_rng(seed=2657)
 
     def _knot_gen():
-        return rng.random((100, codomain_dimensionality))
+        return np.squeeze(rng.random((100, codomain_dimensionality)))
 
     return _knot_gen
 
@@ -208,7 +208,6 @@ def rotation_matrix(codomain_dimensionality):
 
     R = np.eye(codomain_dimensionality)
     if codomain_dimensionality == 1:
-        print(R.shape)
         return R
     # Get the axis of all possible rotation planes aligned with the axis
     plane_indices = list(itertools.combinations(np.arange(codomain_dimensionality), 2))
@@ -222,3 +221,19 @@ def rotation_matrix(codomain_dimensionality):
         R_theta[j, j] = np.cos(theta)
         R = R @ R_theta
     return R
+
+
+@pytest.fixture(params=[False, True])
+def arc_length_parametrization(request):
+    return request.param
+
+
+@pytest.fixture(params=[2, 10, 50])
+def n_points(request):
+    return request.param
+
+
+@pytest.fixture
+def points(codomain_dimensionality, n_points):
+    rng = np.random.default_rng(seed=5544)
+    return np.squeeze(rng.random((n_points, codomain_dimensionality)))

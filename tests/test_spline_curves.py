@@ -3,6 +3,7 @@ import math
 import numpy
 import numpy as np
 import pytest
+import scipy
 import splinebox.basis_functions
 
 
@@ -201,3 +202,34 @@ def test_rotate(initialized_spline_curve, rotation_matrix, is_hermite_spline):
         else:
             expected = (rotation_matrix @ vals.T).T
         assert np.allclose(spline_copy.eval(t), expected)
+
+
+def test_fit(spline_curve, arc_length_parametrization, points):
+    if len(points) < spline_curve.M:
+        with pytest.raises(RuntimeError):
+            spline_curve.fit(points)
+    else:
+        spline_curve.fit(points)
+        coeffs0 = spline_curve.coeffs.copy()
+
+        if spline_curve.closed:
+            t = np.linspace(0, spline_curve.M, len(points) + 1)[:-1]
+        else:
+            t = np.linspace(0, spline_curve.M, len(points))
+
+        if points.ndim == 1:
+            points = points[:, np.newaxis]
+
+        def difference_func(coeffs, i):
+            spline_curve.coeffs = coeffs
+            spline_vals = spline_curve.eval(t)
+            return np.linalg.norm(points[:, i] - spline_vals)
+
+        if coeffs0.ndim == 1:
+            coeffs0 = coeffs0[:, np.newaxis]
+        coeffs = []
+        for i in range(coeffs0.shape[1]):
+            coeffs.append(scipy.optimize.minimize(difference_func, x0=coeffs0[:, i], args=(i,)).x)
+        coeffs = np.stack(coeffs, axis=-1)
+
+        assert np.allclose(coeffs, coeffs0)
