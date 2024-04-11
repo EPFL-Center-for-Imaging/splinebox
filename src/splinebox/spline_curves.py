@@ -60,6 +60,48 @@ class Spline:
         self._coeffs = values
 
     @property
+    def knots(self):
+        t = np.arange(self.M) if self.closed else np.arange(-self.pad, self.M + self.pad)
+        return self.eval(t)
+
+    @knots.setter
+    def knots(self, values):
+        knots = np.array(values)
+        if len(knots.shape) == 1:
+            if self.closed:
+                self.coeffs = self.basis_function.filter_periodic(knots)
+            else:
+                for _i in range(int(self.pad)):
+                    # knots = np.append(knots, knots[-1-_i] + (knots[-1-_i]-knots[-(_i+1)*2]) )
+                    knots = np.append(knots, knots[-1])
+                for _i in range(int(self.pad)):
+                    # knots = np.append(knots[0+_i] + (knots[0+_i]-knots[2*(_i+1)-1]), knots)
+                    knots = np.append(knots[0], knots)
+                self.coeffs = self.basis_function.filter_symmetric(knots)
+        elif len(knots.shape) == 2:
+            if knots.shape[1] == 2:
+                if self.closed:
+                    coeffsX = self.basis_function.filter_periodic(knots[:, 0])
+                    coeffsY = self.basis_function.filter_periodic(knots[:, 1])
+                else:
+                    for _i in range(int(self.pad)):
+                        knots = np.vstack((knots, knots[-1]))
+                    for _i in range(int(self.pad)):
+                        knots = np.vstack((knots[0], knots))
+                    coeffsX = self.basis_function.filter_symmetric(knots[:, 0])
+                    coeffsY = self.basis_function.filter_symmetric(knots[:, 1])
+                self.coeffs = np.hstack(
+                    (
+                        np.array([coeffsX]).transpose(),
+                        np.array([coeffsY]).transpose(),
+                    )
+                )
+            else:
+                raise RuntimeError(self._wrong_dimension_msg)
+        else:
+            raise RuntimeError(self._wrong_array_size_msg)
+
+    @property
     def basis_function(self):
         return self._basis_function
 
@@ -177,8 +219,7 @@ class Spline:
         return np.squeeze(results)
 
     def getKnotsFromCoefs(self):
-        t = np.arange(self.M) if self.closed else np.arange(-self.pad, self.M + self.pad)
-        return self.eval(t)
+        return self.knots
 
     def getCoefsFromKnots(self, knots):
         """
@@ -188,40 +229,7 @@ class Spline:
         get is a bad name since nothing is returned.
         fit would be better.
         """
-        knots = np.array(knots)
-        if len(knots.shape) == 1:
-            if self.closed:
-                self.coeffs = self.basis_function.filter_periodic(knots)
-            else:
-                for _i in range(int(self.pad)):
-                    # knots = np.append(knots, knots[-1-_i] + (knots[-1-_i]-knots[-(_i+1)*2]) )
-                    knots = np.append(knots, knots[-1])
-                for _i in range(int(self.pad)):
-                    # knots = np.append(knots[0+_i] + (knots[0+_i]-knots[2*(_i+1)-1]), knots)
-                    knots = np.append(knots[0], knots)
-                self.coeffs = self.basis_function.filter_symmetric(knots)
-        elif len(knots.shape) == 2:
-            if knots.shape[1] == 2:
-                if self.closed:
-                    coeffsX = self.basis_function.filter_periodic(knots[:, 0])
-                    coeffsY = self.basis_function.filter_periodic(knots[:, 1])
-                else:
-                    for _i in range(int(self.pad)):
-                        knots = np.vstack((knots, knots[-1]))
-                    for _i in range(int(self.pad)):
-                        knots = np.vstack((knots[0], knots))
-                    coeffsX = self.basis_function.filter_symmetric(knots[:, 0])
-                    coeffsY = self.basis_function.filter_symmetric(knots[:, 1])
-                self.coeffs = np.hstack(
-                    (
-                        np.array([coeffsX]).transpose(),
-                        np.array([coeffsY]).transpose(),
-                    )
-                )
-            else:
-                raise RuntimeError(self._wrong_dimension_msg)
-        else:
-            raise RuntimeError(self._wrong_array_size_msg)
+        self.knots = knots
 
     def getCoefsFromDenseContour(self, contourPoints, arcLengthParameterization=False):
         """
