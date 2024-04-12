@@ -204,32 +204,64 @@ def test_rotate(initialized_spline_curve, rotation_matrix, is_hermite_spline):
         assert np.allclose(spline_copy.eval(t), expected)
 
 
-def test_fit(spline_curve, arc_length_parametrization, points):
+def test_fit(spline_curve, arc_length_parametrization, points, is_hermite_spline):
+    # Bool indicating whether spline_curve is a hermite spline or not
+    hermite = is_hermite_spline(spline_curve)
+
     if len(points) < spline_curve.M:
+        # The problem is underdetermined
         with pytest.raises(RuntimeError):
             spline_curve.fit(points)
     else:
         spline_curve.fit(points)
-        coeffs0 = spline_curve.coeffs.copy()
 
+        # Keep a copy of the result of fit
+        coeffs0 = spline_curve.coeffs.copy()
+        if hermite:
+            tangents0 = spline_curve.tangents.copy()
+            half = len(tangents0)
+
+        # Calculate the parameter values for the data points
         if spline_curve.closed:
             t = np.linspace(0, spline_curve.M, len(points) + 1)[:-1]
         else:
             t = np.linspace(0, spline_curve.M, len(points))
 
+        # Add a dimension if the codomain dimensionality is 1
         if points.ndim == 1:
             points = points[:, np.newaxis]
 
-        def difference_func(coeffs, i):
-            spline_curve.coeffs = coeffs
-            spline_vals = spline_curve.eval(t)
-            return np.linalg.norm(points[:, i] - spline_vals)
+        # Define the objective function for the minimization problem
+        def difference_func(x, i):
+            if hermite:
+                spline_curve.coeffs = x[:half]
+                spline_curve.tangents = x[half:]
+                spline_vals = spline_curve.eval(t)[0]
+            else:
+                spline_curve.coeffs = x
+                spline_vals = spline_curve.eval(t)
+            loss = np.linalg.norm(points[:, i] - spline_vals)
+            return loss
 
-        if coeffs0.ndim == 1:
-            coeffs0 = coeffs0[:, np.newaxis]
-        coeffs = []
-        for i in range(coeffs0.shape[1]):
-            coeffs.append(scipy.optimize.minimize(difference_func, x0=coeffs0[:, i], args=(i,)).x)
-        coeffs = np.stack(coeffs, axis=-1)
+        # prepare the initial value for the minimization
+        x0 = np.concatenate([coeffs0, tangents0], axis=0) if hermite else coeffs0
+
+        if x0.ndim == 1:
+            x0 = x0[:, np.newaxis]
+
+        # Minimize for each codomain dimension separately
+        x = []
+        for i in range(x0.shape[1]):
+            x.append(scipy.optimize.minimize(difference_func, x0=x0[:, i], args=(i,)).x)
+
+        # Turn minimization result into coeffs and tangents for the spline
+        x = np.stack(x, axis=-1)
+        if hermite:
+            coeffs = np.squeeze(x[:half])
+            tangents = np.squeeze(x[half:])
+        else:
+            coeffs = np.squeeze(x)
 
         assert np.allclose(coeffs, coeffs0)
+        if hermite:
+            assert np.allclose(tangents, tangents0)
