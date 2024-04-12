@@ -205,90 +205,31 @@ class Spline:
         """
         self.knots = knots
 
-    def getCoefsFromDenseContour(self, contourPoints, arcLengthParameterization=False):
+    def fit(self, points, arc_length_parameterization=False):
         """
-        ???
+        Fit the provided points with the spline using
+        least squares.
 
-        Fits the spline to match a contour.
-        get is a bad name since nothing is returned.
-        fit would be better.
-        Presumably the this is different from getCoefsFromKnots
-        because the spline does not have to go through the points.
+        Parameters
+        ----------
+        points : numpy.ndarray
+            The data points that should be fit.
+        arc_length_parameterization : bool
+            Whether or not to space the knots based on the distance
+            between the provided points. This is usefull when the
+            points are not equally spaced. Default is `False`.
         """
-        N = len(contourPoints)
-
-        phi = np.zeros((N, self.M)) if self.closed else np.zeros((N, self.M + 2 * self.pad))
-
-        if len(contourPoints.shape) == 1:
-            r = np.zeros(N)
-        elif len(contourPoints.shape) == 2 and (contourPoints.shape[1] == 2):
-            r = np.zeros((N, 2))
-
-        if arcLengthParameterization:
-            dist = [np.linalg.norm(contourPoints[i] - contourPoints[i - 1]) for i in range(1, len(contourPoints))]
-            if self.closed:
-                dist.append(np.linalg.norm(contourPoints[0] - contourPoints[-1]))
-            arclengths = np.hstack(([0], np.cumsum(dist, 0)))
+        if len(points) < self.M:
+            raise RuntimeError(
+                "You provided fewer data points than you spline has knots. For the fit to have a unique solution you need to provide at least as many data points as your spline has knots. Consider adding more data or reducing the number of knots M."
+            )
+        if arc_length_parameterization:
+            raise NotImplementedError
         else:
-            if self.closed:
-                samplingRate = int(N / self.M)
-                extraPoints = N % self.M
-            else:
-                samplingRate = int(N / (self.M - 1))
-                extraPoints = N % (self.M - 1)
-
-        for i in range(N):
-            r[i] = contourPoints[i]
-
-            if arcLengthParameterization:
-                if self.closed:
-                    t = arclengths[i] * self.M / arclengths[-1]
-                else:
-                    t = arclengths[i] * (self.M - 1) / arclengths[-1]
-            else:
-                t = i / (samplingRate + 1.0) if i / samplingRate < extraPoints else i / samplingRate
-
-            if self.closed:
-                for k in range(self.M):
-                    tval = self.wrapIndex(t, k)
-                    if tval > -self.halfSupport and tval < self.halfSupport:
-                        basisFactor = self.basis_function.eval(tval)
-                    else:
-                        basisFactor = 0.0
-                    phi[i, k] += basisFactor
-            else:
-                for k in range(self.M + 2 * self.pad):
-                    tval = t - (k - self.halfSupport)
-                    if tval > -self.halfSupport and tval < self.halfSupport:
-                        basisFactor = self.basis_function.eval(tval)
-                    else:
-                        basisFactor = 0.0
-                    phi[i, k] += basisFactor
-
-        if len(contourPoints.shape) == 1:
-            c = np.linalg.lstsq(phi, r, rcond=None)
-
-            if self.closed:
-                self.coeffs = np.zeros([self.M])
-                for k in range(self.M):
-                    self.coeffs[k] = c[0][k]
-            else:
-                self.coeffs = np.zeros([self.M + 2 * self.pad])
-                for k in range(self.M + 2 * self.pad):
-                    self.coeffs[k] = c[0][k]
-
-        elif len(contourPoints.shape) == 2 and contourPoints.shape[1] == 2:
-            cX = np.linalg.lstsq(phi, r[:, 0], rcond=None)
-            cY = np.linalg.lstsq(phi, r[:, 1], rcond=None)
-
-            if self.closed:
-                self.coeffs = np.zeros([self.M, 2])
-                for k in range(self.M):
-                    self.coeffs[k] = np.array([cX[0][k], cY[0][k]])
-            else:
-                self.coeffs = np.zeros([self.M + 2 * self.pad, 2])
-                for k in range(self.M + 2 * self.pad):
-                    self.coeffs[k] = np.array([cX[0][k], cY[0][k]])
+            t = np.linspace(0, self.M, len(points) + 1)[:-1] if self.closed else np.linspace(0, self.M, len(points))
+        tval = self._get_tval(t)
+        basis_function_values = self.basis_function.eval(tval, derivative=0)
+        self.coeffs = np.linalg.lstsq(basis_function_values, points, rcond=None)[0]
 
     def arcLength(self, t0, tf=None):
         """
@@ -435,6 +376,7 @@ class Spline:
         This is a helper method for `eval`. It is its own method
         to allow :class:`splinebox.spline_curves.HermiteSpline` to
         overwrite the `eval` method using `_get_tval`.
+        It is also used in :meth:`splinebox.spline_curves.Spline.fit`
         """
         if not isinstance(t, collections.abc.Iterable):
             t = np.array([t])
@@ -449,11 +391,11 @@ class Spline:
         else:
             # take into account the padding with additional basis functions
             # for non-closed splines
-            k = np.arange(self.M + 2 * self.pad)
+            k = np.arange(self.M + 2 * self.pad) - self.pad
             k = k[np.newaxis, :]
             t = t[:, np.newaxis]
             # positions at which the basis functions have to be evaluated
-            tval = t - (k - self.halfSupport)
+            tval = t - k
         return tval
 
     @staticmethod
@@ -606,72 +548,22 @@ class HermiteSpline(Spline):
         else:
             raise RuntimeError(self._wrong_array_size_msg)
 
-    def getCoefsFromDenseContour(self, contourPoints, arcLengthParameterization=False):
-        N = len(contourPoints)
-        phi = np.zeros((N, 2 * self.M))
-
-        if len(contourPoints.shape) == 1:
-            r = np.zeros(N)
-        elif len(contourPoints.shape) == 2 and (contourPoints.shape[1] == 2):
-            r = np.zeros((N, 2))
-
-        if arcLengthParameterization:
-            dist = [np.linalg.norm(contourPoints[i] - contourPoints[i - 1]) for i in range(1, len(contourPoints))]
-            if self.closed:
-                dist.append(np.linalg.norm(contourPoints[0] - contourPoints[-1]))
-            arclengths = np.hstack(([0], np.cumsum(dist, 0)))
+    def fit(self, points, arc_length_parameterization=False):
+        if len(points) < self.M:
+            raise RuntimeError(
+                "You provided fewer data points than you spline has knots. For the fit to have a unique solution you need to provide at least as many data points as your spline has knots. Consider adding more data or reducing the number of knots M."
+            )
+        if arc_length_parameterization:
+            raise NotImplementedError
         else:
-            if self.closed:
-                samplingRate = int(N / self.M)
-                extraPoints = N % self.M
-            else:
-                samplingRate = int(N / (self.M - 1))
-                extraPoints = N % (self.M - 1)
-
-        for i in range(N):
-            r[i] = contourPoints[i]
-
-            if arcLengthParameterization:
-                if self.closed:
-                    t = arclengths[i] * self.M / arclengths[-1]
-                else:
-                    t = arclengths[i] * (self.M - 1) / arclengths[-1]
-            else:
-                if i == 0:
-                    t = 0
-                elif t < extraPoints:
-                    t += 1.0 / (samplingRate + 1.0)
-                else:
-                    t += 1.0 / samplingRate
-
-            for k in range(self.M):
-                tval = self.wrapIndex(t, k) if self.closed else t - k
-                if tval > -self.halfSupport and tval < self.halfSupport:
-                    basisFactor = self.basis_function.eval(tval)
-                else:
-                    basisFactor = [0.0, 0.0]
-
-                phi[i, k] += basisFactor[0]
-                phi[i, k + self.M] += basisFactor[1]
-
-        if len(contourPoints.shape) == 1:
-            c = np.linalg.lstsq(phi, r, rcond=None)
-
-            self.coeffs = np.zeros([self.M])
-            self.tangents = np.zeros([self.M])
-            for k in range(self.M):
-                self.coeffs[k] = c[0][k]
-                self.tangents[k] = c[0][k + self.M]
-
-        elif len(contourPoints.shape) == 2 and (contourPoints.shape[1] == 2):
-            cX = np.linalg.lstsq(phi, r[:, 0], rcond=None)
-            cY = np.linalg.lstsq(phi, r[:, 1], rcond=None)
-
-            self.coeffs = np.zeros([self.M, 2])
-            self.tangents = np.zeros([self.M, 2])
-            for k in range(self.M):
-                self.coeffs[k] = np.array([cX[0][k], cY[0][k]])
-                self.tangents[k] = np.array([cX[0][k + self.M], cY[0][k + self.M]])
+            t = np.linspace(0, self.M, len(points) + 1)[:-1] if self.closed else np.linspace(0, self.M, len(points))
+        tval = self._get_tval(t)
+        basis_function_values = self.basis_function.eval(tval, derivative=0)
+        basis_function_values = np.concatenate([basis_function_values[0], basis_function_values[0]], axis=1)
+        half = self.M if self.closed else self.M + 2 * self.pad
+        solution = np.linalg.lstsq(basis_function_values, points, rcond=None)[0]
+        self.coeffs = solution[:half]
+        self.tangents = solution[half:]
 
     def eval(self, t, derivative=0):
         """
