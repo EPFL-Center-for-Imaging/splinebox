@@ -518,6 +518,27 @@ class HermiteSpline(Spline):
         self._tangents = values
 
     @property
+    def knots(self):
+        t = np.arange(self.M) if self.closed else np.arange(-self.pad, self.M + self.pad)
+        return self.eval(t)
+
+    @knots.setter
+    def knots(self, values):
+        if values is not None:
+            n = len(values)
+            if self.closed and n != self.M:
+                raise ValueError(
+                    f"The number of tangents must match the number of knots for a closed spline. You provided {n} tangents for a spline with M={self.M} knots."
+                )
+            support = self.basis_function.support
+            padded_M = self.M + 2 * self.pad
+            if not self.closed and n != padded_M:
+                raise ValueError(
+                    f"Non-closed splines are padded at the ends with additional knots, i.e. the effective number of knots is M + support of the basis function. You provided {n} tangents for a spline with M={self.M} and a basis function with support={support}, expected {padded_M}."
+                )
+        self.coeffs = values
+
+    @property
     def basis_function(self):
         return self._basis_function
 
@@ -530,6 +551,8 @@ class HermiteSpline(Spline):
         self._basis_function = value
 
     def getCoefsFromKnots(self, knots, tangentAtKnots):
+        # self.knots = knots
+        # self.tangents = tangentAtKnots
         knots = np.array(knots)
         tangentAtKnots = np.array(tangentAtKnots)
 
