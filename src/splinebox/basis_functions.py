@@ -681,6 +681,14 @@ class CubicHermite(BasisFunction):
 
         return val
 
+    @staticmethod
+    def filter_symmetric(s):
+        return s
+
+    @staticmethod
+    def filter_periodic(s):
+        return s
+
 
 class ExponentialHermite(BasisFunction):
     """
@@ -770,6 +778,14 @@ class ExponentialHermite(BasisFunction):
     def _derivative_2(x):
         raise RuntimeError("ExponentialHermite isn't twice differentiable.")
         return
+
+    @staticmethod
+    def filter_symmetric(s):
+        return s
+
+    @staticmethod
+    def filter_periodic(s):
+        return s
 
 
 def _multinomial(

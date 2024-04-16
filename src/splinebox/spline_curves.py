@@ -521,25 +521,6 @@ class HermiteSpline(Spline):
         self._tangents = values
 
     @property
-    def knots(self):
-        t = np.arange(self.M) if self.closed else np.arange(-self.pad, self.M + self.pad)
-        return self.eval(t)
-
-    @knots.setter
-    def knots(self, values):
-        knots = np.array(values)
-        if self.closed:
-            self.coeffs = knots
-        else:
-            # Add constant padding for the ends of the spline
-            if knots.ndim == 1:
-                knots = knots[:, np.newaxis]
-            knots = np.pad(knots, ((self.pad, self.pad), (0, 0)), mode="edge")
-            knots = np.squeeze(knots)
-
-            self.coeffs = knots
-
-    @property
     def basis_function(self):
         return self._basis_function
 
