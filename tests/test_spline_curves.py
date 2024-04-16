@@ -273,12 +273,20 @@ def test_knots(spline_curve, knot_gen, is_hermite_spline, request):
     spline_curve.knots = knots
 
     if is_hermite_spline(spline_curve):
+        # Use finite differences as tangents
         if spline_curve.closed:
-            tangents = knots
+            if knots.ndim == 1:
+                diff = np.diff(knots, axis=0, append=knots[0])
+            else:
+                diff = np.diff(knots, axis=0, append=knots[0][np.newaxis, :])
+            tangents = (diff + np.roll(diff, 1)) / 2
         else:
-            tangents = knots[:, np.newaxis] if knots.ndim == 1 else knots
+            diff = np.diff(knots, axis=0)
             pad = math.ceil(spline_curve.basis_function.support / 2)
-            tangents = np.pad(tangents, ((pad, pad), (0, 0)), mode="edge")
+            if diff.ndim == 1:
+                diff = diff[:, np.newaxis]
+            diff = np.pad(diff, ((pad + 1, pad + 1), (0, 0)), mode="constant", constant_values=(0,))
+            tangents = (diff[:-1] + diff[1:]) / 2
             tangents = np.squeeze(tangents)
         spline_curve.tangents = tangents
 
