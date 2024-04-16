@@ -134,8 +134,8 @@ def coeff_gen(codomain_dimensionality):
 def knot_gen(codomain_dimensionality):
     rng = np.random.default_rng(seed=2657)
 
-    def _knot_gen():
-        return np.squeeze(rng.random((100, codomain_dimensionality)))
+    def _knot_gen(M=100):
+        return np.squeeze(rng.random((M, codomain_dimensionality)))
 
     return _knot_gen
 

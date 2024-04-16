@@ -98,8 +98,7 @@ def test_closed_splines(closed_spline_curve, derivative, coeff_gen, is_hermite_s
 
 def test_draw():
     spline = splinebox.spline_curves.Spline(M=4, basis_function=splinebox.basis_functions.B1(), closed=True)
-    knots = np.array([[1, 1], [1, 2], [2, 2], [2, 1]])
-    spline.getCoefsFromKnots(knots)
+    spline.knots = np.array([[1, 1], [1, 2], [2, 2], [2, 1]])
 
     x = np.linspace(0, 3, 31)
     y = np.linspace(0, 3, 31)
@@ -123,8 +122,7 @@ def test_arc_length():
         2.0 * numpy.pi / M,
     )
     spline = splinebox.spline_curves.Spline(M=M, basis_function=basis_function, closed=True)
-    knots = np.array([[-1, -1], [-1, 1], [1, 1], [1, -1]])
-    spline.getCoefsFromKnots(knots)
+    spline.knots = np.array([[-1, -1], [-1, 1], [1, 1], [1, -1]])
 
     t = np.linspace(0, M - 1, 100)
     arc_lengths = spline.arc_length(t)
@@ -146,7 +144,7 @@ def test_arc_length_to_parameter():
     for t in np.linspace(0, 2 * np.pi, M + 1)[:-1]:
         knots.append([np.sin(t), np.cos(t)])
     knots = np.array(knots)
-    spline.getCoefsFromKnots(knots)
+    spline.knots = knots
 
     ls = np.linspace(0, 2 * np.pi, 15)
     expected = ls / 2 / np.pi * M
@@ -156,8 +154,7 @@ def test_arc_length_to_parameter():
     M = 7
     basis_function = splinebox.basis_functions.B1()
     spline = splinebox.spline_curves.Spline(M=M, basis_function=basis_function, closed=False)
-    knots = np.array([[0, 0], [1, 1], [1, 0], [2, 1], [2, 0], [3, 1], [3, 0]])
-    spline.getCoefsFromKnots(knots)
+    spline.knots = np.array([[0, 0], [1, 1], [1, 0], [2, 1], [2, 0], [3, 1], [3, 0]])
 
     rising_length = np.sqrt(2)
     tooth_length = rising_length + 1
@@ -265,3 +262,26 @@ def test_fit(spline_curve, arc_length_parametrization, points, is_hermite_spline
         assert np.allclose(coeffs, coeffs0)
         if hermite:
             assert np.allclose(tangents, tangents0)
+
+
+def test_knots(spline_curve, knot_gen, is_hermite_spline):
+    knots = knot_gen(spline_curve.M)
+    spline_curve.knots = knots
+
+    if is_hermite_spline:
+        if spline_curve.closed:
+            tangents = knots
+        else:
+            tangents = knots[:, np.newaxis] if knots.ndim == 1 else knots
+            pad = math.ceil(spline_curve.basis_function.support / 2)
+            tangents = np.pad(tangents, ((pad, pad), (0, 0)), mode="edge")
+            tangents = np.squeeze(tangents)
+        spline_curve.tangents = tangents
+
+    # This assert makes sense because the knots are not saved in
+    # the spline class but are converted to coefficients which are saved.
+    if spline_curve.closed:
+        assert np.allclose(knots, spline_curve.knots)
+    else:
+        pad = math.ceil(spline_curve.basis_function.support / 2)
+        assert np.allclose(knots, spline_curve.knots[pad:-pad])
