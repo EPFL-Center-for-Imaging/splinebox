@@ -62,7 +62,8 @@ initial_knots = knots.copy()
 # Now, we can construct a B3 spline and adjust its control points (coefficients)
 # using the knots we generated above.
 spline = splinebox.spline_curves.Spline(M=M, basis_function=splinebox.basis_functions.B3(), closed=True)
-spline.getCoefsFromKnots(knots)
+print(knots.shape)
+spline.knots = knots
 
 
 # %%

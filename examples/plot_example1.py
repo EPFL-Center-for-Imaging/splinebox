@@ -34,7 +34,7 @@ for i, (name, basis_function) in enumerate(
     )
 ):
     curve = splinebox.spline_curves.Spline(len(coordinates), basis_function, True)
-    curve.getCoefsFromKnots(coordinates)
+    curve.knots = coordinates
     discreteContour = curve.eval(x)
 
     axes[i // n, i % n].plot(discreteContour[:, 0], discreteContour[:, 1])

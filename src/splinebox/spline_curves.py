@@ -70,9 +70,12 @@ class Spline:
         if self.closed:
             self.coeffs = self.basis_function.filter_periodic(knots)
         else:
-            for _i in range(int(self.pad)):
-                knots = np.append(knots, knots[-1])
-                knots = np.append(knots[0], knots)
+            # Add constant padding for the ends of the spline
+            if knots.ndim == 1:
+                knots = knots[:, np.newaxis]
+            knots = np.pad(knots, ((self.pad, self.pad), (0, 0)), mode="edge")
+            knots = np.squeeze(knots)
+
             self.coeffs = self.basis_function.filter_symmetric(knots)
 
     @property
@@ -524,19 +527,17 @@ class HermiteSpline(Spline):
 
     @knots.setter
     def knots(self, values):
-        if values is not None:
-            n = len(values)
-            if self.closed and n != self.M:
-                raise ValueError(
-                    f"The number of tangents must match the number of knots for a closed spline. You provided {n} tangents for a spline with M={self.M} knots."
-                )
-            support = self.basis_function.support
-            padded_M = self.M + 2 * self.pad
-            if not self.closed and n != padded_M:
-                raise ValueError(
-                    f"Non-closed splines are padded at the ends with additional knots, i.e. the effective number of knots is M + support of the basis function. You provided {n} tangents for a spline with M={self.M} and a basis function with support={support}, expected {padded_M}."
-                )
-        self.coeffs = values
+        knots = np.array(values)
+        if self.closed:
+            self.coeffs = knots
+        else:
+            # Add constant padding for the ends of the spline
+            if knots.ndim == 1:
+                knots = knots[:, np.newaxis]
+            knots = np.pad(knots, ((self.pad, self.pad), (0, 0)), mode="edge")
+            knots = np.squeeze(knots)
+
+            self.coeffs = knots
 
     @property
     def basis_function(self):
