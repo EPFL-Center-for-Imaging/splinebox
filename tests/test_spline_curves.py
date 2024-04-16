@@ -264,7 +264,11 @@ def test_fit(spline_curve, arc_length_parametrization, points, is_hermite_spline
             assert np.allclose(tangents, tangents0)
 
 
-def test_knots(spline_curve, knot_gen, is_hermite_spline):
+def test_knots(spline_curve, knot_gen, is_hermite_spline, request):
+    if isinstance(spline_curve.basis_function, splinebox.basis_functions.B2):
+        # The filter_symmetric and filter_periodic are not implemented for B2
+        request.node.add_marker(pytest.mark.xfail)
+
     knots = knot_gen(spline_curve.M)
     spline_curve.knots = knots
 
