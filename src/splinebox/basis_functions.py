@@ -252,7 +252,9 @@ class B3(BasisFunction):
         M = len(s)
         pole = -2 + np.sqrt(3)
 
-        cp = np.zeros(M)
+        ndim = 1 if s.ndim == 1 else s.shape[1]
+
+        cp = np.zeros((M, ndim))
         eps = 1e-8
         k0 = np.min(((2 * M) - 2, int(np.ceil(np.log(eps) / np.log(np.abs(pole))))))
         for k in range(k0):
@@ -264,7 +266,7 @@ class B3(BasisFunction):
         for k in range(1, M):
             cp[k] = s[k] + pole * cp[k - 1]
 
-        cm = np.zeros(M)
+        cm = np.zeros((M, ndim))
         cm[M - 1] = cp[M - 1] + (pole * cp[M - 2])
         cm[M - 1] *= pole / ((pole**2) - 1)
         for k in range(M - 2, -1, -1):
@@ -273,14 +275,16 @@ class B3(BasisFunction):
         c = cm * 6
 
         c[np.where(abs(c) < eps)] = 0
-        return c
+        return np.squeeze(c)
 
     @staticmethod
     def filter_periodic(s):
         M = len(s)
         pole = -2 + np.sqrt(3)
 
-        cp = np.zeros(M)
+        ndim = 1 if s.ndim == 1 else s.shape[1]
+
+        cp = np.zeros((M, ndim))
         for k in range(M):
             cp[0] += s[(M - k) % M] * (pole**k)
         cp[0] *= 1 / (1 - (pole**M))
@@ -288,7 +292,7 @@ class B3(BasisFunction):
         for k in range(1, M):
             cp[k] = s[k] + pole * cp[k - 1]
 
-        cm = np.zeros(M)
+        cm = np.zeros((M, ndim))
         for k in range(M):
             cm[M - 1] += (pole**k) * cp[k]
         cm[M - 1] *= pole / (1 - (pole**M))
@@ -302,7 +306,7 @@ class B3(BasisFunction):
 
         eps = 1e-8
         c[np.where(abs(c) < eps)] = 0
-        return c
+        return np.squeeze(c)
 
     def refinement_mask(self):
         order = int(self.support)
@@ -396,11 +400,14 @@ class Exponential(BasisFunction):
 
     def filter_symmetric(self, s):
         self.M = len(s)
+
+        ndim = 1 if s.ndim == 1 else s.shape[1]
+
         b0 = self._func(0)
         b1 = self._func(1)
         pole = (-b0 + np.sqrt(2 * b0 - 1)) / (1 - b0)
 
-        cp = np.zeros(self.M)
+        cp = np.zeros((self.M, ndim))
         eps = 1e-8
         k0 = np.min(
             (
@@ -417,7 +424,7 @@ class Exponential(BasisFunction):
         for k in range(1, self.M):
             cp[k] = s[k] + pole * cp[k - 1]
 
-        cm = np.zeros(self.M)
+        cm = np.zeros((self.M, ndim))
         cm[self.M - 1] = cp[self.M - 1] + (pole * cp[self.M - 2])
         cm[self.M - 1] *= pole / ((pole * pole) - 1)
         for k in range(self.M - 2, -1, -1):
@@ -426,14 +433,17 @@ class Exponential(BasisFunction):
         c = cm / b1
 
         c[np.where(np.abs(c) < eps)] = 0
-        return c
+        return np.squeeze(c)
 
     def filter_periodic(self, s):
         self.M = len(s)
+
+        ndim = 1 if s.ndim == 1 else s.shape[1]
+
         b0 = self._func(0)
         pole = (-b0 + np.sqrt(2 * b0 - 1)) / (1 - b0)
 
-        cp = np.zeros(self.M)
+        cp = np.zeros((self.M, ndim))
         cp[0] = s[0]
         for k in range(self.M):
             cp[0] += s[k] * (pole ** (self.M - k))
@@ -442,7 +452,7 @@ class Exponential(BasisFunction):
         for k in range(1, self.M):
             cp[k] = s[k] + (pole * cp[k - 1])
 
-        cm = np.zeros(self.M)
+        cm = np.zeros((self.M, ndim))
         cm[self.M - 1] = cp[self.M - 1]
         for k in range(self.M - 1):
             cm[self.M - 1] += cp[k] * (pole ** (k + 1))
@@ -456,7 +466,7 @@ class Exponential(BasisFunction):
 
         eps = 1e-8
         c[np.where(np.abs(c) < eps)] = 0
-        return c
+        return np.squeeze(c)
 
     def refinement_mask(self):
         order = int(self.support)
