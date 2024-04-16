@@ -285,3 +285,17 @@ def test_knots(spline_curve, knot_gen, is_hermite_spline):
     else:
         pad = math.ceil(spline_curve.basis_function.support / 2)
         assert np.allclose(knots, spline_curve.knots[pad:-pad])
+
+
+def test_centroid(spline_curve, coeff_gen, is_hermite_spline):
+    support = spline_curve.basis_function.support
+    closed = spline_curve.closed
+    M = spline_curve.M
+
+    spline_curve.coeffs = coeff_gen(M, support, closed)
+    if is_hermite_spline(spline_curve):
+        spline_curve.tangents = coeff_gen(spline_curve.M, support, closed)
+
+    knots = spline_curve.getKnotsFromCoefs()
+    expected = np.mean(knots, axis=0)
+    assert np.allclose(spline_curve.centroid(), expected)
