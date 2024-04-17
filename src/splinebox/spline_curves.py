@@ -590,7 +590,7 @@ class HermiteSpline(Spline):
 
         tval = self._get_tval(t)
         basis_function_values = self.basis_function.eval(tval, derivative=derivative)
-        value = np.matmul(basis_function_values, self.coeffs) + np.matmul(basis_function_values, self.tangents)
+        value = np.matmul(basis_function_values[0], self.coeffs) + np.matmul(basis_function_values[1], self.tangents)
         return value
 
     def scale(self, scalingFactor):

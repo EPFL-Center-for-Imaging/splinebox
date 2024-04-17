@@ -293,16 +293,10 @@ def test_knots(spline_curve, knot_gen, is_hermite_spline, request):
     # This assert makes sense because the knots are not saved in
     # the spline class but are converted to coefficients which are saved.
     if spline_curve.closed:
-        if is_hermite_spline(spline_curve):
-            assert np.allclose(knots, spline_curve.knots[0])
-        else:
-            assert np.allclose(knots, spline_curve.knots)
+        assert np.allclose(knots, spline_curve.knots)
     else:
         pad = math.ceil(spline_curve.basis_function.support / 2)
-        if is_hermite_spline(spline_curve):
-            assert np.allclose(knots, spline_curve.knots[0, pad:-pad])
-        else:
-            assert np.allclose(knots, spline_curve.knots[pad:-pad])
+        assert np.allclose(knots, spline_curve.knots[pad:-pad])
 
 
 def test_centroid(spline_curve, coeff_gen, is_hermite_spline):
