@@ -306,10 +306,11 @@ def test_centroid(spline_curve, coeff_gen, is_hermite_spline):
     closed = spline_curve.closed
     M = spline_curve.M
 
-    spline_curve.coeffs = coeff_gen(M, support, closed)
+    coeffs = coeff_gen(M, support, closed)
+    spline_curve.coeffs = coeffs
     if is_hermite_spline(spline_curve):
-        spline_curve.tangents = coeff_gen(spline_curve.M, support, closed)
+        tangents = coeff_gen(spline_curve.M, support, closed)
+        spline_curve.tangents = tangents
 
-    knots = spline_curve.getKnotsFromCoefs()
-    expected = np.mean(knots, axis=0)
-    assert np.allclose(spline_curve.centroid(), expected)
+    expected = np.mean(coeffs, axis=0)
+    assert np.allclose(spline_curve._coeffs_centroid(), expected)

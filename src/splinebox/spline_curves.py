@@ -426,12 +426,11 @@ class Spline:
                 else:
                     wrapped_tval[j, i] = t - k
 
-    def centroid(self):
+    def _coeffs_centroid(self):
         """
-        Does this correspond to the geometric centroid?
-        Probably not, since the coefficient values are used.
-        Why is centroid always 2D? Should there be a check for
-        dimensionality here?
+        Helper method for :meth:`splinebox.spline_curves.Spline.scale`
+        and :meth:`splinebox.spline_curves.Spline.rotate`.
+        Computes the centroid of the coefficients.
         """
         return np.mean(self.coeffs, axis=0)
 
@@ -452,7 +451,7 @@ class Spline:
         This should probably use :meth:`splinebox.spline_curves.Spline.translate`
         `scalingFactor` can be renamed to `factor`.
         """
-        centroid = self.centroid()
+        centroid = self._coeffs_centroid()
 
         for k in range(self.M):
             vectorToCentroid = self.coeffs[k] - centroid
