@@ -327,7 +327,7 @@ class Exponential(BasisFunction):
         0 & \text{otherwise}\end{cases}
 
     .. math::
-        \text{where } L=(\frac{\sin(\pi / M)}{\pi / M})^{-2}
+        \text{where } L=(\frac{\sin(\pi / M)}{\pi / M})^{-2}\text{ and }x = x + \frac{support}{2}
     """
 
     def __init__(self, M, alpha):
