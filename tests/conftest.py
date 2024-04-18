@@ -238,7 +238,7 @@ def arc_length_parametrization(request):
     return request.param
 
 
-@pytest.fixture(params=[2, 10, 50])
+@pytest.fixture(params=[2, 20, 50])
 def n_points(request):
     return request.param
 

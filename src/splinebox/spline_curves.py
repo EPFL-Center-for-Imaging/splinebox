@@ -567,7 +567,7 @@ class HermiteSpline(Spline):
             t = np.linspace(0, self.M, len(points) + 1)[:-1] if self.closed else np.linspace(0, self.M, len(points))
         tval = self._get_tval(t)
         basis_function_values = self.basis_function.eval(tval, derivative=0)
-        basis_function_values = np.concatenate([basis_function_values[0], basis_function_values[0]], axis=1)
+        basis_function_values = np.concatenate([basis_function_values[0], basis_function_values[1]], axis=1)
         half = self.M if self.closed else self.M + 2 * self.pad
         solution = np.linalg.lstsq(basis_function_values, points, rcond=None)[0]
         self.coeffs = solution[:half]

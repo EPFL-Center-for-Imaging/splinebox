@@ -219,10 +219,10 @@ def test_fit(spline_curve, arc_length_parametrization, points, is_hermite_spline
         spline_curve.fit(points)
 
         # Keep a copy of the result of fit
-        coeffs0 = spline_curve.coeffs.copy()
+        coeffs_fit = spline_curve.coeffs.copy()
         if hermite:
-            tangents0 = spline_curve.tangents.copy()
-            half = len(tangents0)
+            tangents_fit = spline_curve.tangents.copy()
+            half = len(tangents_fit)
 
         # Calculate the parameter values for the data points
         if spline_curve.closed:
@@ -239,15 +239,14 @@ def test_fit(spline_curve, arc_length_parametrization, points, is_hermite_spline
             if hermite:
                 spline_curve.coeffs = x[:half]
                 spline_curve.tangents = x[half:]
-                spline_vals = spline_curve.eval(t)[0]
             else:
                 spline_curve.coeffs = x
-                spline_vals = spline_curve.eval(t)
+            spline_vals = spline_curve.eval(t)
             loss = np.linalg.norm(points[:, i] - spline_vals)
             return loss
 
         # prepare the initial value for the minimization
-        x0 = np.concatenate([coeffs0, tangents0], axis=0) if hermite else coeffs0
+        x0 = np.concatenate([coeffs_fit, tangents_fit], axis=0) if hermite else coeffs_fit
 
         if x0.ndim == 1:
             x0 = x0[:, np.newaxis]
@@ -260,14 +259,14 @@ def test_fit(spline_curve, arc_length_parametrization, points, is_hermite_spline
         # Turn minimization result into coeffs and tangents for the spline
         x = np.stack(x, axis=-1)
         if hermite:
-            coeffs = np.squeeze(x[:half])
-            tangents = np.squeeze(x[half:])
+            coeffs_expected = np.squeeze(x[:half])
+            tangents_expected = np.squeeze(x[half:])
         else:
-            coeffs = np.squeeze(x)
+            coeffs_expected = np.squeeze(x)
 
-        assert np.allclose(coeffs, coeffs0)
+        assert np.allclose(coeffs_expected, coeffs_fit)
         if hermite:
-            assert np.allclose(tangents, tangents0)
+            assert np.allclose(tangents_expected, tangents_fit)
 
 
 def test_knots(spline_curve, knot_gen, is_hermite_spline, request):
