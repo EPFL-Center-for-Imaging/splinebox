@@ -193,13 +193,7 @@ def test_rotate(initialized_spline_curve, rotation_matrix, is_hermite_spline):
         spline_copy.rotate(rotation_matrix)
         t = np.linspace(0, spline.M - 1, 100) if spline.closed else np.linspace(0, spline.M, 100)
         vals = spline.eval(t)
-        if is_hermite_spline(spline):
-            expected = []
-            for i in range(2):
-                expected.append((rotation_matrix @ vals[i].T).T)
-            expected = np.stack(expected)
-        else:
-            expected = (rotation_matrix @ vals.T).T
+        expected = (rotation_matrix @ vals.T).T
         assert np.allclose(spline_copy.eval(t), expected)
 
 
