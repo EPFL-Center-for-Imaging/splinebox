@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import pytest
 import splinebox.basis_functions
@@ -28,7 +30,7 @@ def test_filters(basis_function, is_interpolating, knot_gen):
         assert np.allclose(basis_function.filter_periodic(s), s)
 
 
-def test_derivatives(basis_function, derivative):
+def test_derivatives(basis_function, derivative, not_differentiable_twice):
     if derivative == 0:
         return
 
@@ -40,17 +42,7 @@ def test_derivatives(basis_function, derivative):
     dy = np.diff(y)
     estimated_derivative = dy / dx
 
-    if (
-        isinstance(
-            basis_function,
-            (
-                splinebox.basis_functions.B1,
-                splinebox.basis_functions.CubicHermite,
-                splinebox.basis_functions.ExponentialHermite,
-            ),
-        )
-        and derivative == 2
-    ):
+    if not_differentiable_twice(basis_function) and derivative == 2:
         # B1, CubicHermite, and ExponentialHermite basis functions are not differentiable twice.
         with pytest.raises(RuntimeError):
             basis_function.eval(x[:-1] + dx / 2, derivative=2)
@@ -75,3 +67,17 @@ def test_derivatives(basis_function, derivative):
             close = np.convolve(close, kernel, mode="same")
 
         assert np.all(close > 0)
+
+
+def test_partition_of_unity(basis_function):
+    support = math.ceil(basis_function.support)
+    x = np.linspace(0, 1, 10000)
+    summed = np.zeros_like(x)
+    for k in range(-support, support):
+        vals = basis_function.eval(x - k)
+        if basis_function.multigenerator:
+            vals = vals[0]
+        if vals.ndim == 2:
+            vals = vals[:, 0]
+        summed += vals
+    assert np.allclose(summed, np.ones_like(summed))
