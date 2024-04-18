@@ -190,10 +190,20 @@ def test_rotate(initialized_spline_curve, rotation_matrix, is_hermite_spline):
         with pytest.raises(RuntimeError):
             spline_copy.rotate(rotation_matrix)
     else:
-        spline_copy.rotate(rotation_matrix)
+        spline_copy.rotate(rotation_matrix, centred=False)
         t = np.linspace(0, spline.M - 1, 100) if spline.closed else np.linspace(0, spline.M, 100)
         vals = spline.eval(t)
         expected = (rotation_matrix @ vals.T).T
+        assert np.allclose(spline_copy.eval(t), expected)
+
+        spline_copy = spline.copy()
+        spline_copy.rotate(rotation_matrix, centred=True)
+        t = np.linspace(0, spline.M - 1, 100) if spline.closed else np.linspace(0, spline.M, 100)
+        vals = spline.eval(t)
+        centring_vector = np.mean(spline.coeffs, axis=0)
+        vals = vals - centring_vector
+        expected = (rotation_matrix @ vals.T).T
+        expected = expected + centring_vector
         assert np.allclose(spline_copy.eval(t), expected)
 
 

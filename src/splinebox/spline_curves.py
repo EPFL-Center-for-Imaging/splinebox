@@ -457,7 +457,7 @@ class Spline:
             vectorToCentroid = self.coeffs[k] - centroid
             self.coeffs[k] = centroid + scalingFactor * vectorToCentroid
 
-    def rotate(self, rotation_matrix):
+    def rotate(self, rotation_matrix, centred=True):
         """
         Rotate the spline with the provided rotation matrix.
 
@@ -470,8 +470,16 @@ class Spline:
             raise RuntimeError(self._no_coeffs_msg)
         if self.coeffs.ndim == 1:
             raise RuntimeError("1D splines can not be rotated.")
+
+        if centred:
+            centroid = self._coeffs_centroid()
+            self.translate(-centroid)
+
         for k in range(len(self.coeffs)):
             self.coeffs[k] = np.matmul(rotation_matrix, self.coeffs[k])
+
+        if centred:
+            self.translate(centroid)
 
 
 class HermiteSpline(Spline):
@@ -594,8 +602,8 @@ class HermiteSpline(Spline):
         for k in range(self.M):
             self.tangents[k] *= scalingFactor
 
-    def rotate(self, rotation_matrix):
-        Spline.rotate(self, rotation_matrix)
+    def rotate(self, rotation_matrix, centred=True):
+        Spline.rotate(self, rotation_matrix, centred=centred)
 
         if self.tangents is None:
             raise RuntimeError(self._no_tangents_msg)
