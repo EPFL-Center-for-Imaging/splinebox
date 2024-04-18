@@ -234,35 +234,31 @@ class Spline:
         basis_function_values = self.basis_function.eval(tval, derivative=0)
         self.coeffs = np.linalg.lstsq(basis_function_values, points, rcond=None)[0]
 
-    def arcLength(self, t0, tf=None):
+    def arc_length(self, stop=None, start=0):
         """
-        Integrate along the arc length.
-
-        Can probably be made faster if the basis functions
-        accept arrays directly.
+        Compute the arc length of the spline between
+        the two parameter value specified. if
 
         Parameters
         ----------
-        t0 : float
+        stop : float (optional)
+            Stop point in parameter space.
+        start : float (optional)
             Start point in parameter space.
-        tf : float (optional)
-            End point in parameter space.
         """
-        if t0 == tf:
-            return 0.0
+        if stop is None:
+            stop = self.M if self.closed else self.M - 1
 
-        if tf is None:
-            tf = self.M if self.closed else self.M - 1
+        if start == stop:
+            return 0
 
-        if t0 > tf:
-            temp = tf
-            tf = t0
-            t0 = temp
+        if start > stop:
+            start, stop = stop, start
 
         integral = scipy.integrate.quad(
-            lambda t: np.linalg.norm(self.eval(t, dt=True)),
-            t0,
-            tf,
+            lambda t: np.linalg.norm(self.eval(t, derivative=1)),
+            start,
+            stop,
             epsabs=1e-6,
             epsrel=1e-6,
             maxp1=50,
@@ -295,7 +291,7 @@ class Spline:
             Precision to which the length is matched.
         """
         midPoint = lowerBound + (upperBound - lowerBound) / 2
-        midPointLength = currentValue + self.arcLength(lowerBound, midPoint)
+        midPointLength = currentValue + self.arc_length(lowerBound, midPoint)
 
         if (np.round(currentValue, precisionDecimals) == np.round(midPointLength, precisionDecimals)) or (
             np.round(s, precisionDecimals) == np.round(midPointLength, precisionDecimals)
@@ -332,7 +328,7 @@ class Spline:
 
         if len(self.coeffs.shape) == 1 or (len(self.coeffs.shape) == 2 and self.coeffs.shape[1] == 2):
             N = numSamples if self.closed else numSamples - 1
-            L = self.arcLength(0)
+            L = self.arc_length()
 
             ts = [0]
             for n in range(1, N):
