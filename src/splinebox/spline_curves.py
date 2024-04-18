@@ -195,19 +195,6 @@ class Spline:
                 results[coord] = 0
         return np.squeeze(results)
 
-    def getKnotsFromCoefs(self):
-        return self.knots
-
-    def getCoefsFromKnots(self, knots):
-        """
-        ???
-
-        Fits the spline to go through the knots.
-        get is a bad name since nothing is returned.
-        fit would be better.
-        """
-        self.knots = knots
-
     def fit(self, points, arc_length_parameterization=False):
         """
         Fit the provided points with the spline using
@@ -534,27 +521,6 @@ class HermiteSpline(Spline):
                 "It looks like you are trying to use a single generator to build a multigenerator spline model."
             )
         self._basis_function = value
-
-    def getCoefsFromKnots(self, knots, tangentAtKnots):
-        # self.knots = knots
-        # self.tangents = tangentAtKnots
-        knots = np.array(knots)
-        tangentAtKnots = np.array(tangentAtKnots)
-
-        if knots.shape != tangentAtKnots.shape:
-            raise RuntimeError(self.coefTangentMismatchMessage)
-
-        if len(knots.shape) == 1:
-            self.coeffs = knots
-            self.tangents = tangentAtKnots
-        elif len(knots.shape) == 2:
-            if knots.shape[1] == 2:
-                self.coeffs = knots
-                self.tangents = tangentAtKnots
-            else:
-                raise RuntimeError(self._wrong_dimension_msg)
-        else:
-            raise RuntimeError(self._wrong_array_size_msg)
 
     def fit(self, points, arc_length_parameterization=False):
         if len(points) < self.M:
