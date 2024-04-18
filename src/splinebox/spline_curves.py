@@ -254,55 +254,61 @@ class Spline:
 
         return integral[0]
 
-    def lengthToParameterRecursion(self, s, currentValue, lowerBound, upperBound, precisionDecimals=4):
+    def _length_to_parameter_recursion(self, s, current_value, lower_bound, upper_bound, atol=1e-4):
         """
         Convert the given arc length s on the curve to a value in parameters space.
         This is done recursively, i.e. check if the point is before or after halfway
-        and repeat.
-
-        Some intelegent default can probably be set so the user only has to provide s.
-        Or this function should be made private entirely,
-        because there is :meth:`splinebox.spline_curves.Spline.lengthToParameter`
+        and repeat. It uses binary search.
 
         Parameters
         ----------
         s : float
             Arc length on the spline.
-        currentValue : float
+        current_value : float
             The arc length to the lower bound.
-        lowerBound : float
+        lower_bound : float
             Lower limit in parameter space.
-        upperBound : float
+        upper_bound : float
             Upper limit in parameters space.
-        precisionDecimals : int
-            Precision to which the length is matched.
+        atol : float
+            Absolute precision to which the length is matched.
         """
-        midPoint = lowerBound + (upperBound - lowerBound) / 2
-        midPointLength = currentValue + self.arc_length(lowerBound, midPoint)
+        midpoint = lower_bound + (upper_bound - lower_bound) / 2
+        midpoint_length = current_value + self.arc_length(lower_bound, midpoint)
 
-        if (np.round(currentValue, precisionDecimals) == np.round(midPointLength, precisionDecimals)) or (
-            np.round(s, precisionDecimals) == np.round(midPointLength, precisionDecimals)
-        ):
-            return np.round(midPoint, precisionDecimals)
-
-        elif np.round(s, precisionDecimals) < np.round(midPointLength, precisionDecimals):
-            return self.lengthToParameterRecursion(s, currentValue, lowerBound, midPoint, precisionDecimals)
+        if np.isclose(s, midpoint_length, atol=atol, rtol=0):
+            return midpoint
+        elif s < midpoint_length:
+            return self._length_to_parameter_recursion(s, current_value, lower_bound, midpoint, atol)
         else:
-            return self.lengthToParameterRecursion(s, midPointLength, midPoint, upperBound, precisionDecimals)
+            return self._length_to_parameter_recursion(s, midpoint_length, midpoint, upper_bound, atol)
 
-    def lengthToParameter(self, s):
+    def arc_length_to_parameter(self, s, atol=1e-4):
         """
         Convert the arc length `s` to the coresponding value in parameter space.
 
         Parameters
         ----------
-        s : float
+        s : float or np.array
             Length on curve.
+        atol : float
+            The ablsolute error tolerance.
         """
-        if self.closed:
-            return self.lengthToParameterRecursion(s, 0, 0, self.M)
-        else:
-            return self.lengthToParameterRecursion(s, 0, 0, self.M - 1)
+        if not isinstance(s, np.ndarray):
+            s = np.array([s])
+        sort_indices = np.argsort(s)
+        results = np.zeros_like(s)
+
+        current_value = 0
+        lower_bound = 0
+        upper_bound = self.M if self.closed else self.M - 1
+
+        for i in sort_indices:
+            results[i] = self._length_to_parameter_recursion(s[i], current_value, lower_bound, upper_bound, atol=atol)
+            lower_bound = results[i]
+            current_value = self.arc_length(0, lower_bound)
+
+        return np.squeeze(results)
 
     def sampleArcLength(self, numSamples, dt=False):
         """

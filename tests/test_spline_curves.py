@@ -136,7 +136,7 @@ def test_arc_length():
 
 def test_arc_length_to_parameter():
     # Create circular spline with radius sqrt(2)
-    M = 5
+    M = 100
     basis_function = splinebox.basis_functions.Exponential(
         M,
         2.0 * numpy.pi / M,
@@ -144,13 +144,15 @@ def test_arc_length_to_parameter():
     spline = splinebox.spline_curves.Spline(M=M, basis_function=basis_function, closed=True)
     knots = []
     for t in np.linspace(0, 2 * np.pi, M + 1)[:-1]:
-        knots.append([np.sin(t), np.cos(t)])
+        knots.append([np.cos(t), np.sin(t)])
     knots = np.array(knots)
     spline.knots = knots
 
     ls = np.linspace(0, 2 * np.pi, 15)
-    expected = ls / 2 / np.pi * M
-    assert np.allclose(spline.arc_length_to_parameter(ls), expected)
+    expected = np.linspace(0, M, 15)  # ls / 2 / np.pi * M
+    atol = 1e-5
+    results = spline.arc_length_to_parameter(ls, atol=atol)
+    assert np.allclose(results, expected, atol=1e-3, rtol=0)
 
     # Create a sawtooth spline
     M = 7
@@ -170,8 +172,10 @@ def test_arc_length_to_parameter():
         # there are two knots per tooth
         return n_tooth * 2 + partial_tooth_param
 
-    expected = map(to_param, ls)
-    assert np.allclose(spline.arc_length_to_parameter(ls), expected)
+    expected = np.array(list(map(to_param, ls)))
+    atol = 1e-4
+    results = spline.arc_length_to_parameter(ls, atol=atol)
+    assert np.allclose(results, expected, atol=atol)
 
 
 def test_translate(initialized_spline_curve, translation_vector):
