@@ -5,6 +5,7 @@ Generate the splinebox logo
 This example shows how the `S` of the splinebox logo is
 constructed using a B3 spline.
 """
+
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -13,7 +14,13 @@ import splinebox.spline_curves
 
 points = np.array([[1, 2], [0, 2], [0, 1], [1, 1], [1, 0], [0, 0]])
 M = len(points)
-padded_points = np.concatenate([np.array([[1.5, 1.5], [1.5, 1.5]]), points, np.array([[-0.5, 0.5], [-0.5, 0.5]])])
+padded_points = np.concatenate(
+    [
+        np.array([[1.5, 1.5]]),
+        points,
+        np.array([[-0.5, 0.5]]),
+    ]
+)
 basis_function = splinebox.basis_functions.B3()
 spline = splinebox.spline_curves.Spline(M=M, basis_function=basis_function, closed=False, coeffs=padded_points)
 ts = np.linspace(0, M - 1, 100)
