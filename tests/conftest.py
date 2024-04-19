@@ -12,7 +12,7 @@ import splinebox.spline_curves
         (splinebox.basis_functions.B1, {}),
         (splinebox.basis_functions.B2, {}),
         (splinebox.basis_functions.B3, {}),
-        (splinebox.basis_functions.Exponential, {"M": 5}),
+        (splinebox.basis_functions.Exponential, {}),
         (splinebox.basis_functions.CatmullRom, {}),
         (splinebox.basis_functions.CubicHermite, {}),
         (splinebox.basis_functions.ExponentialHermite, {"alpha": 0.4}),
@@ -21,14 +21,16 @@ import splinebox.spline_curves
         "B1",
         "B2",
         "B3",
-        "Exponential-M5",
+        "Exponential",
         "CatmullRom",
         "CubicHermite",
         "ExponentialHermite-alpha0.4",
     ],
 )
-def basis_function(request):
+def basis_function(request, M):
     basis_function, params = request.param
+    if basis_function == splinebox.basis_functions.Exponential:
+        params["M"] = M
     return basis_function(**params)
 
 
@@ -71,8 +73,8 @@ def closed(request):
 
 @pytest.fixture
 def spline_curve(basis_function, M, closed):
-    if hasattr(basis_function, "M"):
-        M = basis_function.M
+    # if hasattr(basis_function, "M"):
+    #     M = basis_function.M
     if isinstance(
         basis_function, (splinebox.basis_functions.CubicHermite, splinebox.basis_functions.ExponentialHermite)
     ):
