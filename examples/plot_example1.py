@@ -5,8 +5,6 @@ Closed interpolating splines
 This example shows different closed interpolating splines.
 """
 
-import math
-
 import matplotlib.pyplot as plt
 import numpy as np
 import splinebox.basis_functions
@@ -29,7 +27,7 @@ for i, (name, basis_function) in enumerate(
     (
         ("B1", splinebox.basis_functions.B1()),
         ("B3", splinebox.basis_functions.B3()),
-        ("Exponential", splinebox.basis_functions.Exponential(len(coordinates), 2.0 * math.pi / len(coordinates))),
+        ("Exponential", splinebox.basis_functions.Exponential(len(coordinates))),
         ("CatmullRom", splinebox.basis_functions.CatmullRom()),
     )
 ):

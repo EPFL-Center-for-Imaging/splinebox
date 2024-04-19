@@ -12,8 +12,7 @@ import splinebox.spline_curves
         (splinebox.basis_functions.B1, {}),
         (splinebox.basis_functions.B2, {}),
         (splinebox.basis_functions.B3, {}),
-        (splinebox.basis_functions.Exponential, {"M": 5, "alpha": 2 * np.pi / 5}),
-        (splinebox.basis_functions.Exponential, {"M": 10, "alpha": 0.3}),
+        (splinebox.basis_functions.Exponential, {"M": 5}),
         (splinebox.basis_functions.CatmullRom, {}),
         (splinebox.basis_functions.CubicHermite, {}),
         (splinebox.basis_functions.ExponentialHermite, {"alpha": 0.4}),
@@ -22,11 +21,10 @@ import splinebox.spline_curves
         "B1",
         "B2",
         "B3",
-        "Exponential-M5-alpha2pi/M",
-        "Exponential-M10-alpha0.3",
+        "Exponential-M5",
         "CatmullRom",
         "CubicHermite",
-        "ExponentialHermite",
+        "ExponentialHermite-alpha0.4",
     ],
 )
 def basis_function(request):
@@ -39,10 +37,10 @@ def basis_function(request):
         (splinebox.basis_functions.B1, {}),
         (splinebox.basis_functions.B2, {}),
         (splinebox.basis_functions.B3, {}),
-        (splinebox.basis_functions.Exponential, {"M": 5, "alpha": 0.3}),
+        (splinebox.basis_functions.Exponential, {"M": 5}),
         (splinebox.basis_functions.CatmullRom, {}),
     ],
-    ids=["B1", "B2", "B3", "Exponential-M5-alpha0.3", "CatmullRom"],
+    ids=["B1", "B2", "B3", "Exponential-M5", "CatmullRom"],
 )
 def non_hermite_basis_function(request):
     basis_function, params = request.param

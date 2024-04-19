@@ -5,8 +5,7 @@ import splinebox.basis_functions
 fig, axes = plt.subplots(3, 1, sharex=True)
 
 M = 5
-alpha = 0.5
-basis = splinebox.basis_functions.Exponential(M=M, alpha=alpha)
+basis = splinebox.basis_functions.Exponential(M=M)
 
 x = np.linspace(-3, 3, 100)
 
@@ -14,7 +13,7 @@ basis_0th = basis.eval(x)
 basis_1st = basis.eval(x, derivative=1)
 basis_2nd = basis.eval(x, derivative=2)
 
-fig.suptitle(f"Exponential basis function and its derivatives for $M={M}$, $\\alpha={alpha}$")
+fig.suptitle(f"Exponential basis function and its derivatives for $M={M}$")
 axes[0].plot(x, basis_0th, label=r"$f(x)$")
 axes[0].legend()
 axes[1].plot(x, basis_1st, label=r"$\frac{df}{dx}(x)$")

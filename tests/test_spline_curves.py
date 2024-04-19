@@ -1,6 +1,5 @@
 import math
 
-import numpy
 import numpy as np
 import pytest
 import scipy
@@ -121,10 +120,7 @@ def test_draw():
 def test_arc_length():
     # Create circular spline with radius sqrt(2)
     M = 10
-    basis_function = splinebox.basis_functions.Exponential(
-        M,
-        2.0 * numpy.pi / M,
-    )
+    basis_function = splinebox.basis_functions.Exponential(M)
     spline = splinebox.spline_curves.Spline(M=M, basis_function=basis_function, closed=True)
     phi = np.linspace(0, 2 * np.pi, M + 1)[:-1]
     knots = np.stack([np.cos(phi), np.sin(phi)], axis=-1)
@@ -141,10 +137,7 @@ def test_arc_length():
 def test_arc_length_to_parameter():
     # Create circular spline with radius sqrt(2)
     M = 100
-    basis_function = splinebox.basis_functions.Exponential(
-        M,
-        2.0 * numpy.pi / M,
-    )
+    basis_function = splinebox.basis_functions.Exponential(M)
     spline = splinebox.spline_curves.Spline(M=M, basis_function=basis_function, closed=True)
     knots = []
     for t in np.linspace(0, 2 * np.pi, M + 1)[:-1]:

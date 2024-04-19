@@ -321,82 +321,91 @@ class Exponential(BasisFunction):
 
     .. math::
         f(x) = \begin{cases}
-        \frac{L}{\alpha^2} 2 \sin(\frac{\alpha}{2} x) & \text{for } 0 \leq x < 1 \\
+        \frac{L}{\alpha^2} 2 \sin(\frac{\alpha}{2} x)^2 & \text{for } 0 \leq x < 1 \\
         \frac{L}{\alpha^2} (\cos(\alpha (x - 2)) + \cos(\alpha (x - 1)) - 2 \cos(\alpha)) & \text{for } 1 \leq x < 2 \\
         \frac{L}{\alpha^2} 2 \sin(\frac{\alpha}{2} (x- 3))^2 & \text{for } 2 \leq x \leq 3 \\
         0 & \text{otherwise}\end{cases}
 
     .. math::
         \text{where } L=(\frac{\sin(\pi / M)}{\pi / M})^{-2}\text{ and }x = x + \frac{support}{2}
+
+    .. math::
+        f(x) = \begin{cases}
+        2 L \sin(\alpha x)^2 & \text{for } 0 \leq x < 1 \\
+        L (\cos(2\alpha (x - 2)) + \cos(2\alpha (x - 1)) - 2 \cos(2\alpha)) & \text{for } 1 \leq x < 2 \\
+        2 L \sin(\alpha (x - 3))^2 & \text{for } 2 \leq x \leq 3 \\
+        0 & \text{otherwise}\end{cases}
+
+    .. math::
+        \text{where } \alpha=\frac{\pi}{M}, L=\frac{1}{4 \sin(\alpha)^2} \text{ and }x = x + \frac{3}{2}
     """
 
-    def __init__(self, M, alpha):
+    def __init__(self, M):
         super().__init__(False, 3)
         self.M = M
-        self.alpha = alpha
 
     def _func(self, x):
-        return self.__func(x, self.support / 2, self.M, self.alpha)
+        return self.__func(x, self.support / 2, self.M)
 
     @staticmethod
-    @numba.vectorize(
-        [numba.float64(numba.float64, numba.float64, numba.float64, numba.float64)], nopython=True, cache=True
-    )
-    def __func(x, half_support, M, alpha):
+    @numba.vectorize([numba.float64(numba.float64, numba.float64, numba.float64)], nopython=True, cache=True)
+    def __func(x, half_support, M):
         x += half_support
-        L = (np.sin(np.pi / M) / (np.pi / M)) ** (-2)
+
+        alpha = np.pi / M
+        L = 1 / (4 * np.sin(alpha) ** 2)
 
         val = 0
         if x >= 0 and x < 1:
-            val = 2 * np.sin(alpha * 0.5 * x) * np.sin(alpha * 0.5 * x)
+            val = 2 * np.sin(alpha * x) ** 2
         elif x >= 1 and x < 2:
-            val = np.cos(alpha * (x - 2)) + np.cos(alpha * (x - 1)) - 2 * np.cos(alpha)
+            val = np.cos(2 * alpha * (x - 2)) + np.cos(2 * alpha * (x - 1)) - 2 * np.cos(2 * alpha)
         elif x >= 2 and x <= 3:
-            val = 2 * np.sin(alpha * 0.5 * (x - 3)) * np.sin(alpha * 0.5 * (x - 3))
+            val = 2 * np.sin(alpha * (x - 3)) ** 2
 
-        return (L * val) / (alpha * alpha)
+        return L * val
 
     def _derivative_1(self, x):
-        return self.__derivative_1(x, self.support / 2, self.M, self.alpha)
+        return self.__derivative_1(x, self.support / 2, self.M)
 
     @staticmethod
-    @numba.vectorize(
-        [numba.float64(numba.float64, numba.float64, numba.float64, numba.float64)], nopython=True, cache=True
-    )
-    def __derivative_1(x, half_support, M, alpha):
+    @numba.vectorize([numba.float64(numba.float64, numba.float64, numba.float64)], nopython=True, cache=True)
+    def __derivative_1(x, half_support, M):
         x += half_support
-        L = (np.sin(np.pi / M) / (np.pi / M)) ** (-2)
+
+        alpha = np.pi / M
+        L = 1 / (4 * np.sin(alpha) ** 2)
 
         val = 0
         if x >= 0 and x <= 1:
-            val = alpha * np.sin(alpha * x)
+            val = 4 * alpha * np.sin(alpha * x) * np.cos(alpha * x)
         elif x > 1 and x <= 2:
-            val = alpha * (np.sin(alpha * (1 - x)) + np.sin(alpha * (2 - x)))
+            val = 2 * alpha * (np.sin(2 * alpha * (2 - x)) + np.sin(2 * alpha * (1 - x)))
         elif x > 2 and x <= 3:
-            val = alpha * np.sin(alpha * (x - 3))
+            val = 4 * alpha * np.sin(alpha * (x - 3)) * np.cos(alpha * (x - 3))
 
-        return (L * val) / (alpha * alpha)
+        return L * val
 
     def _derivative_2(self, x):
-        return self.__derivative_2(x, self.support / 2, self.M, self.alpha)
+        return self.__derivative_2(x, self.support / 2, self.M)
 
     @staticmethod
-    @numba.vectorize(
-        [numba.float64(numba.float64, numba.float64, numba.float64, numba.float64)], nopython=True, cache=True
-    )
-    def __derivative_2(x, half_support, M, alpha):
+    @numba.vectorize([numba.float64(numba.float64, numba.float64, numba.float64)], nopython=True, cache=True)
+    def __derivative_2(x, half_support, M):
         x += half_support
-        L = (np.sin(np.pi / M) / (np.pi / M)) ** (-2)
+
+        alpha = np.pi / M
+        L = 1 / (4 * np.sin(alpha) ** 2)
 
         val = 0
         if x >= 0 and x <= 1:
-            val = alpha * alpha * np.cos(alpha * x)
+            val = 4 * alpha**2 * (np.cos(alpha * x) ** 2 - np.sin(alpha * x) ** 2)
         elif x > 1 and x <= 2:
-            val = alpha * alpha * (-np.cos(alpha * (1 - x)) - np.cos(alpha * (2 - x)))
+            val = -4 * alpha**2 * (np.cos(2 * alpha * (2 - x)) + np.cos(2 * alpha * (1 - x)))
         elif x > 2 and x <= 3:
-            val = alpha * alpha * np.cos(alpha * (x - 3))
+            val = 4 * alpha**2 * (np.cos(alpha * (x - 3)) ** 2 - np.sin(alpha * (x - 3)) ** 2)
 
-        return (L * val) / (alpha * alpha)
+        return L * val
 
     def filter_symmetric(self, s):
         self.M = len(s)
