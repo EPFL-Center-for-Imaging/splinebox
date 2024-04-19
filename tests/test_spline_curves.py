@@ -29,7 +29,11 @@ def test_eval(
 
     if is_interpolating(spline_curve) and derivative == 0:
         values = spline_curve.eval(np.arange(spline_curve.M), derivative=derivative)
-        expected = spline_curve.coeffs if closed else spline_curve.coeffs[int(half_support) : -int(half_support)]
+        expected = spline_curve.coeffs
+        if not closed:
+            pad = math.ceil(half_support) - 1
+            if pad != 0:
+                expected = expected[pad:-pad]
         assert np.allclose(values, expected)
 
     elif derivative == 2 and not_differentiable_twice(spline_curve):
@@ -47,7 +51,7 @@ def test_set_coeffs(spline_curve, is_hermite_spline):
     if spline_curve.closed:
         expected = spline_curve.M
     else:
-        expected = spline_curve.M + 2 * math.ceil(spline_curve.basis_function.support / 2)
+        expected = spline_curve.M + 2 * (math.ceil(spline_curve.basis_function.support / 2) - 1)
 
     for i in range(expected - 2, expected + 2):
         coeffs = np.arange(i)
@@ -182,7 +186,7 @@ def test_translate(initialized_spline_curve, translation_vector):
     spline = initialized_spline_curve
     spline_copy = spline.copy()
     spline_copy.translate(translation_vector)
-    t = np.linspace(0, spline.M - 1, 100) if spline.closed else np.linspace(0, spline.M, 100)
+    t = np.linspace(0, spline.M, 100) if spline.closed else np.linspace(0, spline.M - 1, 100)
     expected = spline.eval(t) + translation_vector
     assert np.allclose(spline_copy.eval(t), expected)
 
@@ -195,14 +199,14 @@ def test_rotate(initialized_spline_curve, rotation_matrix, is_hermite_spline):
             spline_copy.rotate(rotation_matrix)
     else:
         spline_copy.rotate(rotation_matrix, centred=False)
-        t = np.linspace(0, spline.M - 1, 100) if spline.closed else np.linspace(0, spline.M, 100)
+        t = np.linspace(0, spline.M, 100) if spline.closed else np.linspace(0, spline.M - 1, 100)
         vals = spline.eval(t)
         expected = (rotation_matrix @ vals.T).T
         assert np.allclose(spline_copy.eval(t), expected)
 
         spline_copy = spline.copy()
         spline_copy.rotate(rotation_matrix, centred=True)
-        t = np.linspace(0, spline.M - 1, 100) if spline.closed else np.linspace(0, spline.M, 100)
+        t = np.linspace(0, spline.M, 100) if spline.closed else np.linspace(0, spline.M - 1, 100)
         vals = spline.eval(t)
         centring_vector = np.mean(spline.coeffs, axis=0)
         vals = vals - centring_vector
@@ -232,7 +236,7 @@ def test_fit(spline_curve, arc_length_parametrization, points, is_hermite_spline
         if spline_curve.closed:
             t = np.linspace(0, spline_curve.M, len(points) + 1)[:-1]
         else:
-            t = np.linspace(0, spline_curve.M, len(points))
+            t = np.linspace(0, spline_curve.M - 1, len(points))
 
         # Add a dimension if the codomain dimensionality is 1
         if points.ndim == 1:
@@ -291,7 +295,7 @@ def test_knots(spline_curve, knot_gen, is_hermite_spline, request):
             tangents = (diff + np.roll(diff, 1)) / 2
         else:
             diff = np.diff(knots, axis=0)
-            pad = math.ceil(spline_curve.basis_function.support / 2)
+            pad = math.ceil(spline_curve.basis_function.support / 2) - 1
             if diff.ndim == 1:
                 diff = diff[:, np.newaxis]
             diff = np.pad(diff, ((pad + 1, pad + 1), (0, 0)), mode="constant", constant_values=(0,))
@@ -304,8 +308,11 @@ def test_knots(spline_curve, knot_gen, is_hermite_spline, request):
     if spline_curve.closed:
         assert np.allclose(knots, spline_curve.knots)
     else:
-        pad = math.ceil(spline_curve.basis_function.support / 2)
-        assert np.allclose(knots, spline_curve.knots[pad:-pad])
+        pad = math.ceil(spline_curve.basis_function.support / 2) - 1
+        if pad == 0:
+            assert np.allclose(knots, spline_curve.knots)
+        else:
+            assert np.allclose(knots, spline_curve.knots[pad:-pad])
 
 
 def test_centroid(spline_curve, coeff_gen, is_hermite_spline):

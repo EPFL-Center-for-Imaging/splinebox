@@ -36,7 +36,7 @@ class Spline:
         self.halfSupport = self.basis_function.support / 2
         # Number of additional knots used for padding the ends
         # of an open spline
-        self.pad = math.ceil(self.halfSupport)
+        self.pad = math.ceil(self.halfSupport) - 1
         self.closed = closed
         self.coeffs = coeffs
 
@@ -55,7 +55,7 @@ class Spline:
             padded_M = self.M + 2 * self.pad
             if not self.closed and n != padded_M:
                 raise ValueError(
-                    f"Non-closed splines are padded at the ends with additional knots, i.e. the effective number of knots is M + 2 * ceil(support/2) of the basis function. You provided {n} coefficients for a spline with M={self.M} and a basis function with support={self.basis_function.support}, expected {padded_M}."
+                    f"Non-closed splines are padded at the ends with additional knots, i.e. the effective number of knots is M + 2 * (ceil(support/2) - 1) of the basis function. You provided {n} coefficients for a spline with M={self.M} and a basis function with support={self.basis_function.support}, expected {padded_M}."
                 )
         self._coeffs = values
 
@@ -216,7 +216,7 @@ class Spline:
         if arc_length_parameterization:
             raise NotImplementedError
         else:
-            t = np.linspace(0, self.M, len(points) + 1)[:-1] if self.closed else np.linspace(0, self.M, len(points))
+            t = np.linspace(0, self.M, len(points) + 1)[:-1] if self.closed else np.linspace(0, self.M - 1, len(points))
         tval = self._get_tval(t)
         basis_function_values = self.basis_function.eval(tval, derivative=0)
         self.coeffs = np.linalg.lstsq(basis_function_values, points, rcond=None)[0]
@@ -512,7 +512,7 @@ class HermiteSpline(Spline):
             padded_M = self.M + 2 * self.pad
             if not self.closed and n != padded_M:
                 raise ValueError(
-                    f"Non-closed splines are padded at the ends with additional knots, i.e. the effective number of knots is M + support of the basis function. You provided {n} tangents for a spline with M={self.M} and a basis function with support={support}, expected {padded_M}."
+                    f"Non-closed splines are padded at the ends with additional knots, i.e. the effective number of knots is M + 2 * (ceil(support / 2) - 1) of the basis function. You provided {n} tangents for a spline with M={self.M} and a basis function with support={support}, expected {padded_M}."
                 )
         self._tangents = values
 
@@ -536,7 +536,7 @@ class HermiteSpline(Spline):
         if arc_length_parameterization:
             raise NotImplementedError
         else:
-            t = np.linspace(0, self.M, len(points) + 1)[:-1] if self.closed else np.linspace(0, self.M, len(points))
+            t = np.linspace(0, self.M, len(points) + 1)[:-1] if self.closed else np.linspace(0, self.M - 1, len(points))
         tval = self._get_tval(t)
         basis_function_values = self.basis_function.eval(tval, derivative=0)
         basis_function_values = np.concatenate([basis_function_values[0], basis_function_values[1]], axis=1)
