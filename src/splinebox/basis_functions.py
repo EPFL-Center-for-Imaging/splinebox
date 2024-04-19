@@ -454,7 +454,7 @@ class Exponential(BasisFunction):
 
         cp = np.zeros((self.M, ndim))
         cp[0] = s[0]
-        for k in range(self.M):
+        for k in range(1, self.M):
             cp[0] += s[k] * (pole ** (self.M - k))
         cp[0] *= 1 / (1 - (pole**self.M))
 
