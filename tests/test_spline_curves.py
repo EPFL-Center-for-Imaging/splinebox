@@ -1,4 +1,5 @@
 import math
+import unittest.mock
 
 import numpy as np
 import pytest
@@ -32,17 +33,9 @@ def test_eval(
     half_support = support / 2
     closed = spline_curve.closed
 
-    with pytest.raises(RuntimeError):
-        # coefficients have not been set
-        spline_curve.eval(eval_positions, derivative=derivative)
-
-    # Set coefficients
+    # Set coefficients and tangents
     spline_curve.coeffs = coeff_gen(spline_curve.M, support, closed)
-
     if is_hermite_spline(spline_curve):
-        with pytest.raises(RuntimeError):
-            # Tangents have not been set
-            spline_curve.eval(eval_positions, derivative=derivative)
         spline_curve.tangents = coeff_gen(spline_curve.M, support, closed)
 
     if is_interpolating(spline_curve) and derivative == 0:
@@ -60,6 +53,12 @@ def test_eval(
 
     else:
         spline_curve.eval(eval_positions, derivative=derivative)
+
+    # Check that the presence of the coefficients and tangents was verified
+    if is_hermite_spline(spline_curve):
+        spline_curve._check_coeffs_and_tangents.assert_called_once()
+    else:
+        spline_curve._check_coeffs.assert_called_once()
 
 
 def test_set_coeffs(spline_curve, is_hermite_spline):
@@ -120,6 +119,7 @@ def test_closed_splines(closed_spline_curve, derivative, coeff_gen, is_hermite_s
 
 def test_draw():
     spline = splinebox.spline_curves.Spline(M=4, basis_function=splinebox.basis_functions.B1(), closed=True)
+    spline._check_coeffs = unittest.mock.MagicMock()
     spline.knots = np.array([[1, 1], [1, 2], [2, 2], [2, 1]])
 
     x = np.linspace(0, 3, 31)
@@ -135,19 +135,30 @@ def test_draw():
     output = spline.draw(x, y)
     assert np.allclose(output, expected)
 
+    # Check that the presence of the coefficients was verified
+    spline._check_coeffs.assert_called()
+
 
 def test_arc_length():
     # Create circular spline with radius sqrt(2)
     M = 10
     basis_function = splinebox.basis_functions.Exponential(M)
     spline = splinebox.spline_curves.Spline(M=M, basis_function=basis_function, closed=True)
+    spline._check_coeffs = unittest.mock.MagicMock()
     phi = np.linspace(0, 2 * np.pi, M + 1)[:-1]
     knots = np.stack([np.cos(phi), np.sin(phi)], axis=-1)
     spline.knots = knots
 
     ts = np.linspace(0, M, 100)
+
+    # Reset mock in case it was called by any of the methods befor
+    spline._check_coeffs.reset_mock()
+
     arc_lengths = [spline.arc_length(t) for t in ts]
     arc_lengths = np.array(arc_lengths)
+
+    # Check that the presence of the coefficients was verified
+    spline._check_coeffs.assert_called()
 
     expected = np.linspace(0, 2 * np.pi, 100)
     assert np.allclose(arc_lengths, expected)
@@ -158,6 +169,7 @@ def test_arc_length_to_parameter():
     M = 100
     basis_function = splinebox.basis_functions.Exponential(M)
     spline = splinebox.spline_curves.Spline(M=M, basis_function=basis_function, closed=True)
+    spline._check_coeffs = unittest.mock.MagicMock()
     knots = []
     for t in np.linspace(0, 2 * np.pi, M + 1)[:-1]:
         knots.append([np.cos(t), np.sin(t)])
@@ -167,13 +179,22 @@ def test_arc_length_to_parameter():
     ls = np.linspace(0, 2 * np.pi, 15)
     expected = np.linspace(0, M, 15)  # ls / 2 / np.pi * M
     atol = 1e-5
+
+    # Reset mock in case it was called by any of the methods befor
+    spline._check_coeffs.reset_mock()
+
     results = spline.arc_length_to_parameter(ls, atol=atol)
+
+    # Check that the presence of the coefficients was verified
+    spline._check_coeffs.assert_called()
+
     assert np.allclose(results, expected, atol=1e-3, rtol=0)
 
     # Create a sawtooth spline
     M = 7
     basis_function = splinebox.basis_functions.B1()
     spline = splinebox.spline_curves.Spline(M=M, basis_function=basis_function, closed=False)
+    spline._check_coeffs = unittest.mock.MagicMock()
     spline.knots = np.array([[0, 0], [1, 1], [1, 0], [2, 1], [2, 0], [3, 1], [3, 0]])
 
     rising_length = np.sqrt(2)
@@ -190,14 +211,25 @@ def test_arc_length_to_parameter():
 
     expected = np.array(list(map(to_param, ls)))
     atol = 1e-4
+
+    # Reset mock in case it was called by any of the methods befor
+    spline._check_coeffs.reset_mock()
+
     results = spline.arc_length_to_parameter(ls, atol=atol)
+
+    # Check that the presence of the coefficients was verified
+    spline._check_coeffs.assert_called()
+
     assert np.allclose(results, expected, atol=atol)
 
 
 def test_translate(initialized_spline_curve, translation_vector):
     spline = initialized_spline_curve
     spline_copy = spline.copy()
+    spline_copy._check_coeffs = unittest.mock.MagicMock()
     spline_copy.translate(translation_vector)
+    # Check that the presence of the coefficients was verified
+    spline_copy._check_coeffs.assert_called()
     t = np.linspace(0, spline.M, 100) if spline.closed else np.linspace(0, spline.M - 1, 100)
     expected = spline.eval(t) + translation_vector
     assert np.allclose(spline_copy.eval(t), expected)
@@ -206,18 +238,24 @@ def test_translate(initialized_spline_curve, translation_vector):
 def test_rotate(initialized_spline_curve, rotation_matrix, is_hermite_spline):
     spline = initialized_spline_curve
     spline_copy = spline.copy()
+    spline_copy._check_coeffs = unittest.mock.MagicMock()
     if spline.coeffs.ndim == 1:
         with pytest.raises(RuntimeError):
             spline_copy.rotate(rotation_matrix)
     else:
         spline_copy.rotate(rotation_matrix, centred=False)
+        # Check that the presence of the coefficients was verified
+        spline_copy._check_coeffs.assert_called()
         t = np.linspace(0, spline.M, 100) if spline.closed else np.linspace(0, spline.M - 1, 100)
         vals = spline.eval(t)
         expected = (rotation_matrix @ vals.T).T
         assert np.allclose(spline_copy.eval(t), expected)
 
         spline_copy = spline.copy()
+        spline_copy._check_coeffs = unittest.mock.MagicMock()
         spline_copy.rotate(rotation_matrix, centred=True)
+        # Check that the presence of the coefficients was verified
+        spline_copy._check_coeffs.assert_called()
         t = np.linspace(0, spline.M, 100) if spline.closed else np.linspace(0, spline.M - 1, 100)
         vals = spline.eval(t)
         centring_vector = np.mean(spline.coeffs, axis=0)
@@ -341,6 +379,8 @@ def test_centroid(spline_curve, coeff_gen, is_hermite_spline):
     expected = np.mean(coeffs, axis=0)
     assert np.allclose(spline_curve._coeffs_centroid(), expected)
 
+    spline_curve._check_coeffs.assert_called()
+
 
 def test_scale(initialized_spline_curve, is_hermite_spline):
     spline = initialized_spline_curve
@@ -358,6 +398,18 @@ def test_scale(initialized_spline_curve, is_hermite_spline):
 
     t = np.linspace(0, spline.M, 100) if spline.closed else np.linspace(0, spline.M - 1, 100)
 
+    # Reset mocks in case they were called by another method already
+    if is_hermite_spline(spline_copy):
+        spline._check_coeffs_and_tangents.reset_mock()
+    else:
+        spline._check_coeffs.reset_mock()
+
     spline.scale(factor)
+
+    # Check that coefficients and tangents were checked
+    if is_hermite_spline(spline_copy):
+        spline._check_coeffs_and_tangents.assert_called()
+    else:
+        spline._check_coeffs.assert_called()
 
     assert np.allclose(spline.eval(t), spline_copy.eval(t))

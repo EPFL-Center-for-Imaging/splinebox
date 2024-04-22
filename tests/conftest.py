@@ -1,5 +1,6 @@
 import itertools
 import math
+import unittest.mock
 
 import numpy as np
 import pytest
@@ -76,8 +77,13 @@ def spline_curve(basis_function, M, closed):
     if isinstance(
         basis_function, (splinebox.basis_functions.CubicHermite, splinebox.basis_functions.ExponentialHermite)
     ):
-        return splinebox.spline_curves.HermiteSpline(M, basis_function, closed=closed)
-    return splinebox.spline_curves.Spline(M, basis_function, closed=closed)
+        spline = splinebox.spline_curves.HermiteSpline(M, basis_function, closed=closed)
+        spline._check_coeffs_and_tangents = unittest.mock.MagicMock()
+        spline._check_coeffs = unittest.mock.MagicMock()
+    else:
+        spline = splinebox.spline_curves.Spline(M, basis_function, closed=closed)
+        spline._check_coeffs = unittest.mock.MagicMock()
+    return spline
 
 
 @pytest.fixture
