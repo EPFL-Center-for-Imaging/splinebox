@@ -6,6 +6,25 @@ import scipy
 import splinebox.basis_functions
 
 
+def test__check_coeffs(non_hermite_spline_curve, coeff_gen):
+    spline = non_hermite_spline_curve
+    with pytest.raises(RuntimeError):
+        spline._check_coeffs()
+    spline.coeffs = coeff_gen(spline.M, spline.basis_function.support, spline.closed)
+    spline._check_coeffs()
+
+
+def test__check_coeffs_and_tangents(hermite_spline_curve, coeff_gen):
+    spline = hermite_spline_curve
+    with pytest.raises(RuntimeError):
+        spline._check_coeffs_and_tangents()
+    spline.coeffs = coeff_gen(spline.M, spline.basis_function.support, spline.closed)
+    with pytest.raises(RuntimeError):
+        spline._check_coeffs_and_tangents()
+    spline.tangents = coeff_gen(spline.M, spline.basis_function.support, spline.closed)
+    spline._check_coeffs_and_tangents()
+
+
 def test_eval(
     spline_curve, coeff_gen, derivative, eval_positions, is_hermite_spline, not_differentiable_twice, is_interpolating
 ):
