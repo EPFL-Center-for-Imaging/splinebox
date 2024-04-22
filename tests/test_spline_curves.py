@@ -321,3 +321,24 @@ def test_centroid(spline_curve, coeff_gen, is_hermite_spline):
 
     expected = np.mean(coeffs, axis=0)
     assert np.allclose(spline_curve._coeffs_centroid(), expected)
+
+
+def test_scale(initialized_spline_curve, is_hermite_spline):
+    spline = initialized_spline_curve
+    spline_copy = spline.copy()
+
+    factor = 1.5
+
+    centroid = spline_copy._coeffs_centroid()
+    spline_copy.translate(-centroid)
+    spline_copy.coeffs = spline_copy.coeffs * factor
+    spline_copy.translate(centroid)
+
+    if is_hermite_spline(spline_copy):
+        spline_copy.tangents = spline_copy.tangents * factor
+
+    t = np.linspace(0, spline.M, 100) if spline.closed else np.linspace(0, spline.M - 1, 100)
+
+    spline.scale(factor)
+
+    assert np.allclose(spline.eval(t), spline_copy.eval(t))
