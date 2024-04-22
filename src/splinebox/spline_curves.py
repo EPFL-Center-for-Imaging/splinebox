@@ -140,7 +140,9 @@ class Spline:
         self._check_coeffs()
         r = self.eval(t)
         dr = self.eval(t, derivative=1)
-
+        if r.ndim == 1:
+            r = r[np.newaxis, :]
+            dr = dr[np.newaxis, :]
         r2 = np.linalg.norm(r, axis=1) ** 2
         if np.any(np.isnan(dr)) or np.isclose(r2, 0):
             # Happens the the spline is not differentiable in this location
@@ -372,7 +374,7 @@ class Spline:
         tval = self._get_tval(t)
         basis_function_values = self.basis_function.eval(tval, derivative=derivative)
         value = np.matmul(basis_function_values, self.coeffs)
-        return value
+        return np.squeeze(value)
 
     def _get_tval(self, t):
         """
