@@ -103,7 +103,7 @@ class B1(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _func(x):
+    def _func(x):  # pragma: no cover
         val = 0
         if abs(x) >= 0 and abs(x) < 1:
             val = 1 - abs(x)
@@ -111,7 +111,7 @@ class B1(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _derivative_1(x):
+    def _derivative_1(x):  # pragma: no cover
         val = 0
         if x > -1 and x < 0:
             val = 1
@@ -154,7 +154,7 @@ class B2(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _func(x):
+    def _func(x):  # pragma: no cover
         val = 0
         if x >= -1.5 and x <= -0.5:
             val = 0.5 * (x**2) + 1.5 * x + 1.125
@@ -166,7 +166,7 @@ class B2(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _derivative_1(x):
+    def _derivative_1(x):  # pragma: no cover
         val = 0
         if x >= -1.5 and x <= -0.5:
             val = x + 1.5
@@ -178,7 +178,7 @@ class B2(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _derivative_2(x):
+    def _derivative_2(x):  # pragma: no cover
         val = 0
         if x >= -1.5 and x <= -0.5:
             val = 1
@@ -211,7 +211,7 @@ class B3(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _func(x):
+    def _func(x):  # pragma: no cover
         val = 0
         if abs(x) >= 0 and abs(x) < 1:
             val = 2 / 3 - (abs(x) ** 2) + (abs(x) ** 3) / 2
@@ -221,7 +221,7 @@ class B3(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _derivative_1(x):
+    def _derivative_1(x):  # pragma: no cover
         val = 0
         if x >= 0 and x < 1:
             val = -2 * x + 1.5 * x * x
@@ -235,7 +235,7 @@ class B3(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _derivative_2(x):
+    def _derivative_2(x):  # pragma: no cover
         val = 0
         if x >= 0 and x < 1:
             val = -2 + 3 * x
@@ -349,7 +349,7 @@ class Exponential(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64, numba.float64)], nopython=True, cache=True)
-    def __func(x, half_support, M):
+    def __func(x, half_support, M):  # pragma: no cover
         x += half_support
 
         alpha = np.pi / M
@@ -370,7 +370,7 @@ class Exponential(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64, numba.float64)], nopython=True, cache=True)
-    def __derivative_1(x, half_support, M):
+    def __derivative_1(x, half_support, M):  # pragma: no cover
         x += half_support
 
         alpha = np.pi / M
@@ -391,7 +391,7 @@ class Exponential(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64, numba.float64)], nopython=True, cache=True)
-    def __derivative_2(x, half_support, M):
+    def __derivative_2(x, half_support, M):  # pragma: no cover
         x += half_support
 
         alpha = np.pi / M
@@ -500,7 +500,7 @@ class CatmullRom(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _func(x):
+    def _func(x):  # pragma: no cover
         val = 0
         if np.abs(x) >= 0 and np.abs(x) <= 1:
             val = (3 / 2) * (np.abs(x) ** 3) - (5 / 2) * (np.abs(x) ** 2) + 1
@@ -510,7 +510,7 @@ class CatmullRom(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _derivative_1(x):
+    def _derivative_1(x):  # pragma: no cover
         val = 0
         if x >= 0 and x <= 1:
             val = x * (4.5 * x - 5)
@@ -524,7 +524,7 @@ class CatmullRom(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _derivative_2(x):
+    def _derivative_2(x):  # pragma: no cover
         val = 0
         if x >= 0 and x <= 1:
             val = 9 * x - 5
@@ -558,7 +558,7 @@ class CubicHermite(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def h31(x):
+    def h31(x):  # pragma: no cover
         val = 0
         if x >= 0 and x <= 1:
             val = (1 + (2 * x)) * (x - 1) * (x - 1)
@@ -568,7 +568,7 @@ class CubicHermite(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def h32(x):
+    def h32(x):  # pragma: no cover
         val = 0
         if x >= 0 and x <= 1:
             val = x * (x - 1) * (x - 1)
@@ -581,7 +581,7 @@ class CubicHermite(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def h31prime(x):
+    def h31prime(x):  # pragma: no cover
         val = 0
         if x >= 0 and x <= 1:
             val = 6 * x * (x - 1)
@@ -591,7 +591,7 @@ class CubicHermite(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def h32prime(x):
+    def h32prime(x):  # pragma: no cover
         val = 0
         if x >= 0 and x <= 1:
             val = 3 * x * x - 4 * x + 1
@@ -713,7 +713,7 @@ class ExponentialHermite(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
-    def _he31(x, alpha):
+    def _he31(x, alpha):  # pragma: no cover
         def _g1(x, alpha):
             val = 0
             if x >= 0 and x <= 1:
@@ -731,7 +731,7 @@ class ExponentialHermite(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
-    def _he32(x, alpha):
+    def _he32(x, alpha):  # pragma: no cover
         def _g2(x, alpha):
             val = 0
             if x >= 0 and x <= 1:
@@ -753,7 +753,7 @@ class ExponentialHermite(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
-    def _he31prime(x, alpha):
+    def _he31prime(x, alpha):  # pragma: no cover
         def _g1prime(x, alpha):
             val = 0
             if x >= 0 and x <= 1:
@@ -767,7 +767,7 @@ class ExponentialHermite(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
-    def _he32prime(x, alpha):
+    def _he32prime(x, alpha):  # pragma: no cover
         def _g2prime(x, alpha):
             val = 0
             if x >= 0 and x <= 1:

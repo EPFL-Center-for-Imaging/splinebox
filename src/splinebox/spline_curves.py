@@ -405,7 +405,7 @@ class Spline:
     @numba.guvectorize(
         [(numba.float64[:], numba.float64[:], numba.float64, numba.int64, numba.float64[:, :])], "(n),(m),(),()->(n,m)"
     )
-    def _wrap_index(ts, ks, halfSupport, M, wrapped_tval):
+    def _wrap_index(ts, ks, halfSupport, M, wrapped_tval):  # pragma: no cover
         """
         Fill the wrapped_tval array whenever a value t
         is affected by the basis function at knot k, taking
