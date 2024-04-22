@@ -438,17 +438,16 @@ class Spline:
         """
         self.coeffs = self.coeffs + vector
 
-    def scale(self, scalingFactor):
+    def scale(self, scaling_factor):
         """
         Enlarge or shrink the spline.
         This should probably use :meth:`splinebox.spline_curves.Spline.translate`
         `scalingFactor` can be renamed to `factor`.
         """
         centroid = self._coeffs_centroid()
-
-        for k in range(self.M):
-            vectorToCentroid = self.coeffs[k] - centroid
-            self.coeffs[k] = centroid + scalingFactor * vectorToCentroid
+        self.translate(-centroid)
+        self.coeffs *= scaling_factor
+        self.translate(centroid)
 
     def rotate(self, rotation_matrix, centred=True):
         """
@@ -568,11 +567,9 @@ class HermiteSpline(Spline):
         value = np.matmul(basis_function_values[0], self.coeffs) + np.matmul(basis_function_values[1], self.tangents)
         return value
 
-    def scale(self, scalingFactor):
-        Spline.scale(self, scalingFactor)
-
-        for k in range(self.M):
-            self.tangents[k] *= scalingFactor
+    def scale(self, scaling_factor):
+        Spline.scale(self, scaling_factor)
+        self.tangents *= scaling_factor
 
     def rotate(self, rotation_matrix, centred=True):
         Spline.rotate(self, rotation_matrix, centred=centred)
