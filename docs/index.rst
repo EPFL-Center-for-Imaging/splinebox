@@ -2,6 +2,6 @@
    :maxdepth: 1
    :hidden:
 
-   definitions/index.rst
+   theory/index.rst
    api/index.rst
    auto_examples/index.rst
