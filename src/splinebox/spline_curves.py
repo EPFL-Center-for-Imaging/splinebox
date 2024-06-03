@@ -233,7 +233,7 @@ class Spline:
         basis_function_values = self.basis_function.eval(tval, derivative=0)
         self.coeffs = np.linalg.lstsq(basis_function_values, points, rcond=None)[0]
 
-    def arc_length(self, stop=None, start=0):
+    def arc_length(self, stop=None, start=0, epsabs=1e-6, epsrel=1e-6):
         """
         Compute the arc length of the spline between
         the two parameter value specified. if
@@ -244,6 +244,10 @@ class Spline:
             Stop point in parameter space.
         start : float (optional)
             Start point in parameter space.
+        epsabs : float (optional)
+            Absolute error tolerance. Default is 1e-6.
+        epsrel : float (optional)
+            Relative error tolerance. Default is 1e-6.
         """
         self._check_coeffs()
         if stop is None:
@@ -259,15 +263,17 @@ class Spline:
             lambda t: np.linalg.norm(self.eval(t, derivative=1)),
             start,
             stop,
-            epsabs=1e-6,
-            epsrel=1e-6,
+            epsabs=epsabs,
+            epsrel=epsrel,
             maxp1=50,
             limit=100,
         )
 
         return integral[0]
 
-    def _length_to_parameter_recursion(self, s, current_value, lower_bound, upper_bound, atol=1e-4):
+    def _length_to_parameter_recursion(
+        self, s, current_value, lower_bound, upper_bound, intermediate_results=None, atol=1e-4
+    ):
         """
         Convert the given arc length s on the curve to a value in parameters space.
         This is done recursively, i.e. check if the point is before or after halfway
@@ -283,19 +289,28 @@ class Spline:
             Lower limit in parameter space.
         upper_bound : float
             Upper limit in parameters space.
+        intermediate_results : list
+            A list where all computed length parameter pairs are stored.
+            This can be used to initialize subsequent conversions more efficiently.
         atol : float
             Absolute precision to which the length is matched.
         """
         self._check_coeffs()
         midpoint = lower_bound + (upper_bound - lower_bound) / 2
-        midpoint_length = current_value + self.arc_length(lower_bound, midpoint)
+        midpoint_length = current_value + self.arc_length(lower_bound, midpoint, epsabs=atol)
+        if intermediate_results is not None:
+            intermediate_results.append((midpoint, midpoint_length))
 
         if np.isclose(s, midpoint_length, atol=atol, rtol=0):
             return midpoint
         elif s < midpoint_length:
-            return self._length_to_parameter_recursion(s, current_value, lower_bound, midpoint, atol)
+            return self._length_to_parameter_recursion(
+                s, current_value, lower_bound, midpoint, intermediate_results, atol
+            )
         else:
-            return self._length_to_parameter_recursion(s, midpoint_length, midpoint, upper_bound, atol)
+            return self._length_to_parameter_recursion(
+                s, midpoint_length, midpoint, upper_bound, intermediate_results, atol
+            )
 
     def arc_length_to_parameter(self, s, atol=1e-4):
         """
@@ -317,11 +332,27 @@ class Spline:
         current_value = 0
         lower_bound = 0
         upper_bound = self.M if self.closed else self.M - 1
+        intermediate_results = []
+
+        def upper_bound_key_func(x):
+            diff = x[1] - s[i]
+            if diff >= 0:
+                return diff
+            else:
+                return np.inf
 
         for i in sort_indices:
-            results[i] = self._length_to_parameter_recursion(s[i], current_value, lower_bound, upper_bound, atol=atol)
+            if len(intermediate_results) > 0:
+                upper_bound, upper_bound_len = min(intermediate_results, key=upper_bound_key_func)
+                if s[i] > upper_bound_len:
+                    upper_bound = self.M if self.closed else self.M - 1
+
+            results[i] = self._length_to_parameter_recursion(
+                s[i], current_value, lower_bound, upper_bound, intermediate_results, atol=atol
+            )
+
             lower_bound = results[i]
-            current_value = self.arc_length(0, lower_bound)
+            _, current_value = min(intermediate_results, key=lambda x: abs(x[0] - lower_bound))
 
         return np.squeeze(results)
 
