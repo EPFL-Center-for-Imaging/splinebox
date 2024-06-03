@@ -704,83 +704,87 @@ class ExponentialHermite(BasisFunction):
     ???
     """
 
-    def __init__(self, alpha):
+    def __init__(self, M):
         super().__init__(True, 2)
-        self.alpha = alpha
+        self.M = M
 
     def _func(self, x):
-        return np.array([self._he31(x, self.alpha), self._he32(x, self.alpha)])
+        return np.array([self._he31(x, self.M), self._he32(x, self.M)])
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
-    def _he31(x, alpha):  # pragma: no cover
-        def _g1(x, alpha):
+    def _he31(x, M):  # pragma: no cover
+        def _g1(x, M):
             val = 0
             if x >= 0 and x <= 1:
-                denom = (0.5 * alpha * np.cos(0.5 * alpha)) - np.sin(0.5 * alpha)
+                alpha = np.pi / M
+                denom = (alpha * np.cos(alpha)) - np.sin(alpha)
                 num = (
-                    (0.5 * ((alpha * np.cos(0.5 * alpha)) - np.sin(0.5 * alpha)))
-                    - (0.5 * alpha * np.cos(0.5 * alpha) * x)
-                    - (0.5 * np.sin(0.5 * alpha - (alpha * x)))
+                    (0.5 * (2 * alpha * np.cos(alpha) - np.sin(alpha)))
+                    - (alpha * np.cos(alpha) * x)
+                    - (0.5 * np.sin(alpha - (2 * alpha * x)))
                 )
                 val = num / denom
             return val
 
-        val = _g1(x, alpha) if x >= 0 else _g1(-x, alpha)
+        val = _g1(x, M) if x >= 0 else _g1(-x, M)
         return val
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
-    def _he32(x, alpha):  # pragma: no cover
-        def _g2(x, alpha):
+    def _he32(x, M):  # pragma: no cover
+        def _g2(x, M):
             val = 0
             if x >= 0 and x <= 1:
-                denom = ((0.5 * alpha * np.cos(0.5 * alpha)) - np.sin(0.5 * alpha)) * (4 * alpha) * np.sin(0.5 * alpha)
+                alpha = np.pi / M
+                denom = ((alpha * np.cos(alpha)) - np.sin(alpha)) * 8 * alpha * np.sin(alpha)
                 num = (
-                    -((alpha * np.cos(alpha)) - np.sin(alpha))
-                    - (2 * alpha * np.sin(0.5 * alpha) * np.sin(0.5 * alpha) * x)
-                    - (2 * np.sin(0.5 * alpha) * np.cos(alpha * (x - 0.5)))
-                    + (alpha * np.cos(alpha * (x - 1)))
+                    -((2 * alpha * np.cos(2 * alpha)) - np.sin(2 * alpha))
+                    - (4 * alpha * np.sin(alpha) * np.sin(alpha) * x)
+                    - (2 * np.sin(alpha) * np.cos(2 * alpha * (x - 0.5)))
+                    + (2 * alpha * np.cos(2 * alpha * (x - 1)))
                 )
                 val = num / denom
             return val
 
-        val = _g2(x, alpha) if x >= 0 else -1 * _g2(-x, alpha)
+        val = _g2(x, M) if x >= 0 else -1 * _g2(-x, M)
         return val
 
     def _derivative_1(self, x):
-        return np.array([self._he31prime(x, self.alpha), self._he32prime(x, self.alpha)])
+        return np.array([self._he31prime(x, self.M), self._he32prime(x, self.M)])
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
-    def _he31prime(x, alpha):  # pragma: no cover
-        def _g1prime(x, alpha):
+    def _he31prime(x, M):  # pragma: no cover
+        def _g1prime(x, M):
             val = 0
             if x >= 0 and x <= 1:
-                denom = (0.5 * alpha * np.cos(0.5 * alpha)) - np.sin(0.5 * alpha)
-                num = -(0.5 * alpha * np.cos(0.5 * alpha)) + (0.5 * alpha * np.cos(0.5 * alpha - (alpha * x)))
+                alpha = np.pi / M
+                denom = (alpha * np.cos(alpha)) - np.sin(alpha)
+                num = -(alpha * np.cos(alpha)) + (alpha * np.cos(alpha - (2 * alpha * x)))
                 val = num / denom
             return val
 
-        val = _g1prime(x, alpha) if x >= 0 else -1 * _g1prime(-x, alpha)
+        val = _g1prime(x, M) if x >= 0 else -1 * _g1prime(-x, M)
         return val
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
-    def _he32prime(x, alpha):  # pragma: no cover
-        def _g2prime(x, alpha):
+    def _he32prime(x, M):  # pragma: no cover
+        def _g2prime(x, M):
             val = 0
             if x >= 0 and x <= 1:
-                denom = ((0.5 * alpha * np.cos(0.5 * alpha)) - np.sin(0.5 * alpha)) * (4 * alpha) * np.sin(0.5 * alpha)
+                alpha = np.pi / M
+                denom = ((alpha * np.cos(alpha)) - np.sin(alpha)) * 8 * alpha * np.sin(alpha)
                 num = (
-                    -(2 * alpha * np.sin(0.5 * alpha) * np.sin(0.5 * alpha))
-                    + (2 * alpha * np.sin(0.5 * alpha) * np.sin(alpha * (x - 0.5)))
-                    - (alpha * alpha * np.sin(alpha * (x - 1)))
+                    -(4 * alpha * np.sin(alpha) * np.sin(alpha))
+                    + (4 * alpha * np.sin(alpha) * np.sin(2 * alpha * (x - 0.5)))
+                    - (4 * alpha**2 * np.sin(2 * alpha * (x - 1)))
                 )
                 val = num / denom
             return val
 
-        val = _g2prime(x, alpha) if x >= 0 else _g2prime(-x, alpha)
+        val = _g2prime(x, M) if x >= 0 else _g2prime(-x, M)
         return val
 
     @staticmethod

@@ -10,27 +10,19 @@ import splinebox.spline_curves
 
 @pytest.fixture(
     params=[
-        (splinebox.basis_functions.B1, {}),
-        (splinebox.basis_functions.B2, {}),
-        (splinebox.basis_functions.B3, {}),
-        (splinebox.basis_functions.Exponential, {}),
-        (splinebox.basis_functions.CatmullRom, {}),
-        (splinebox.basis_functions.CubicHermite, {}),
-        (splinebox.basis_functions.ExponentialHermite, {"alpha": 0.4}),
-    ],
-    ids=[
-        "B1",
-        "B2",
-        "B3",
-        "Exponential",
-        "CatmullRom",
-        "CubicHermite",
-        "ExponentialHermite-alpha0.4",
-    ],
+        splinebox.basis_functions.B1,
+        splinebox.basis_functions.B2,
+        splinebox.basis_functions.B3,
+        splinebox.basis_functions.Exponential,
+        splinebox.basis_functions.CatmullRom,
+        splinebox.basis_functions.CubicHermite,
+        splinebox.basis_functions.ExponentialHermite,
+    ]
 )
 def basis_function(request, M):
-    basis_function, params = request.param
-    if basis_function == splinebox.basis_functions.Exponential:
+    basis_function = request.param
+    params = {}
+    if basis_function in [splinebox.basis_functions.Exponential, splinebox.basis_functions.ExponentialHermite]:
         params["M"] = M
     return basis_function(**params)
 
@@ -53,7 +45,7 @@ def non_hermite_basis_function(request):
 @pytest.fixture(
     params=[
         (splinebox.basis_functions.CubicHermite, {}),
-        (splinebox.basis_functions.ExponentialHermite, {"alpha": 0.4}),
+        (splinebox.basis_functions.ExponentialHermite, {"M": 5}),
     ],
     ids=["CubicHermite", "ExponentialHermite"],
 )
