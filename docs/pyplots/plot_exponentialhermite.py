@@ -12,7 +12,7 @@ x = np.linspace(-3, 3, 100)
 basis_0th = basis.eval(x)
 basis_1st = basis.eval(x, derivative=1)
 
-fig.suptitle(f"Exponential Hermite basis function and its derivatives for $\\M={M}$")
+fig.suptitle(f"Exponential Hermite basis function and its derivatives for $M={M}$")
 axes[0][0].plot(x, basis_0th[0], label=r"$f_1(x)$")
 axes[0][0].legend()
 axes[1][0].plot(x, basis_1st[0], label=r"$\frac{df_1}{dx}(x)$")
