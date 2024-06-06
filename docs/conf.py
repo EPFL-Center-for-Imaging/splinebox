@@ -110,3 +110,10 @@ sphinx_gallery_conf = {
     "examples_dirs": "../examples",  # path to your example scripts
     "gallery_dirs": "auto_examples",  # path to where to save gallery generated output
 }
+
+# Matplotlib sphinxext configuration
+plot_html_show_formats = False
+plot_html_show_source_link = False
+plot_formats = [
+    ("png", 500),
+]

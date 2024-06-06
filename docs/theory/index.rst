@@ -7,6 +7,7 @@ Theory
 
    basis_function.rst
    data_approximation.rst
+   ../references.rst
 
 SplineBox implements uniform splines of the form
 
