@@ -333,6 +333,10 @@ def test_knots(spline_curve, knot_gen, is_hermite_spline, request):
         request.node.add_marker(pytest.mark.xfail)
 
     knots = knot_gen(spline_curve.M)
+    pad = math.ceil(spline_curve.basis_function.support / 2) - 1
+    if spline_curve.padding_function is None and not spline_curve.closed:
+        knots = splinebox.spline_curves.padding_function(knots, pad)
+        knots = np.squeeze(knots)
     spline_curve.knots = knots
 
     if is_hermite_spline(spline_curve):
@@ -355,14 +359,12 @@ def test_knots(spline_curve, knot_gen, is_hermite_spline, request):
 
     # This assert makes sense because the knots are not saved in
     # the spline class but are converted to coefficients which are saved.
-    if spline_curve.closed:
-        assert np.allclose(knots, spline_curve.knots)
+    if spline_curve.padding_function is None and not spline_curve.closed and pad != 0:
+        # We only compare the actual knots because padded knots will not
+        # be the same because the of the filtering to find the control points.
+        assert np.allclose(knots[pad:-pad], spline_curve.knots[pad:-pad])
     else:
-        pad = math.ceil(spline_curve.basis_function.support / 2) - 1
-        if pad == 0:
-            assert np.allclose(knots, spline_curve.knots)
-        else:
-            assert np.allclose(knots, spline_curve.knots[pad:-pad])
+        assert np.allclose(knots, spline_curve.knots)
 
 
 def test_centroid(spline_curve, coeff_gen, is_hermite_spline):

@@ -64,16 +64,23 @@ def closed(request):
     return request.param
 
 
+@pytest.fixture(params=[None, splinebox.spline_curves.padding_function])
+def padding_function(request):
+    return request.param
+
+
 @pytest.fixture
-def spline_curve(basis_function, M, closed):
+def spline_curve(basis_function, M, closed, padding_function):
     if isinstance(
         basis_function, (splinebox.basis_functions.CubicHermite, splinebox.basis_functions.ExponentialHermite)
     ):
-        spline = splinebox.spline_curves.HermiteSpline(M, basis_function, closed=closed)
+        spline = splinebox.spline_curves.HermiteSpline(
+            M, basis_function, closed=closed, padding_function=padding_function
+        )
         spline._check_control_points_and_tangents = unittest.mock.MagicMock()
         spline._check_control_points = unittest.mock.MagicMock()
     else:
-        spline = splinebox.spline_curves.Spline(M, basis_function, closed=closed)
+        spline = splinebox.spline_curves.Spline(M, basis_function, closed=closed, padding_function=padding_function)
         spline._check_control_points = unittest.mock.MagicMock()
     return spline
 
