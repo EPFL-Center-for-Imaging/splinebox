@@ -21,7 +21,7 @@ for i in range(n):
         axes[i, j].scatter(coordinates[:, 0], coordinates[:, 1])
 
 # The parameter values at which the spline is evaluated
-x = np.linspace(0, len(coordinates), 1000)
+ts = np.linspace(0, len(coordinates), 1000)
 
 for i, (name, basis_function) in enumerate(
     (
@@ -33,7 +33,7 @@ for i, (name, basis_function) in enumerate(
 ):
     curve = splinebox.spline_curves.Spline(len(coordinates), basis_function, True)
     curve.knots = coordinates
-    discreteContour = curve.eval(x)
+    discreteContour = curve.eval(ts)
 
     axes[i // n, i % n].plot(discreteContour[:, 0], discreteContour[:, 1])
     axes[i // n, i % n].set_title(name)

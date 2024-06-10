@@ -25,13 +25,13 @@ class BasisFunction:
         self.multigenerator = multigenerator
         self.support = support
 
-    def eval(self, x, derivative=0):
+    def eval(self, t, derivative=0):
         """
-        Evaluate the function at position(s) `x`.
+        Evaluate the function at position(s) `t`.
 
         Parameters
         ----------
-        x : numpy.array
+        t : numpy.array
             The points where the function should be evaluated.
         derivative : [0, 1, 2], default = 0
             Whether to evaluate the function (0) or its first (1)
@@ -41,24 +41,24 @@ class BasisFunction:
         -------
         y : numpy.array
             Values of the function or its first or second derivative
-            at position(s) `x`.
+            at position(s) `t`.
         """
         if derivative == 0:
-            return self._func(x)
+            return self._func(t)
         elif derivative == 1:
-            return self._derivative_1(x)
+            return self._derivative_1(t)
         elif derivative == 2:
-            return self._derivative_2(x)
+            return self._derivative_2(t)
         else:
             raise ValueError(f"derivative has to be 0, 1, or 2 not {derivative}")
 
-    def _func(self, x):
+    def _func(self, t):
         raise NotImplementedError(BasisFunction._unimplemented_message)
 
-    def _derivative_1(self, x):
+    def _derivative_1(self, t):
         raise NotImplementedError(BasisFunction._unimplemented_message)
 
-    def _derivative_2(self, x):
+    def _derivative_2(self, t):
         raise NotImplementedError(BasisFunction._unimplemented_message)
 
     def filter_symmetric(self, s):
@@ -95,7 +95,7 @@ class B1(BasisFunction):
     Basis spline of degree 1.
 
     .. math::
-        f(x) = \begin{cases}1 - \lvert x \rvert & \text{for } -1 \leq x \leq 1 \\ 0 & \text{otherwise}\end{cases}
+        f(t) = \begin{cases}1 - \lvert t \rvert & \text{for } -1 \leq t \leq 1 \\ 0 & \text{otherwise}\end{cases}
     """
 
     def __init__(self):
@@ -103,27 +103,27 @@ class B1(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _func(x):  # pragma: no cover
+    def _func(t):  # pragma: no cover
         val = 0
-        if abs(x) >= 0 and abs(x) < 1:
-            val = 1 - abs(x)
+        if abs(t) >= 0 and abs(t) < 1:
+            val = 1 - abs(t)
         return val
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _derivative_1(x):  # pragma: no cover
+    def _derivative_1(t):  # pragma: no cover
         val = 0
-        if x > -1 and x < 0:
+        if t > -1 and t < 0:
             val = 1
-        elif x > 0 and x < 1:
+        elif t > 0 and t < 1:
             val = -1
-        elif x == 0 or x == -1 or x == 1:
+        elif t == 0 or t == -1 or t == 1:
             # This is the gradient you'll get at exactly 0
             val = np.nan
         return val
 
     @staticmethod
-    def _derivative_2(x):
+    def _derivative_2(t):
         raise RuntimeError("B1 isn't twice differentiable.")
 
     @staticmethod
@@ -146,7 +146,7 @@ class B2(BasisFunction):
     Basis spline of degree 2.
 
     .. math::
-        f(x) = \begin{cases}\frac{x^2}{2} + \frac{3}{2} x + \frac{9}{8} & \text{for } -\frac{3}{2} \leq x \leq -\frac{1}{2} \\ -x^2 + \frac{3}{4} & \text{for } -\frac{1}{2} < x \leq \frac{1}{2} \\ \frac{1}{2} x^2 - \frac{3}{2} x + \frac{9}{8} & \text{for } \frac{1}{2} < x \leq \frac{3}{2} \\ 0 & \text{otherwise}\end{cases}
+        f(t) = \begin{cases}\frac{t^2}{2} + \frac{3}{2} t + \frac{9}{8} & \text{for } -\frac{3}{2} \leq t \leq -\frac{1}{2} \\ -t^2 + \frac{3}{4} & \text{for } -\frac{1}{2} < t \leq \frac{1}{2} \\ \frac{1}{2} t^2 - \frac{3}{2} t + \frac{9}{8} & \text{for } \frac{1}{2} < t \leq \frac{3}{2} \\ 0 & \text{otherwise}\end{cases}
     """
 
     def __init__(self):
@@ -154,37 +154,37 @@ class B2(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _func(x):  # pragma: no cover
+    def _func(t):  # pragma: no cover
         val = 0
-        if x >= -1.5 and x <= -0.5:
-            val = 0.5 * (x**2) + 1.5 * x + 1.125
-        elif x > -0.5 and x <= 0.5:
-            val = -x * x + 0.75
-        elif x > 0.5 and x <= 1.5:
-            val = 0.5 * (x**2) - 1.5 * x + 1.125
+        if t >= -1.5 and t <= -0.5:
+            val = 0.5 * (t**2) + 1.5 * t + 1.125
+        elif t > -0.5 and t <= 0.5:
+            val = -t * t + 0.75
+        elif t > 0.5 and t <= 1.5:
+            val = 0.5 * (t**2) - 1.5 * t + 1.125
         return val
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _derivative_1(x):  # pragma: no cover
+    def _derivative_1(t):  # pragma: no cover
         val = 0
-        if x >= -1.5 and x <= -0.5:
-            val = x + 1.5
-        elif x > -0.5 and x <= 0.5:
-            val = -2 * x
-        elif x > 0.5 and x <= 1.5:
-            val = x - 1.5
+        if t >= -1.5 and t <= -0.5:
+            val = t + 1.5
+        elif t > -0.5 and t <= 0.5:
+            val = -2 * t
+        elif t > 0.5 and t <= 1.5:
+            val = t - 1.5
         return val
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _derivative_2(x):  # pragma: no cover
+    def _derivative_2(t):  # pragma: no cover
         val = 0
-        if x >= -1.5 and x <= -0.5:
+        if t >= -1.5 and t <= -0.5:
             val = 1
-        elif x > -0.5 and x <= 0.5:
+        elif t > -0.5 and t <= 0.5:
             val = -2
-        elif x > 0.5 and x <= 1.5:
+        elif t > 0.5 and t <= 1.5:
             val = 1
         return val
 
@@ -200,9 +200,9 @@ class B3(BasisFunction):
     Basis spline of degree 3.
 
     .. math::
-        f(x) = \begin{cases}
-        \frac{2}{3} - \lvert x \rvert^2 + \frac{\lvert x \rvert^3}{2} & \text{for } 0 \leq \lvert x \rvert < 1 \\
-        \frac{1}{6}(2 - \lvert x \rvert)^3 & \text{for } 1 \leq \lvert x \rvert \leq 2 \\
+        f(t) = \begin{cases}
+        \frac{2}{3} - \lvert t \rvert^2 + \frac{\lvert t \rvert^3}{2} & \text{for } 0 \leq \lvert t \rvert < 1 \\
+        \frac{1}{6}(2 - \lvert t \rvert)^3 & \text{for } 1 \leq \lvert t \rvert \leq 2 \\
         0 & \text{otherwise}\end{cases}
     """
 
@@ -211,40 +211,40 @@ class B3(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _func(x):  # pragma: no cover
+    def _func(t):  # pragma: no cover
         val = 0
-        if abs(x) >= 0 and abs(x) < 1:
-            val = 2 / 3 - (abs(x) ** 2) + (abs(x) ** 3) / 2
-        elif abs(x) >= 1 and abs(x) <= 2:
-            val = ((2 - abs(x)) ** 3) / 6
+        if abs(t) >= 0 and abs(t) < 1:
+            val = 2 / 3 - (abs(t) ** 2) + (abs(t) ** 3) / 2
+        elif abs(t) >= 1 and abs(t) <= 2:
+            val = ((2 - abs(t)) ** 3) / 6
         return val
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _derivative_1(x):  # pragma: no cover
+    def _derivative_1(t):  # pragma: no cover
         val = 0
-        if x >= 0 and x < 1:
-            val = -2 * x + 1.5 * x * x
-        elif x > -1 and x < 0:
-            val = -2 * x - 1.5 * x * x
-        elif x >= 1 and x <= 2:
-            val = -0.5 * ((2 - x) ** 2)
-        elif x >= -2 and x <= -1:
-            val = 0.5 * ((2 + x) ** 2)
+        if t >= 0 and t < 1:
+            val = -2 * t + 1.5 * t * t
+        elif t > -1 and t < 0:
+            val = -2 * t - 1.5 * t * t
+        elif t >= 1 and t <= 2:
+            val = -0.5 * ((2 - t) ** 2)
+        elif t >= -2 and t <= -1:
+            val = 0.5 * ((2 + t) ** 2)
         return val
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _derivative_2(x):  # pragma: no cover
+    def _derivative_2(t):  # pragma: no cover
         val = 0
-        if x >= 0 and x < 1:
-            val = -2 + 3 * x
-        elif x > -1 and x < 0:
-            val = -2 - 3 * x
-        elif x >= 1 and x <= 2:
-            val = 2 - x
-        elif x >= -2 and x <= -1:
-            val = 2 + x
+        if t >= 0 and t < 1:
+            val = -2 + 3 * t
+        elif t > -1 and t < 0:
+            val = -2 - 3 * t
+        elif t >= 1 and t <= 2:
+            val = 2 - t
+        elif t >= -2 and t <= -1:
+            val = 2 + t
         return val
 
     @staticmethod
@@ -320,90 +320,90 @@ class Exponential(BasisFunction):
     ???
 
     .. math::
-        f(x) = \begin{cases}
-        \frac{L}{\alpha^2} 2 \sin(\frac{\alpha}{2} x)^2 & \text{for } 0 \leq x < 1 \\
-        \frac{L}{\alpha^2} (\cos(\alpha (x - 2)) + \cos(\alpha (x - 1)) - 2 \cos(\alpha)) & \text{for } 1 \leq x < 2 \\
-        \frac{L}{\alpha^2} 2 \sin(\frac{\alpha}{2} (x- 3))^2 & \text{for } 2 \leq x \leq 3 \\
+        f(t) = \begin{cases}
+        \frac{L}{\alpha^2} 2 \sin(\frac{\alpha}{2} t)^2 & \text{for } 0 \leq t < 1 \\
+        \frac{L}{\alpha^2} (\cos(\alpha (t - 2)) + \cos(\alpha (t - 1)) - 2 \cos(\alpha)) & \text{for } 1 \leq t < 2 \\
+        \frac{L}{\alpha^2} 2 \sin(\frac{\alpha}{2} (t - 3))^2 & \text{for } 2 \leq t \leq 3 \\
         0 & \text{otherwise}\end{cases}
 
     .. math::
-        \text{where } L=(\frac{\sin(\pi / M)}{\pi / M})^{-2}\text{ and }x = x + \frac{support}{2}
+        \text{where } L=(\frac{\sin(\pi / M)}{\pi / M})^{-2}\text{ and }t = t + \frac{support}{2}
 
     .. math::
-        f(x) = \begin{cases}
-        2 L \sin(\alpha x)^2 & \text{for } 0 \leq x < 1 \\
-        L (\cos(2\alpha (x - 2)) + \cos(2\alpha (x - 1)) - 2 \cos(2\alpha)) & \text{for } 1 \leq x < 2 \\
-        2 L \sin(\alpha (x - 3))^2 & \text{for } 2 \leq x \leq 3 \\
+        f(t) = \begin{cases}
+        2 L \sin(\alpha t)^2 & \text{for } 0 \leq t < 1 \\
+        L (\cos(2\alpha (t - 2)) + \cos(2\alpha (t - 1)) - 2 \cos(2\alpha)) & \text{for } 1 \leq t < 2 \\
+        2 L \sin(\alpha (t - 3))^2 & \text{for } 2 \leq t \leq 3 \\
         0 & \text{otherwise}\end{cases}
 
     .. math::
-        \text{where } \alpha=\frac{\pi}{M}, L=\frac{1}{4 \sin(\alpha)^2} \text{ and }x = x + \frac{3}{2}
+        \text{where } \alpha=\frac{\pi}{M}, L=\frac{1}{4 \sin(\alpha)^2} \text{ and }t = t + \frac{3}{2}
     """
 
     def __init__(self, M):
         super().__init__(False, 3)
         self.M = M
 
-    def _func(self, x):
-        return self.__func(x, self.support / 2, self.M)
+    def _func(self, t):
+        return self.__func(t, self.support / 2, self.M)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64, numba.float64)], nopython=True, cache=True)
-    def __func(x, half_support, M):  # pragma: no cover
-        x += half_support
+    def __func(t, half_support, M):  # pragma: no cover
+        t += half_support
 
         alpha = np.pi / M
         L = 1 / (4 * np.sin(alpha) ** 2)
 
         val = 0
-        if x >= 0 and x < 1:
-            val = 2 * np.sin(alpha * x) ** 2
-        elif x >= 1 and x < 2:
-            val = np.cos(2 * alpha * (x - 2)) + np.cos(2 * alpha * (x - 1)) - 2 * np.cos(2 * alpha)
-        elif x >= 2 and x <= 3:
-            val = 2 * np.sin(alpha * (x - 3)) ** 2
+        if t >= 0 and t < 1:
+            val = 2 * np.sin(alpha * t) ** 2
+        elif t >= 1 and t < 2:
+            val = np.cos(2 * alpha * (t - 2)) + np.cos(2 * alpha * (t - 1)) - 2 * np.cos(2 * alpha)
+        elif t >= 2 and t <= 3:
+            val = 2 * np.sin(alpha * (t - 3)) ** 2
 
         return L * val
 
-    def _derivative_1(self, x):
-        return self.__derivative_1(x, self.support / 2, self.M)
+    def _derivative_1(self, t):
+        return self.__derivative_1(t, self.support / 2, self.M)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64, numba.float64)], nopython=True, cache=True)
-    def __derivative_1(x, half_support, M):  # pragma: no cover
-        x += half_support
+    def __derivative_1(t, half_support, M):  # pragma: no cover
+        t += half_support
 
         alpha = np.pi / M
         L = 1 / (4 * np.sin(alpha) ** 2)
 
         val = 0
-        if x >= 0 and x <= 1:
-            val = 4 * alpha * np.sin(alpha * x) * np.cos(alpha * x)
-        elif x > 1 and x <= 2:
-            val = 2 * alpha * (np.sin(2 * alpha * (2 - x)) + np.sin(2 * alpha * (1 - x)))
-        elif x > 2 and x <= 3:
-            val = 4 * alpha * np.sin(alpha * (x - 3)) * np.cos(alpha * (x - 3))
+        if t >= 0 and t <= 1:
+            val = 4 * alpha * np.sin(alpha * t) * np.cos(alpha * t)
+        elif t > 1 and t <= 2:
+            val = 2 * alpha * (np.sin(2 * alpha * (2 - t)) + np.sin(2 * alpha * (1 - t)))
+        elif t > 2 and t <= 3:
+            val = 4 * alpha * np.sin(alpha * (t - 3)) * np.cos(alpha * (t - 3))
 
         return L * val
 
-    def _derivative_2(self, x):
-        return self.__derivative_2(x, self.support / 2, self.M)
+    def _derivative_2(self, t):
+        return self.__derivative_2(t, self.support / 2, self.M)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64, numba.float64)], nopython=True, cache=True)
-    def __derivative_2(x, half_support, M):  # pragma: no cover
-        x += half_support
+    def __derivative_2(t, half_support, M):  # pragma: no cover
+        t += half_support
 
         alpha = np.pi / M
         L = 1 / (4 * np.sin(alpha) ** 2)
 
         val = 0
-        if x >= 0 and x <= 1:
-            val = 4 * alpha**2 * (np.cos(alpha * x) ** 2 - np.sin(alpha * x) ** 2)
-        elif x > 1 and x <= 2:
-            val = -4 * alpha**2 * (np.cos(2 * alpha * (2 - x)) + np.cos(2 * alpha * (1 - x)))
-        elif x > 2 and x <= 3:
-            val = 4 * alpha**2 * (np.cos(alpha * (x - 3)) ** 2 - np.sin(alpha * (x - 3)) ** 2)
+        if t >= 0 and t <= 1:
+            val = 4 * alpha**2 * (np.cos(alpha * t) ** 2 - np.sin(alpha * t) ** 2)
+        elif t > 1 and t <= 2:
+            val = -4 * alpha**2 * (np.cos(2 * alpha * (2 - t)) + np.cos(2 * alpha * (1 - t)))
+        elif t > 2 and t <= 3:
+            val = 4 * alpha**2 * (np.cos(alpha * (t - 3)) ** 2 - np.sin(alpha * (t - 3)) ** 2)
 
         return L * val
 
@@ -500,40 +500,40 @@ class CatmullRom(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _func(x):  # pragma: no cover
+    def _func(t):  # pragma: no cover
         val = 0
-        if np.abs(x) >= 0 and np.abs(x) <= 1:
-            val = (3 / 2) * (np.abs(x) ** 3) - (5 / 2) * (np.abs(x) ** 2) + 1
-        elif np.abs(x) > 1 and np.abs(x) <= 2:
-            val = (-1 / 2) * (np.abs(x) ** 3) + (5 / 2) * (np.abs(x) ** 2) - 4 * np.abs(x) + 2
+        if np.abs(t) >= 0 and np.abs(t) <= 1:
+            val = (3 / 2) * (np.abs(t) ** 3) - (5 / 2) * (np.abs(t) ** 2) + 1
+        elif np.abs(t) > 1 and np.abs(t) <= 2:
+            val = (-1 / 2) * (np.abs(t) ** 3) + (5 / 2) * (np.abs(t) ** 2) - 4 * np.abs(t) + 2
         return val
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _derivative_1(x):  # pragma: no cover
+    def _derivative_1(t):  # pragma: no cover
         val = 0
-        if x >= 0 and x <= 1:
-            val = x * (4.5 * x - 5)
-        elif x >= -1 and x < 0:
-            val = -x * (4.5 * x + 5)
-        elif x > 1 and x <= 2:
-            val = -1.5 * x * x + 5 * x - 4
-        elif x >= -2 and x < -1:
-            val = 1.5 * x * x + 5 * x + 4
+        if t >= 0 and t <= 1:
+            val = t * (4.5 * t - 5)
+        elif t >= -1 and t < 0:
+            val = -t * (4.5 * t + 5)
+        elif t > 1 and t <= 2:
+            val = -1.5 * t * t + 5 * t - 4
+        elif t >= -2 and t < -1:
+            val = 1.5 * t * t + 5 * t + 4
         return val
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _derivative_2(x):  # pragma: no cover
+    def _derivative_2(t):  # pragma: no cover
         val = 0
-        if x >= 0 and x <= 1:
-            val = 9 * x - 5
-        elif x >= -1 and x < 0:
-            val = -9 * x - 5
-        elif x > 1 and x <= 2:
-            val = -3 * x + 5
-        elif x >= -2 and x < -1:
-            val = 3 * x + 5
+        if t >= 0 and t <= 1:
+            val = 9 * t - 5
+        elif t >= -1 and t < 0:
+            val = -9 * t - 5
+        elif t > 1 and t <= 2:
+            val = -3 * t + 5
+        elif t >= -2 and t < -1:
+            val = 3 * t + 5
         return val
 
     @staticmethod
@@ -553,54 +553,54 @@ class CubicHermite(BasisFunction):
     def __init__(self):
         super().__init__(True, 2)
 
-    def _func(self, x):
-        return np.array([self.h31(x), self.h32(x)])
+    def _func(self, t):
+        return np.array([self.h31(t), self.h32(t)])
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def h31(x):  # pragma: no cover
+    def h31(t):  # pragma: no cover
         val = 0
-        if x >= 0 and x <= 1:
-            val = (1 + (2 * x)) * (x - 1) * (x - 1)
-        elif x < 0 and x >= -1:
-            val = (1 - (2 * x)) * (x + 1) * (x + 1)
+        if t >= 0 and t <= 1:
+            val = (1 + (2 * t)) * (t - 1) * (t - 1)
+        elif t < 0 and t >= -1:
+            val = (1 - (2 * t)) * (t + 1) * (t + 1)
         return val
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def h32(x):  # pragma: no cover
+    def h32(t):  # pragma: no cover
         val = 0
-        if x >= 0 and x <= 1:
-            val = x * (x - 1) * (x - 1)
-        elif x < 0 and x >= -1:
-            val = x * (x + 1) * (x + 1)
+        if t >= 0 and t <= 1:
+            val = t * (t - 1) * (t - 1)
+        elif t < 0 and t >= -1:
+            val = t * (t + 1) * (t + 1)
         return val
 
-    def _derivative_1(self, x):
-        return np.array([self.h31prime(x), self.h32prime(x)])
+    def _derivative_1(self, t):
+        return np.array([self.h31prime(t), self.h32prime(t)])
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def h31prime(x):  # pragma: no cover
+    def h31prime(t):  # pragma: no cover
         val = 0
-        if x >= 0 and x <= 1:
-            val = 6 * x * (x - 1)
-        elif x < 0 and x >= -1:
-            val = -6 * x * (x + 1)
+        if t >= 0 and t <= 1:
+            val = 6 * t * (t - 1)
+        elif t < 0 and t >= -1:
+            val = -6 * t * (t + 1)
         return val
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def h32prime(x):  # pragma: no cover
+    def h32prime(t):  # pragma: no cover
         val = 0
-        if x >= 0 and x <= 1:
-            val = 3 * x * x - 4 * x + 1
-        elif x < 0 and x >= -1:
-            val = 3 * x * x + 4 * x + 1
+        if t >= 0 and t <= 1:
+            val = 3 * t * t - 4 * t + 1
+        elif t < 0 and t >= -1:
+            val = 3 * t * t + 4 * t + 1
         return val
 
     @staticmethod
-    def _derivative_2(x):
+    def _derivative_2(t):
         raise RuntimeError("CubicHermite isn't twice differentiable.")
 
     def h31Autocorrelation(self, i, j, M):
@@ -708,83 +708,83 @@ class ExponentialHermite(BasisFunction):
         super().__init__(True, 2)
         self.M = M
 
-    def _func(self, x):
-        return np.array([self._he31(x, self.M), self._he32(x, self.M)])
+    def _func(self, t):
+        return np.array([self._he31(t, self.M), self._he32(t, self.M)])
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
-    def _he31(x, M):  # pragma: no cover
-        def _g1(x, M):
+    def _he31(t, M):  # pragma: no cover
+        def _g1(t, M):
             val = 0
-            if x >= 0 and x <= 1:
+            if t >= 0 and t <= 1:
                 alpha = np.pi / M
                 denom = (alpha * np.cos(alpha)) - np.sin(alpha)
                 num = (
                     (0.5 * (2 * alpha * np.cos(alpha) - np.sin(alpha)))
-                    - (alpha * np.cos(alpha) * x)
-                    - (0.5 * np.sin(alpha - (2 * alpha * x)))
+                    - (alpha * np.cos(alpha) * t)
+                    - (0.5 * np.sin(alpha - (2 * alpha * t)))
                 )
                 val = num / denom
             return val
 
-        val = _g1(x, M) if x >= 0 else _g1(-x, M)
+        val = _g1(t, M) if t >= 0 else _g1(-t, M)
         return val
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
-    def _he32(x, M):  # pragma: no cover
-        def _g2(x, M):
+    def _he32(t, M):  # pragma: no cover
+        def _g2(t, M):
             val = 0
-            if x >= 0 and x <= 1:
+            if t >= 0 and t <= 1:
                 alpha = np.pi / M
                 denom = ((alpha * np.cos(alpha)) - np.sin(alpha)) * 8 * alpha * np.sin(alpha)
                 num = (
                     -((2 * alpha * np.cos(2 * alpha)) - np.sin(2 * alpha))
-                    - (4 * alpha * np.sin(alpha) * np.sin(alpha) * x)
-                    - (2 * np.sin(alpha) * np.cos(2 * alpha * (x - 0.5)))
-                    + (2 * alpha * np.cos(2 * alpha * (x - 1)))
+                    - (4 * alpha * np.sin(alpha) * np.sin(alpha) * t)
+                    - (2 * np.sin(alpha) * np.cos(2 * alpha * (t - 0.5)))
+                    + (2 * alpha * np.cos(2 * alpha * (t - 1)))
                 )
                 val = num / denom
             return val
 
-        val = _g2(x, M) if x >= 0 else -1 * _g2(-x, M)
+        val = _g2(t, M) if t >= 0 else -1 * _g2(-t, M)
         return val
 
-    def _derivative_1(self, x):
-        return np.array([self._he31prime(x, self.M), self._he32prime(x, self.M)])
+    def _derivative_1(self, t):
+        return np.array([self._he31prime(t, self.M), self._he32prime(t, self.M)])
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
-    def _he31prime(x, M):  # pragma: no cover
-        def _g1prime(x, M):
+    def _he31prime(t, M):  # pragma: no cover
+        def _g1prime(t, M):
             val = 0
-            if x >= 0 and x <= 1:
+            if t >= 0 and t <= 1:
                 alpha = np.pi / M
                 denom = (alpha * np.cos(alpha)) - np.sin(alpha)
-                num = -(alpha * np.cos(alpha)) + (alpha * np.cos(alpha - (2 * alpha * x)))
+                num = -(alpha * np.cos(alpha)) + (alpha * np.cos(alpha - (2 * alpha * t)))
                 val = num / denom
             return val
 
-        val = _g1prime(x, M) if x >= 0 else -1 * _g1prime(-x, M)
+        val = _g1prime(t, M) if t >= 0 else -1 * _g1prime(-t, M)
         return val
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
-    def _he32prime(x, M):  # pragma: no cover
-        def _g2prime(x, M):
+    def _he32prime(t, M):  # pragma: no cover
+        def _g2prime(t, M):
             val = 0
-            if x >= 0 and x <= 1:
+            if t >= 0 and t <= 1:
                 alpha = np.pi / M
                 denom = ((alpha * np.cos(alpha)) - np.sin(alpha)) * 8 * alpha * np.sin(alpha)
                 num = (
                     -(4 * alpha * np.sin(alpha) * np.sin(alpha))
-                    + (4 * alpha * np.sin(alpha) * np.sin(2 * alpha * (x - 0.5)))
-                    - (4 * alpha**2 * np.sin(2 * alpha * (x - 1)))
+                    + (4 * alpha * np.sin(alpha) * np.sin(2 * alpha * (t - 0.5)))
+                    - (4 * alpha**2 * np.sin(2 * alpha * (t - 1)))
                 )
                 val = num / denom
             return val
 
-        val = _g2prime(x, M) if x >= 0 else _g2prime(-x, M)
+        val = _g2prime(t, M) if t >= 0 else _g2prime(-t, M)
         return val
 
     @staticmethod

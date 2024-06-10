@@ -21,9 +21,9 @@ basis_function = splinebox.B3()
 spline = splinebox.Spline(M, basis_function, closed=False)
 spline.fit(values)
 
-t = np.linspace(0, M - 1, 1000)
-spline_y = spline.eval(t)
-spline_x = np.linspace(x.min(), x.max(), len(t))
+ts = np.linspace(0, M - 1, 1000)
+spline_y = spline.eval(ts)
+spline_x = np.linspace(x.min(), x.max(), len(ts))
 
 plt.scatter(x, values, color="orange")
 plt.plot(spline_x, spline_y)
