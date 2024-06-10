@@ -78,9 +78,9 @@ contours = []
 external_energies = []
 
 
-def energy_function(coeffs, spline, t, alpha, beta):
-    coeffs = coeffs.reshape((spline.M, -1))
-    spline.coeffs = coeffs
+def energy_function(control_points, spline, t, alpha, beta):
+    control_points = control_points.reshape((spline.M, -1))
+    spline.control_points = control_points
     contour = spline.eval(t)
     contours.append(contour.copy())
     edge_energy_value = np.sum(edge_energy(contour[:, 0], contour[:, 1], grid=False))
@@ -92,10 +92,10 @@ def energy_function(coeffs, spline, t, alpha, beta):
 # %%
 # The active contours approach consists of iteratively updating our control points (coefficients)
 # to minimize the energy.
-initial_coeffs = spline.coeffs.copy()
+initial_control_points = spline.control_points.copy()
 t = np.linspace(0, M, 400)
 result = scipy.optimize.minimize(
-    energy_function, initial_coeffs.flatten(), method="Powell", args=(spline, t, alpha, beta)
+    energy_function, initial_control_points.flatten(), method="Powell", args=(spline, t, alpha, beta)
 )
 
 # %%

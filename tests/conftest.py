@@ -70,11 +70,11 @@ def spline_curve(basis_function, M, closed):
         basis_function, (splinebox.basis_functions.CubicHermite, splinebox.basis_functions.ExponentialHermite)
     ):
         spline = splinebox.spline_curves.HermiteSpline(M, basis_function, closed=closed)
-        spline._check_coeffs_and_tangents = unittest.mock.MagicMock()
-        spline._check_coeffs = unittest.mock.MagicMock()
+        spline._check_control_points_and_tangents = unittest.mock.MagicMock()
+        spline._check_control_points = unittest.mock.MagicMock()
     else:
         spline = splinebox.spline_curves.Spline(M, basis_function, closed=closed)
-        spline._check_coeffs = unittest.mock.MagicMock()
+        spline._check_control_points = unittest.mock.MagicMock()
     return spline
 
 
@@ -211,7 +211,7 @@ def initialized_spline_curve(spline_curve, is_hermite_spline, coeff_gen):
     closed = spline_curve.closed
     M = spline_curve.M
 
-    spline_curve.coeffs = coeff_gen(M, support, closed)
+    spline_curve.control_points = coeff_gen(M, support, closed)
     if is_hermite_spline(spline_curve):
         spline_curve.tangents = coeff_gen(spline_curve.M, support, closed)
 

@@ -21,12 +21,14 @@ class Spline:
         Whether or not the spline is closed, i.e. the two ends connect.
     """
 
-    _wrong_dimension_msg = "It looks like coeffs is a 2D array with second dimension different than two. I don't know how to handle this yet."
-    _wrong_array_size_msg = "It looks like coeffs is neither a 1 nor a 2D array. I don't know how to handle this yet."
-    _no_coeffs_msg = "This model doesn't have any coefficients."
+    _wrong_dimension_msg = "It looks like control_points is a 2D array with second dimension different than two. I don't know how to handle this yet."
+    _wrong_array_size_msg = (
+        "It looks like control_points is neither a 1 nor a 2D array. I don't know how to handle this yet."
+    )
+    _no_control_points_msg = "This model doesn't have any coefficients."
     _unimplemented_msg = "This function is not implemented."
 
-    def __init__(self, M, basis_function, closed=False, coeffs=None):
+    def __init__(self, M, basis_function, closed=False, control_points=None):
         if basis_function.support <= M:
             self.M = M
         else:
@@ -38,23 +40,23 @@ class Spline:
         # of an open spline
         self.pad = math.ceil(self.halfSupport) - 1
         self.closed = closed
-        self.coeffs = coeffs
+        self.control_points = control_points
 
-    def _check_coeffs(self):
+    def _check_control_points(self):
         """
         Most methods require coefficients to be set before they
         can be used. This helper function checks if the coefficients have been
         set.
         """
-        if self.coeffs is None:
-            raise RuntimeError(self._no_coeffs_msg)
+        if self.control_points is None:
+            raise RuntimeError(self._no_control_points_msg)
 
     @property
-    def coeffs(self):
-        return self._coeffs
+    def control_points(self):
+        return self._control_points
 
-    @coeffs.setter
-    def coeffs(self, values):
+    @control_points.setter
+    def control_points(self, values):
         if values is not None:
             n = len(values)
             if self.closed and n != self.M:
@@ -66,7 +68,7 @@ class Spline:
                 raise ValueError(
                     f"Non-closed splines are padded at the ends with additional knots, i.e. the effective number of knots is M + 2 * (ceil(support/2) - 1) of the basis function. You provided {n} coefficients for a spline with M={self.M} and a basis function with support={self.basis_function.support}, expected {padded_M}."
                 )
-        self._coeffs = values
+        self._control_points = values
 
     @property
     def knots(self):
@@ -77,7 +79,7 @@ class Spline:
     def knots(self, values):
         knots = np.array(values)
         if self.closed:
-            self.coeffs = self.basis_function.filter_periodic(knots)
+            self.control_points = self.basis_function.filter_periodic(knots)
         else:
             # Add constant padding for the ends of the spline
             if knots.ndim == 1:
@@ -85,7 +87,7 @@ class Spline:
             knots = np.pad(knots, ((self.pad, self.pad), (0, 0)), mode="edge")
             knots = np.squeeze(knots)
 
-            self.coeffs = self.basis_function.filter_symmetric(knots)
+            self.control_points = self.basis_function.filter_symmetric(knots)
 
     @property
     def basis_function(self):
@@ -111,9 +113,9 @@ class Spline:
         of asking for the dimensions. Like that the user can choose how densly
         they want to sample the grid.
         """
-        self._check_coeffs()
+        self._check_control_points()
 
-        if self.coeffs.ndim != 2 or self.coeffs.shape[1] != 2:
+        if self.control_points.ndim != 2 or self.control_points.shape[1] != 2:
             raise RuntimeError("draw() can only be used with 2D curves")
 
         if not self.closed:
@@ -137,7 +139,7 @@ class Spline:
         .. math::
             \frac{d \theta}{dt} = \frac{1}{r^2} \left( x\frac{dy}{dt} - y\frac{dx}{dt} \right) \text{, where } r^2 = x^2 + y^2
         """
-        self._check_coeffs()
+        self._check_control_points()
         r = self.eval(t)
         dr = self.eval(t, derivative=1)
         if r.ndim == 1:
@@ -180,8 +182,8 @@ class Spline:
         """
         if not self.closed:
             raise RuntimeError("isInside() can only be used with closed curves.")
-        self._check_coeffs()
-        if self.coeffs.ndim != 2 or self.coeffs.shape[1] != 2:
+        self._check_control_points()
+        if self.control_points.ndim != 2 or self.control_points.shape[1] != 2:
             raise RuntimeError("isInside() can only be used with 2D curves.")
 
         if isinstance(x, float):
@@ -231,7 +233,7 @@ class Spline:
             t = np.linspace(0, self.M, len(points) + 1)[:-1] if self.closed else np.linspace(0, self.M - 1, len(points))
         tval = self._get_tval(t)
         basis_function_values = self.basis_function.eval(tval, derivative=0)
-        self.coeffs = np.linalg.lstsq(basis_function_values, points, rcond=None)[0]
+        self.control_points = np.linalg.lstsq(basis_function_values, points, rcond=None)[0]
 
     def arc_length(self, stop=None, start=0, epsabs=1e-6, epsrel=1e-6):
         """
@@ -249,7 +251,7 @@ class Spline:
         epsrel : float (optional)
             Relative error tolerance. Default is 1e-6.
         """
-        self._check_coeffs()
+        self._check_control_points()
         if stop is None:
             stop = self.M if self.closed else self.M - 1
 
@@ -295,7 +297,7 @@ class Spline:
         atol : float
             Absolute precision to which the length is matched.
         """
-        self._check_coeffs()
+        self._check_control_points()
         midpoint = lower_bound + (upper_bound - lower_bound) / 2
         midpoint_length = current_value + self.arc_length(lower_bound, midpoint, epsabs=atol)
         if intermediate_results is not None:
@@ -323,7 +325,7 @@ class Spline:
         atol : float
             The ablsolute error tolerance.
         """
-        self._check_coeffs()
+        self._check_control_points()
         if not isinstance(s, np.ndarray):
             s = np.array([s])
         sort_indices = np.argsort(s)
@@ -362,9 +364,11 @@ class Spline:
         Perhaps it makes sense to ask the user to provide an array of distances
         instead of the numSamples.
         """
-        self._check_coeffs()
+        self._check_control_points()
 
-        if len(self.coeffs.shape) == 1 or (len(self.coeffs.shape) == 2 and self.coeffs.shape[1] == 2):
+        if len(self.control_points.shape) == 1 or (
+            len(self.control_points.shape) == 2 and self.control_points.shape[1] == 2
+        ):
             N = numSamples if self.closed else numSamples - 1
             L = self.arc_length()
 
@@ -380,7 +384,11 @@ class Spline:
 
             curve = np.array([self.eval(t, dt=dt) for t in ts])
 
-            curve = curve[~np.all(curve == 0)] if len(self.coeffs.shape) == 1 else curve[~np.all(curve == 0, axis=1)]
+            curve = (
+                curve[~np.all(curve == 0)]
+                if len(self.control_points.shape) == 1
+                else curve[~np.all(curve == 0, axis=1)]
+            )
 
         else:
             raise RuntimeError(self.wrongArraySizeMessage)
@@ -400,11 +408,11 @@ class Spline:
             Can be 0, 1, 2 for the spline, and its
             first and second derivative respectively.
         """
-        self._check_coeffs()
+        self._check_control_points()
         # Get values at which the basis functions have to be evaluated
         tval = self._get_tval(t)
         basis_function_values = self.basis_function.eval(tval, derivative=derivative)
-        value = np.matmul(basis_function_values, self.coeffs)
+        value = np.matmul(basis_function_values, self.control_points)
         return np.squeeze(value)
 
     def _get_tval(self, t):
@@ -463,14 +471,14 @@ class Spline:
                 else:
                     wrapped_tval[j, i] = t - k
 
-    def _coeffs_centroid(self):
+    def _control_points_centroid(self):
         """
         Helper method for :meth:`splinebox.spline_curves.Spline.scale`
         and :meth:`splinebox.spline_curves.Spline.rotate`.
         Computes the centroid of the coefficients.
         """
-        self._check_coeffs()
-        return np.mean(self.coeffs, axis=0)
+        self._check_control_points()
+        return np.mean(self.control_points, axis=0)
 
     def translate(self, vector):
         """
@@ -481,8 +489,8 @@ class Spline:
         vector : numpy.ndarray
             Displacement vector added to the coefficients.
         """
-        self._check_coeffs()
-        self.coeffs = self.coeffs + vector
+        self._check_control_points()
+        self.control_points = self.control_points + vector
 
     def scale(self, scaling_factor):
         """
@@ -490,10 +498,10 @@ class Spline:
         This should probably use :meth:`splinebox.spline_curves.Spline.translate`
         `scalingFactor` can be renamed to `factor`.
         """
-        self._check_coeffs()
-        centroid = self._coeffs_centroid()
+        self._check_control_points()
+        centroid = self._control_points_centroid()
         self.translate(-centroid)
-        self.coeffs *= scaling_factor
+        self.control_points *= scaling_factor
         self.translate(centroid)
 
     def rotate(self, rotation_matrix, centred=True):
@@ -505,16 +513,16 @@ class Spline:
         rotation_matrix : numpy.ndarray
             The rotation matrix applied to the spline.
         """
-        self._check_coeffs()
-        if self.coeffs.ndim == 1:
+        self._check_control_points()
+        if self.control_points.ndim == 1:
             raise RuntimeError("1D splines can not be rotated.")
 
         if centred:
-            centroid = self._coeffs_centroid()
+            centroid = self._control_points_centroid()
             self.translate(-centroid)
 
-        for k in range(len(self.coeffs)):
-            self.coeffs[k] = np.matmul(rotation_matrix, self.coeffs[k])
+        for k in range(len(self.control_points)):
+            self.control_points[k] = np.matmul(rotation_matrix, self.control_points[k])
 
         if centred:
             self.translate(centroid)
@@ -534,20 +542,20 @@ class HermiteSpline(Spline):
         Whether or not the spline is closed, i.e. the two ends connect.
     """
 
-    _coef_tangent_mismatch_msg = "It looks like coeffs and tangents have different shapes."
+    _coef_tangent_mismatch_msg = "It looks like control_points and tangents have different shapes."
     _no_tangents_msg = "This spline doesn't have any tangents."
 
-    def __init__(self, M, basis_function, closed=False, coeffs=None, tangents=None):
-        super().__init__(M, basis_function, closed, coeffs=coeffs)
+    def __init__(self, M, basis_function, closed=False, control_points=None, tangents=None):
+        super().__init__(M, basis_function, closed, control_points=control_points)
         self.tangents = tangents
 
-    def _check_coeffs_and_tangents(self):
+    def _check_control_points_and_tangents(self):
         """
         Most methods require coefficients to be set before they
         can be used. This helper function checks if the coefficients have been
         set.
         """
-        self._check_coeffs()
+        self._check_control_points()
         if self.tangents is None:
             raise RuntimeError(self._no_tangents_msg)
 
@@ -597,7 +605,7 @@ class HermiteSpline(Spline):
         basis_function_values = np.concatenate([basis_function_values[0], basis_function_values[1]], axis=1)
         half = self.M if self.closed else self.M + 2 * self.pad
         solution = np.linalg.lstsq(basis_function_values, points, rcond=None)[0]
-        self.coeffs = solution[:half]
+        self.control_points = solution[:half]
         self.tangents = solution[half:]
 
     def eval(self, t, derivative=0):
@@ -613,20 +621,22 @@ class HermiteSpline(Spline):
             Can be 0, 1, 2 for the spline, and its
             first and second derivative respectively.
         """
-        self._check_coeffs_and_tangents()
+        self._check_control_points_and_tangents()
 
         tval = self._get_tval(t)
         basis_function_values = self.basis_function.eval(tval, derivative=derivative)
-        value = np.matmul(basis_function_values[0], self.coeffs) + np.matmul(basis_function_values[1], self.tangents)
+        value = np.matmul(basis_function_values[0], self.control_points) + np.matmul(
+            basis_function_values[1], self.tangents
+        )
         return np.squeeze(value)
 
     def scale(self, scaling_factor):
-        self._check_coeffs_and_tangents()
+        self._check_control_points_and_tangents()
         Spline.scale(self, scaling_factor)
         self.tangents *= scaling_factor
 
     def rotate(self, rotation_matrix, centred=True):
-        self._check_coeffs_and_tangents()
+        self._check_control_points_and_tangents()
 
         Spline.rotate(self, rotation_matrix, centred=centred)
 

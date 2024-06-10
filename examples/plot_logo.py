@@ -22,7 +22,7 @@ padded_points = np.concatenate(
     ]
 )
 basis_function = splinebox.basis_functions.B3()
-spline = splinebox.spline_curves.Spline(M=M, basis_function=basis_function, closed=False, coeffs=padded_points)
+spline = splinebox.spline_curves.Spline(M=M, basis_function=basis_function, closed=False, control_points=padded_points)
 ts = np.linspace(0, M - 1, 100)
 vals = spline.eval(ts)
 
