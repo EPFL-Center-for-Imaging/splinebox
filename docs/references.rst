@@ -1,5 +1,5 @@
-**References**
-==============
+References
+==========
 
 .. [Unser1999] M\. Unser, “Splines: A perfect fit for signal and image processing,” IEEE Signal processing magazine, vol. 16, no. 6, pp. 22–38, 1999.
 
