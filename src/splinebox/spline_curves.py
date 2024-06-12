@@ -7,6 +7,13 @@ import numpy as np
 import scipy.integrate
 
 
+def padding_function(knots, pad_length):
+    # Add constant padding to the ends
+    if knots.ndim == 1:
+        knots = knots[:, np.newaxis]
+    return np.pad(knots, ((pad_length, pad_length), (0, 0)), mode="edge")
+
+
 class Spline:
     """
     Base class for the construction of a spline.
@@ -14,11 +21,18 @@ class Spline:
     Parameters
     ----------
     M : int
-        Number of control points.
+        Number of knots.
     basis_function : :class:`splinebox.basis_functions.BasisFunction`
         The basis function used to construct the spline.
     closed : boolean
         Whether or not the spline is closed, i.e. the two ends connect.
+    control_points : np.array
+        The control points of the spline. Optional, can be provided later.
+    padding_function : callable
+        A function that accepts an array of knots as the first argument and
+        the padding size as the second argument. It should return a padded array.
+        If `None`, a padded array has to be supplied when setting the `knots`.
+        The default is constant padding with the edge values (see :func:`splinebox.spline_curves.padding_function`).
     """
 
     _wrong_dimension_msg = "It looks like control_points is a 2D array with second dimension different than two. I don't know how to handle this yet."
@@ -28,7 +42,7 @@ class Spline:
     _no_control_points_msg = "This model doesn't have any coefficients."
     _unimplemented_msg = "This function is not implemented."
 
-    def __init__(self, M, basis_function, closed=False, control_points=None):
+    def __init__(self, M, basis_function, closed=False, control_points=None, padding_function=padding_function):
         if basis_function.support <= M:
             self.M = M
         else:
@@ -41,6 +55,7 @@ class Spline:
         self.pad = math.ceil(self.halfSupport) - 1
         self.closed = closed
         self.control_points = control_points
+        self.padding_function = padding_function
 
     def _check_control_points(self):
         """
@@ -61,30 +76,49 @@ class Spline:
             n = len(values)
             if self.closed and n != self.M:
                 raise ValueError(
-                    f"The number of coefficients must match the number of knots for a closed spline. You provided {n} coefficients for a spline with M={self.M} knots."
+                    f"The number of control points must match M for a closed spline. You provided {n} control points for a spline with M={self.M}."
                 )
             padded_M = self.M + 2 * self.pad
             if not self.closed and n != padded_M:
                 raise ValueError(
-                    f"Non-closed splines are padded at the ends with additional knots, i.e. the effective number of knots is M + 2 * (ceil(support/2) - 1) of the basis function. You provided {n} coefficients for a spline with M={self.M} and a basis function with support={self.basis_function.support}, expected {padded_M}."
+                    f"Non-closed splines are padded at the ends, i.e. the effective number of control points is M + 2 * (ceil(support/2) - 1). You provided {n} tangents for a spline with M={self.M} and a basis function with support={self.basis_function.support}, expected {padded_M}."
                 )
         self._control_points = values
 
     @property
     def knots(self):
-        t = np.arange(self.M) if self.closed else np.arange(-self.pad, self.M + self.pad)
+        if self.padding_function is None and not self.closed:
+            t = np.arange(-self.pad, self.M + self.pad)
+        else:
+            t = np.arange(self.M)
         return self.eval(t)
 
     @knots.setter
     def knots(self, values):
         knots = np.array(values)
+        n = len(knots)
         if self.closed:
+            if n != self.M:
+                raise ValueError(
+                    f"You provided {n} knots for a closed spline with M={self.M}. Expected {self.M} knots."
+                )
             self.control_points = self.basis_function.filter_periodic(knots)
         else:
-            # Add constant padding for the ends of the spline
-            if knots.ndim == 1:
-                knots = knots[:, np.newaxis]
-            knots = np.pad(knots, ((self.pad, self.pad), (0, 0)), mode="edge")
+            padded_M = self.M + 2 * self.pad
+            if self.padding_function is None:
+                if n != padded_M:
+                    raise ValueError(
+                        f"If you do not provide a padding function, i.e. `padding_function=None`, you have to pad the knots at the end to have length M + 2 * (ceil(support/2) - 1) before setting them. You provided {n} knots for a spline with M={self.M} and a basis function with support={self.basis_function.support}, expected {padded_M}."
+                    )
+            else:
+                if n != self.M:
+                    raise ValueError(f"You provided {n} knots for a spline with M={self.M}. Expected {self.M} knots.")
+                knots = self.padding_function(knots, self.pad)
+                if len(knots) != padded_M:
+                    raise ValueError(
+                        f"Incorrect padding. Expected padded to have length {padded_M} instead of {len(knots)}."
+                    )
+
             knots = np.squeeze(knots)
 
             self.control_points = self.basis_function.filter_symmetric(knots)
@@ -545,8 +579,10 @@ class HermiteSpline(Spline):
     _coef_tangent_mismatch_msg = "It looks like control_points and tangents have different shapes."
     _no_tangents_msg = "This spline doesn't have any tangents."
 
-    def __init__(self, M, basis_function, closed=False, control_points=None, tangents=None):
-        super().__init__(M, basis_function, closed, control_points=control_points)
+    def __init__(
+        self, M, basis_function, closed=False, control_points=None, tangents=None, padding_function=padding_function
+    ):
+        super().__init__(M, basis_function, closed, control_points=control_points, padding_function=padding_function)
         self.tangents = tangents
 
     def _check_control_points_and_tangents(self):
@@ -569,13 +605,12 @@ class HermiteSpline(Spline):
             n = len(values)
             if self.closed and n != self.M:
                 raise ValueError(
-                    f"The number of tangents must match the number of knots for a closed spline. You provided {n} tangents for a spline with M={self.M} knots."
+                    f"The number of tangents must match M for a closed spline. You provided {n} tangents for a spline with M={self.M}."
                 )
-            support = self.basis_function.support
             padded_M = self.M + 2 * self.pad
             if not self.closed and n != padded_M:
                 raise ValueError(
-                    f"Non-closed splines are padded at the ends with additional knots, i.e. the effective number of knots is M + 2 * (ceil(support / 2) - 1) of the basis function. You provided {n} tangents for a spline with M={self.M} and a basis function with support={support}, expected {padded_M}."
+                    f"Non-closed splines are padded at the ends, i.e. the effective number of tangents is M + 2 * (ceil(support/2) - 1). You provided {n} tangents for a spline with M={self.M} and a basis function with support={self.basis_function.support}, expected {padded_M}."
                 )
         self._tangents = values
 
