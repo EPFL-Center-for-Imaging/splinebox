@@ -1,0 +1,4 @@
+/* Background image */
+.bd-container {
+  background-image: url("../background.svg");
+}
