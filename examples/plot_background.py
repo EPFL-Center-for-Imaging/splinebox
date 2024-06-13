@@ -26,6 +26,8 @@ ax.axis("equal")
 ax.set_axis_off()
 fig.add_axes(ax)
 control_points = np.clip(spline.control_points, 0, 1)
+# for the actual background alpha=0.07 was used
+alpha = 1
 ax.plot(
     control_points[1:-1, 0],
     control_points[1:-1, 1],
@@ -33,9 +35,8 @@ ax.plot(
     color="forestgreen",
     linewidth=1,
     markersize=1,
-    alpha=0.07,
+    alpha=alpha,
 )
 vals = spline.eval(ts)
-ax.plot(vals[:, 0], vals[:, 1], "-", color="forestgreen", linewidth=1, alpha=0.07)
-plt.savefig("../docs/_static/background.svg", bbox_inches="tight")
+ax.plot(vals[:, 0], vals[:, 1], "-", color="forestgreen", linewidth=1, alpha=alpha)
 plt.show()
