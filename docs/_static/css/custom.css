@@ -1,4 +1,101 @@
+/* Override themes */
+html[data-theme="light"] {
+  --pst-color-primary: rgb(86, 139, 34);
+  --pst-color-secondary:  rgb(13, 55, 13);
+  --pst-color-plot-background: rgb(255, 255, 255);
+}
+
+html[data-theme="dark"] {
+  --pst-color-primary: rgb(44, 180, 44);
+  --pst-color-secondary: rgb(34, 139, 34);
+  --pst-color-plot-background: rgb(218, 219, 220);
+}
+
 /* Background image */
 .bd-container {
   background-image: url("../background.svg");
+}
+
+h1 {
+  background: linear-gradient(to right, var(--pst-color-primary), rgb(245, 188, 71));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: bold;
+}
+
+h2 {
+  background: linear-gradient(to right, var(--pst-color-primary), rgb(245, 188, 71));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.grid-container {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: space-around;
+}
+
+.grid-card {
+  margin: 16px;
+  width: 220px;
+  text-align: center;
+}
+
+.button {
+  min-width: 142px;
+  padding: 0.5em 2em;
+  border: 1px solid var(--pst-color-primary);
+  border-radius: 4px;
+  margin: 1em 0.5em 0.5em 0;
+  text-decoration: none;
+}
+
+.button:hover {
+  background-color: var(--pst-color-secondary);
+  border-color: var(--pst-color-secondary);
+  color: var(--pst-color-background);
+}
+
+.button-primary {
+  background-color: var(--pst-color-primary);
+  color: var(--pst-color-background);
+}
+
+.button-primary:visited {
+  color: var(--pst-color-background);
+}
+
+.button-primary:hover {
+  color: var(--pst-color-background);
+}
+
+.button-secondary {
+  background-color: var(--pst-color-background);
+  color: var(--pst-color-primary);
+}
+
+.button-secondary:visited {
+  color: var(--pst-color-primary);
+}
+
+div.twocol {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  margin-top: 2em;
+} 
+
+div.col.docutils.container {
+  min-width: 100px;
+}
+
+h1.homepage-title {
+  margin-top: 3rem;
+  text-align: center;
+}
+
+.twocol p {
+  margin-top: 1em;
 }

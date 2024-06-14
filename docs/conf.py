@@ -85,8 +85,8 @@ html_theme_options = {
     "show_toc_level": 2,
     "navbar_align": "content",  # [left, content, right] For testing that the navbar items align properly
     "navbar_center": ["navbar-nav"],
-    "navbar_start": ["navbar-logo"],
-    "navbar_end": ["version-switcher", "navbar-icon-links"],
+    "navbar_start": ["navbar-logo", "version-switcher"],
+    "navbar_end": ["theme-switcher", "navbar-icon-links"],
     "secondary_sidebar_items": ["page-toc", "searchbox", "edit-this-page", "sourcelink"],
     "footer_start": ["copyright"],
     "pygment_light_style": "tango",
@@ -97,7 +97,7 @@ html_context = {
     "github_repo": "splinebox",
     "github_version": "main",
     "doc_path": "doc",
-    "default_mode": "light",
+    "default_mode": "auto",
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,
