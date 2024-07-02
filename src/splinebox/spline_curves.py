@@ -452,6 +452,37 @@ class Spline:
         )
         return integral[0] / arc_length**4
 
+    def curvature(self, t):
+        first_deriv = self.eval(t, derivative=1)
+        second_deriv = self.eval(t, derivative=2)
+        norm_first_deriv = np.linalg.norm(first_deriv, axis=1)
+        norm_second_deriv = np.linalg.norm(second_deriv, axis=1)
+        if self.control_points.shape[1] == 2:
+            # We use a different formular for the 2D case to get the signed curvature instead of the
+            # the unsigned curvature. This is useful when plotting curvature combs.
+            nominator = first_deriv[:, 1] * second_deriv[:, 0] - first_deriv[:, 0] * second_deriv[:, 1]
+        else:
+            nominator = np.sqrt(
+                norm_first_deriv**2 * norm_second_deriv**2 - np.sum(first_deriv * second_deriv, axis=1) ** 2
+            )
+        k = nominator / norm_first_deriv**3
+        return k
+
+    def normal(self, t):
+        self._check_control_points()
+        if self.control_points.ndim != 2:
+            raise RuntimeError(
+                "The normal vector is only defined for curves in 2D. Your spline's codomain is 1 dimensional."
+            )
+        if self.control_points.shape[1] != 2:
+            raise RuntimeError(
+                f"The normal vector is only defined for curves in 2D. Your spline's codomain is {self.control_points.shape[1]} dimensional."
+            )
+        first_deriv = self.eval(t, derivative=1)
+        normals = (np.array([[0, -1], [1, 0]]) @ first_deriv.T).T
+        normals /= np.linalg.norm(normals, axis=1)[:, np.newaxis]
+        return normals
+
     def eval(self, t, derivative=0):
         """
         Evalute the spline or one of its derivatives at
