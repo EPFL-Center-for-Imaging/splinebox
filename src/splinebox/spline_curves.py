@@ -81,7 +81,7 @@ class Spline:
             padded_M = self.M + 2 * self.pad
             if not self.closed and n != padded_M:
                 raise ValueError(
-                    f"Non-closed splines are padded at the ends, i.e. the effective number of control points is M + 2 * (ceil(support/2) - 1). You provided {n} tangents for a spline with M={self.M} and a basis function with support={self.basis_function.support}, expected {padded_M}."
+                    f"Non-closed splines are padded at the ends, i.e. the effective number of control points is M + 2 * (ceil(support/2) - 1). You provided {n} control points for a spline with M={self.M} and a basis function with support={self.basis_function.support}, expected {padded_M}."
                 )
         self._control_points = values
 
@@ -296,7 +296,7 @@ class Spline:
             start, stop = stop, start
 
         integral = scipy.integrate.quad(
-            lambda t: np.linalg.norm(self.eval(t, derivative=1)),
+            lambda t: np.linalg.norm(np.nan_to_num(self.eval(t, derivative=1))),
             start,
             stop,
             epsabs=epsabs,
@@ -428,6 +428,29 @@ class Spline:
             raise RuntimeError(self.wrongArraySizeMessage)
 
         return np.stack(curve)
+
+    def curvilinear_reparametrization_energy(self, epsabs=1e-6, epsrel=1e-6):
+        """
+        This energy can be used to enforce equal spacing of the knots.
+
+        Implements equation 25 from Jaboc, et al. 2004
+        https://infoscience.epfl.ch/record/63117?ln=fr&v=pdf
+        In order to make the energy scale invariant,
+        we added a factor of length^-4 to the integral.
+        """
+        arc_length = self.arc_length()
+        c = (arc_length / self.M) ** 2
+        upper_limit = self.M if self.closed else self.M - 1
+        integral = scipy.integrate.quad(
+            lambda t: (np.linalg.norm(np.nan_to_num(self.eval(t, derivative=1))) ** 2 - c) ** 2,
+            0,
+            upper_limit,
+            epsabs=epsabs,
+            epsrel=epsrel,
+            maxp1=50,
+            limit=100,
+        )
+        return integral[0] / arc_length**4
 
     def eval(self, t, derivative=0):
         """

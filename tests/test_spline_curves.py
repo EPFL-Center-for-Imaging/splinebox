@@ -7,7 +7,7 @@ import scipy
 import splinebox.basis_functions
 
 
-def test__check_control_points(non_hermite_spline_curve, coeff_gen):
+def test_check_control_points(non_hermite_spline_curve, coeff_gen):
     spline = non_hermite_spline_curve
     with pytest.raises(RuntimeError):
         spline._check_control_points()
@@ -15,7 +15,7 @@ def test__check_control_points(non_hermite_spline_curve, coeff_gen):
     spline._check_control_points()
 
 
-def test__check_control_points_and_tangents(hermite_spline_curve, coeff_gen):
+def test_check_control_points_and_tangents(hermite_spline_curve, coeff_gen):
     spline = hermite_spline_curve
     with pytest.raises(RuntimeError):
         spline._check_control_points_and_tangents()
@@ -415,3 +415,46 @@ def test_scale(initialized_spline_curve, is_hermite_spline):
         spline._check_control_points.assert_called()
 
     assert np.allclose(spline.eval(t), spline_copy.eval(t))
+
+
+def test_curvilinear_reparametrization_energy():
+    M = 4
+    spline = splinebox.spline_curves.Spline(M, splinebox.B1())
+
+    spline.knots = np.array([[1, 0], [2, 0], [3, 0], [4, 0]])
+
+    # Because of the spacing of the knots the derivative should be constant so we can just compute one value in the middle of the spline.
+    derivative_val = spline.eval((spline.M - 1) / 2, derivative=1)
+
+    # To compute the expected value we exploit the constant derivative.
+    # We can replace the integration in the definition of the curvilinear reparametrization energy with a multiplication because the derivative is constant.
+    length = spline.arc_length()
+    c = (length / spline.M) ** 2
+    e_curv = (np.linalg.norm(derivative_val) ** 2 - c) ** 2
+    expected_val = e_curv * (spline.M - 1) / length**4
+
+    val = spline.curvilinear_reparametrization_energy()
+
+    assert np.isclose(val, expected_val)
+
+
+def test_curvilinear_reparametrization_energy_translation(initialized_spline_curve, translation_vector):
+    """
+    Test if the curvilinear reparametrization energy is invariant to translation.
+    """
+    spline = initialized_spline_curve
+    expected = spline.curvilinear_reparametrization_energy()
+    spline.translate(translation_vector)
+    val = spline.curvilinear_reparametrization_energy()
+    assert np.isclose(val, expected)
+
+
+def test_curvilinear_reparametrization_energy_scale_invariance(initialized_spline_curve):
+    """
+    The curvilinear reparametrization energy should not change when the entire spline is scaled.
+    """
+    spline = initialized_spline_curve
+    expected = spline.curvilinear_reparametrization_energy()
+    spline.scale(0.1)
+    val = spline.curvilinear_reparametrization_energy()
+    assert np.isclose(val, expected)
