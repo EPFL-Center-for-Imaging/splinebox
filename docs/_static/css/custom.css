@@ -1,14 +1,16 @@
 /* Override themes */
 html[data-theme="light"] {
-  --pst-color-primary: rgb(86, 139, 34);
-  --pst-color-secondary:  rgb(13, 55, 13);
+  --pst-color-primary: rgb(34, 139, 34);
+  --pst-color-secondary: rgb(86, 139, 34);
   --pst-color-plot-background: rgb(255, 255, 255);
+  --gradient-color: rgb(245, 188, 71);
 }
 
 html[data-theme="dark"] {
-  --pst-color-primary: rgb(44, 180, 44);
-  --pst-color-secondary: rgb(34, 139, 34);
+  --pst-color-primary: rgb(34, 139, 34);
+  --pst-color-secondary: rgb(44, 180, 44);
   --pst-color-plot-background: rgb(218, 219, 220);
+  --gradient-color: rgb(245, 188, 71);
 }
 
 /* Background image */
@@ -17,14 +19,14 @@ html[data-theme="dark"] {
 }
 
 h1 {
-  background: linear-gradient(to right, var(--pst-color-primary), rgb(245, 188, 71));
+  background: linear-gradient(to right, var(--pst-color-primary), var(--gradient-color));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   font-weight: bold;
 }
 
 h2 {
-  background: linear-gradient(to right, var(--pst-color-primary), rgb(245, 188, 71));
+  background: linear-gradient(to right, var(--pst-color-primary), var(--gradient-color));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -85,7 +87,7 @@ div.twocol {
   flex-wrap: wrap;
   justify-content: space-between;
   margin-top: 2em;
-} 
+}
 
 div.col.docutils.container {
   min-width: 100px;

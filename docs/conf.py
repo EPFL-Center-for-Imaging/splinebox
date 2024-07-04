@@ -17,6 +17,7 @@
 
 # -- Project information -----------------------------------------------------
 
+import cycler
 
 project = "splinebox"
 copyright = "2024, Florian Aymanns, Virginie Uhlmann, Edward Ando"  # noqa: A001
@@ -54,7 +55,7 @@ html_title = "Splinebox Documentation"
 html_logo = "_static/logo.png"
 html_favicon = "_static/favicon.png"
 html_sourcelink_suffix = ""
-html_short_title = "Splinebox"
+html_short_title = "SplineBox"
 
 html_theme_options = {
     "header_links_before_dropdown": 6,
@@ -118,3 +119,4 @@ plot_html_show_source_link = False
 plot_formats = [
     ("png", 500),
 ]
+plot_rcparams = {"axes.prop_cycle": cycler.cycler(color=["#228b18"])}

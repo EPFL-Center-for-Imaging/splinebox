@@ -40,18 +40,18 @@
   .. container:: col
 
     .. code-block:: python
-    
+
        import splinebox
-    
-       # number of knots 
+
+       # number of knots
        M = 10
-    
+
        basis_function = splinebox.B3()
        spline = splinebox.Spline(M, basis_function)
-    
+
        spline.fit(data)
-    
-       t = np.linspace(0, M, 1000)
+
+       t = np.linspace(0, M - 1, 1000)
        vals = spline.eval(t)
 
 .. raw:: html
@@ -63,18 +63,18 @@
    </div>
 
 .. raw:: html
-   
+
    <h1 class="homepage-title">Key Features</h1>
 
    <div class="grid-container">
 
      <div class="grid-card">
        <svg class="w-[48px] h-[48px] text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="none" viewBox="0 0 24 24">
-         <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 9a3 3 0 0 1 3-3m-2 15h4m0-3c0-4.1 4-4.9 4-9A6 6 0 1 0 6 9c0 4 4 5 4 9h4Z"/>
+         <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 9a3 3 0 0 1 3-3m-2 15h4m0-3c0-4.1 4-4.9 4-9A6 6 0 1 0 6 9c0 4 4 5 4 9h4Z"/>
        </svg>
        <p>
          <strong> Intuitive API </strong> <br/>
-         Obejct oriented API design allows for easy interaction and manipulation of splines.
+         Obejct oriented API design allows for easy interaction with and manipulation of splines.
        </p>
      </div>
 
@@ -105,7 +105,7 @@
        </svg>
        <p>
          <strong> Extensible </strong> <br/>
-         Additional basis functions can easily be added using the abstract base class of the basis functions. 
+         Additional basis functions can easily be added using the abstract base class of the basis functions.
        </p>
      </div>
 
@@ -128,7 +128,8 @@
    <p>
      A common task in image anlysis is to fit a closed spline of a given order with a
      fixed number of knots to a countour. Let's compare how we can achieve this task
-     in splinebox and scipy.
+     in splinebox and scipy.<br>
+     <a href="./auto_examples/plot_splinebox_vs_scipy_coin.html">See full example →</a>
    </p>
 
 .. container:: twocol
@@ -146,12 +147,12 @@
    .. container:: col
 
      .. code-block:: python
-     
+
        import splinebox
 
        M = 10
        basis_function = splinebox.B3()
-       
+
        spline = splinebox.Spline(
                     M, basis_function, closed=True
                 )
@@ -162,18 +163,19 @@
    .. container:: col
 
      .. code-block:: python
-     
+
        import scipy.interpolate
 
        M = 10
        N = len(data)
        k = 3
 
-       u = np.arange(0, N, M)
-       t =  
-         
+       t = np.arange(-k, M + k + 1) / M * N
+       u = np.linspace(0, N, N, endpoint=True)
+
        tck, u = scipy.interpolate.splprep(
-                 contour, u=u, k=k, task=-1, s=0, t=t, per=N
+                 contour, u=u, k=k, task=-1,
+                 s=0, t=t, per=N
              )
 
    .. container:: col
@@ -188,8 +190,9 @@
 
 .. raw:: html
 
-   <p>
-     The next task we will look at is iteratively fitting a spline to a bringt object in an image, e.g. an edge an an edge map.
+   <p style="margin-top: 3em">
+     The next task we will look at is iteratively fitting a spline to a bright object in an image, e.g. an edge of an edge map.<br>
+     <a href="./auto_examples/plot_splinebox_vs_scipy_line.html">See full example →</a>
    </p>
 
 .. container:: twocol
@@ -205,22 +208,25 @@
    .. container:: col
 
      .. code-block:: python
-     
+
        import splinebox
        import scipy.optimize
        import numpy as np
 
        def loss_function(control_points, spline):
-           spline.control_points = control_points.reshape((spline.M, -1))
+           contorl_points = control_points.reshape((spline.M, -1))
+           spline.control_points = control_points
            coordinates = spline.eval(ts)
-           return -np.sum(scipy.ndimage.map_coordinates(img, coordinates))
+           return calculate_image_energy(img, coordinates)
 
        M = 10
        basis_function = splinebox.B3()
-       spline = splinebox.Spline(M, basis_function, closed=True)
-       ts = np.linspace(0, spline.M, 100)
+       spline = splinebox.Spline(
+           M, basis_function, closed=True
+       )
+       t = np.linspace(0, spline.M, 100)
 
-       scipy.optimize.minimize(loss_function, initial_control_points.flatten(), args=(spline, ts))
+       scipy.optimize.minimize(loss_function, initial_control_points.flatten(), args=(spline, t))
 
 .. container:: twocol
 
@@ -236,10 +242,10 @@
            tck, u = scipy.interpolate.splprep(
                contour, u=u, k=3, task=-1, s=0, t=t
            )
-           coordinates = scipy.interpolate.splev(tck, ts)
-           return -np.sum(scipy.ndimage.map_coordinates(img, coordinates))
+           coordinates = scipy.interpolate.splev(tck, t)
+           return calculate_image_energy(img, coordinates))
 
-       tck = scipy.optimize.minimize(loss_function, initial_control_points.flatten(), args=(spline, ts)) 
+       tck = scipy.optimize.minimize(loss_function, initial_control_points.flatten(), args=(spline, ts))
 
    .. container:: col
 
