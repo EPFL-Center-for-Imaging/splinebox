@@ -248,7 +248,8 @@ class B3(BasisFunction):
         return val
 
     @staticmethod
-    def filter_symmetric(s):
+    @numba.jit(nopython=True, nogil=True, cache=True, parallel=True)
+    def filter_symmetric(s):  # pragma: no cover
         M = len(s)
         pole = -2 + np.sqrt(3)
 
@@ -256,29 +257,34 @@ class B3(BasisFunction):
 
         cp = np.zeros((M, ndim))
         eps = 1e-8
-        k0 = np.min(((2 * M) - 2, int(np.ceil(np.log(eps) / np.log(np.abs(pole))))))
-        for k in range(k0):
-            k = k % (2 * M - 2)
-            val = s[2 * M - 2 - k] if k >= M else s[k]
-            cp[0] += val * (pole**k)
+        k0 = min(((2 * M) - 2, int(np.ceil(np.log(eps) / np.log(np.abs(pole))))))
+        for k in numba.prange(k0):
+            m = k % (2 * M - 2)
+            val = s[2 * M - 2 - m] if m >= M else s[m]
+            cp[0] += val * (pole**m)
         cp[0] *= 1 / (1 - (pole ** (2 * M - 2)))
 
-        for k in range(1, M):
+        for k in np.arange(1, M):
             cp[k] = s[k] + pole * cp[k - 1]
 
         cm = np.zeros((M, ndim))
         cm[M - 1] = cp[M - 1] + (pole * cp[M - 2])
         cm[M - 1] *= pole / ((pole**2) - 1)
-        for k in range(M - 2, -1, -1):
+
+        for k in np.arange(M - 2, -1, -1):
             cm[k] = pole * (cm[k + 1] - cp[k])
 
         c = cm * 6
 
-        c[np.where(abs(c) < eps)] = 0
-        return np.squeeze(c)
+        shape = c.shape
+        c = c.flatten()
+        c[np.abs(c) < eps] = 0
+        c = c.reshape(shape)
+        return c
 
     @staticmethod
-    def filter_periodic(s):
+    @numba.jit(nopython=True, nogil=True, cache=True)
+    def filter_periodic(s):  # pragma: no cover
         M = len(s)
         pole = -2 + np.sqrt(3)
 
@@ -305,8 +311,11 @@ class B3(BasisFunction):
         c = cm * 6
 
         eps = 1e-8
-        c[np.where(abs(c) < eps)] = 0
-        return np.squeeze(c)
+        shape = c.shape
+        c = c.flatten()
+        c[np.abs(c) < eps] = 0
+        c = c.reshape(shape)
+        return c
 
     def refinement_mask(self):
         order = int(self.support)
@@ -410,72 +419,87 @@ class Exponential(BasisFunction):
     def filter_symmetric(self, s):
         self.M = len(s)
 
-        ndim = 1 if s.ndim == 1 else s.shape[1]
-
         b0 = self._func(0)
         b1 = self._func(1)
+
+        return self._filter_symmetric(s, self.M, b0, b1)
+
+    @staticmethod
+    @numba.jit(nopython=True, nogil=True, cache=True, parallel=True)
+    def _filter_symmetric(s, M, b0, b1):  # pragma: no cover
+        ndim = 1 if s.ndim == 1 else s.shape[1]
         pole = (-b0 + np.sqrt(2 * b0 - 1)) / (1 - b0)
 
-        cp = np.zeros((self.M, ndim))
+        cp = np.zeros((M, ndim))
         eps = 1e-8
-        k0 = np.min(
+        k0 = min(
             (
-                (2 * self.M) - 2,
+                (2 * M) - 2,
                 int(np.ceil(np.log(eps) / np.log(np.abs(pole)))),
             )
         )
-        for k in range(k0):
-            k = k % (2 * self.M - 2)
-            val = s[2 * self.M - 2 - k] if k >= self.M else s[k]
-            cp[0] += val * (pole**k)
-        cp[0] *= 1 / (1 - (pole ** (2 * self.M - 2)))
+        for k in numba.prange(k0):
+            m = k % (2 * M - 2)
+            val = s[2 * M - 2 - m] if m >= M else s[m]
+            cp[0] += val * (pole**m)
+        cp[0] *= 1 / (1 - (pole ** (2 * M - 2)))
 
-        for k in range(1, self.M):
+        for k in range(1, M):
             cp[k] = s[k] + pole * cp[k - 1]
 
-        cm = np.zeros((self.M, ndim))
-        cm[self.M - 1] = cp[self.M - 1] + (pole * cp[self.M - 2])
-        cm[self.M - 1] *= pole / ((pole * pole) - 1)
-        for k in range(self.M - 2, -1, -1):
+        cm = np.zeros((M, ndim))
+        cm[M - 1] = cp[M - 1] + (pole * cp[M - 2])
+        cm[M - 1] *= pole / ((pole * pole) - 1)
+        for k in range(M - 2, -1, -1):
             cm[k] = pole * (cm[k + 1] - cp[k])
 
         c = cm / b1
 
-        c[np.where(np.abs(c) < eps)] = 0
-        return np.squeeze(c)
+        shape = c.shape
+        c = c.flatten()
+        c[np.abs(c) < eps] = 0
+        c = c.reshape(shape)
+        return c
 
     def filter_periodic(self, s):
         self.M = len(s)
+        b0 = self._func(0)
+        return self._filter_periodic(s, self.M, b0)
 
+    @staticmethod
+    @numba.jit(nopython=True, nogil=True, cache=True)
+    def _filter_periodic(s, M, b0):  # pragma: no cover
         ndim = 1 if s.ndim == 1 else s.shape[1]
 
-        b0 = self._func(0)
         pole = (-b0 + np.sqrt(2 * b0 - 1)) / (1 - b0)
 
-        cp = np.zeros((self.M, ndim))
+        cp = np.zeros((M, ndim))
         cp[0] = s[0]
-        for k in range(1, self.M):
-            cp[0] += s[k] * (pole ** (self.M - k))
-        cp[0] *= 1 / (1 - (pole**self.M))
+        for k in range(1, M):
+            cp[0] += s[k] * (pole ** (M - k))
+        cp[0] *= 1 / (1 - (pole**M))
 
-        for k in range(1, self.M):
+        for k in range(1, M):
             cp[k] = s[k] + (pole * cp[k - 1])
 
-        cm = np.zeros((self.M, ndim))
-        cm[self.M - 1] = cp[self.M - 1]
-        for k in range(self.M - 1):
-            cm[self.M - 1] += cp[k] * (pole ** (k + 1))
-        cm[self.M - 1] *= 1 / (1 - (pole**self.M))
-        cm[self.M - 1] *= (1 - pole) ** 2
+        cm = np.zeros((M, ndim))
+        cm[M - 1] = cp[M - 1]
+        for k in range(M - 1):
+            cm[M - 1] += cp[k] * (pole ** (k + 1))
+        cm[M - 1] *= 1 / (1 - (pole**M))
+        cm[M - 1] *= (1 - pole) ** 2
 
-        for k in range(self.M - 2, -1, -1):
+        for k in range(M - 2, -1, -1):
             cm[k] = (pole * cm[k + 1]) + (((1 - pole) ** 2) * cp[k])
 
         c = cm
 
         eps = 1e-8
-        c[np.where(np.abs(c) < eps)] = 0
-        return np.squeeze(c)
+        shape = c.shape
+        c = c.flatten()
+        c[np.abs(c) < eps] = 0
+        c = c.reshape(shape)
+        return c
 
     def refinement_mask(self):
         order = int(self.support)
