@@ -23,11 +23,18 @@ def test_base_class_filters_and_refinement_mask():
         basis_function.refinement_mask()
 
 
-def test_filters(basis_function, is_interpolating, knot_gen):
+def test_filters(basis_function, is_interpolating, knot_gen, request):
+    if isinstance(basis_function, splinebox.basis_functions.B2):
+        # The filter_symmetric and filter_periodic are not implemented for B2
+        request.node.add_marker(pytest.mark.xfail)
+
     s = knot_gen()
     if is_interpolating(basis_function):
         assert np.allclose(basis_function.filter_symmetric(s), s)
         assert np.allclose(basis_function.filter_periodic(s), s)
+    else:
+        assert np.allclose(basis_function.filter_symmetric(s), basis_function.filter_symmetric(s[::-1])[::-1])
+        assert np.allclose(basis_function.filter_periodic(s), basis_function.filter_periodic(s[::-1])[::-1])
 
 
 def test_derivatives(basis_function, derivative, not_differentiable_twice):

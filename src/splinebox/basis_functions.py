@@ -248,7 +248,7 @@ class B3(BasisFunction):
         return val
 
     @staticmethod
-    @numba.jit(nopython=True, nogil=True, cache=True, parallel=True)
+    @numba.jit(nopython=True, nogil=True, cache=True)
     def filter_symmetric(s):  # pragma: no cover
         M = len(s)
         pole = -2 + np.sqrt(3)
@@ -258,7 +258,7 @@ class B3(BasisFunction):
         cp = np.zeros((M, ndim))
         eps = 1e-8
         k0 = min(((2 * M) - 2, int(np.ceil(np.log(eps) / np.log(np.abs(pole))))))
-        for k in numba.prange(k0):
+        for k in np.arange(k0):
             m = k % (2 * M - 2)
             val = s[2 * M - 2 - m] if m >= M else s[m]
             cp[0] += val * (pole**m)
@@ -425,7 +425,7 @@ class Exponential(BasisFunction):
         return self._filter_symmetric(s, self.M, b0, b1)
 
     @staticmethod
-    @numba.jit(nopython=True, nogil=True, cache=True, parallel=True)
+    @numba.jit(nopython=True, nogil=True, cache=True)
     def _filter_symmetric(s, M, b0, b1):  # pragma: no cover
         ndim = 1 if s.ndim == 1 else s.shape[1]
         pole = (-b0 + np.sqrt(2 * b0 - 1)) / (1 - b0)
@@ -438,7 +438,7 @@ class Exponential(BasisFunction):
                 int(np.ceil(np.log(eps) / np.log(np.abs(pole)))),
             )
         )
-        for k in numba.prange(k0):
+        for k in np.arange(k0):
             m = k % (2 * M - 2)
             val = s[2 * M - 2 - m] if m >= M else s[m]
             cp[0] += val * (pole**m)
