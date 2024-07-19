@@ -455,6 +455,9 @@ class Spline:
     def curvature(self, t):
         first_deriv = self.eval(t, derivative=1)
         second_deriv = self.eval(t, derivative=2)
+        if first_deriv.ndim == 1:
+            first_deriv = first_deriv[np.newaxis, :]
+            second_deriv = second_deriv[np.newaxis, :]
         norm_first_deriv = np.linalg.norm(first_deriv, axis=1)
         norm_second_deriv = np.linalg.norm(second_deriv, axis=1)
         if self.control_points.shape[1] == 2:
@@ -466,7 +469,7 @@ class Spline:
                 norm_first_deriv**2 * norm_second_deriv**2 - np.sum(first_deriv * second_deriv, axis=1) ** 2
             )
         k = nominator / norm_first_deriv**3
-        return k
+        return np.squeeze(k)
 
     def normal(self, t):
         self._check_control_points()
