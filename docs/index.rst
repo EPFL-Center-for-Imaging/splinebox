@@ -190,69 +190,32 @@
 
 .. raw:: html
 
-   <p style="margin-top: 3em">
-     The next task we will look at is iteratively fitting a spline to a bright object in an image, e.g. an edge of an edge map.<br>
-     <a href="./auto_examples/plot_splinebox_vs_scipy_line.html">See full example →</a>
-   </p>
-
-.. container:: twocol
-
-   .. container:: col
-
-     .. raw:: html
-
-       <p style="margin-right: 3em">
-         Splinebox's spline object can directly be updated by the optimization framework.
-       </p>
-
-   .. container:: col
-
-     .. code-block:: python
-
-       import splinebox
-       import scipy.optimize
-       import numpy as np
-
-       def loss_function(control_points, spline):
-           contorl_points = control_points.reshape((spline.M, -1))
-           spline.control_points = control_points
-           coordinates = spline.eval(ts)
-           return calculate_image_energy(img, coordinates)
-
-       M = 10
-       basis_function = splinebox.B3()
-       spline = splinebox.Spline(
-           M, basis_function, closed=True
-       )
-       t = np.linspace(0, spline.M, 100)
-
-       scipy.optimize.minimize(loss_function, initial_control_points.flatten(), args=(spline, t))
-
-.. container:: twocol
-
-   .. container:: col
-
-     .. code-block:: python
-
-       import scipy.interpolate
-       import scipy.optimize
-       import numpy as np
-
-       def loss_function(control_points, u, t):
-           tck, u = scipy.interpolate.splprep(
-               contour, u=u, k=3, task=-1, s=0, t=t
-           )
-           coordinates = scipy.interpolate.splev(tck, t)
-           return calculate_image_energy(img, coordinates))
-
-       tck = scipy.optimize.minimize(loss_function, initial_control_points.flatten(), args=(spline, ts))
-
-   .. container:: col
-
-     .. raw:: html
-
-       <p style="margin-left: 3em">
-
-.. raw:: html
+  <p style="margin-top: 3em">
+    For additional examples comparing splinebox to scipy check out our example gallery.
+    <br>
+    <a href="./auto_examples/index.html">See examples →</a>
+  </p>
 
   <h2>Performance</h2>
+
+.. container:: twocol
+
+  .. container:: col
+
+    .. raw:: html
+
+      <p>
+        We compare the performance to splinbox to scipy's splines
+        on three main tasks:
+        <ul>
+        <li>Spline creation give a set of knots</li>
+        <li>Evaluation of a spline at a given parameter value</li>
+        <li>Data approximation using least-squares fitting</li>
+        </ul>
+        Splinebox out performs scipy by approximately two orders of maginitued on the first two tasks and achives comparable performance for least-squares fitting of splines with 10 knots.
+        <a href="./auto_examples/plot_performance_comparison_with_scipy.html">See detailed comparison →</a>
+      </p>
+
+  .. container:: col
+
+    .. plot:: pyplots/plot_performance.py

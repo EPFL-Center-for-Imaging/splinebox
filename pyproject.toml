@@ -101,6 +101,8 @@ docs = [
     "sphinx-gallery",
     "scikit-image",
     "pydata-sphinx-theme",
+    "pandas",
+    "seaborn",
 ]
 
 [project.urls]

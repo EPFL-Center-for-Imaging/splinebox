@@ -72,8 +72,8 @@ k = 3
 # To get a spline with a specific number of control points in scipy
 # we have to precalculate the parameters values `t` for the knots and the parameter values `u`
 # for the data points. It is important that we account for the periodicity and padding of the knots.
-t = np.arange(-k, M + k + 1) / M * N
-u = np.linspace(0, N, N, endpoint=True)
+t = np.arange(-k, M + k + 1)
+u = np.linspace(0, M, N + 1)[:-1]
 
 # %%
 # When constructinc the spline using `splprep` we have to specify the oder of the basis spline,
@@ -81,7 +81,8 @@ u = np.linspace(0, N, N, endpoint=True)
 # but instead regularize it by fixing the number of control points we need to set `s=0` and
 # `task=-1`.
 tck, u = scipy.interpolate.splprep(contour.T, k=k, u=u, t=t, task=-1, s=0, per=N)
-scipy_vals = scipy.interpolate.splev(u, tck)
+ts = np.linspace(0, M, 100)
+scipy_vals = scipy.interpolate.splev(ts, tck)
 scipy_control_points = tck[1]
 
 plt.imshow(mask, cmap="gray", alpha=0.5)
