@@ -96,13 +96,19 @@ test = [
     "pytest",
     "pytest-cov",
 ]
-docs = [
+examples = [
     "matplotlib",
-    "sphinx-gallery",
     "scikit-image",
-    "pydata-sphinx-theme",
     "pandas",
     "seaborn",
+]
+docs = [
+    "splinebox[examples]",
+    "sphinx-gallery",
+    "pydata-sphinx-theme",
+]
+all = [
+    "splinebox[test,examples,docs]",
 ]
 
 [project.urls]
