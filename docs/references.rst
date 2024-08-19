@@ -7,6 +7,8 @@ References
 
 .. [Keys1981] R\. Keys, “Cubic convolution interpolation for digital image processing,” IEEE transactions on acoustics, speech, and signal processing, vol. 29, no. 6, pp. 1153–1160, 1981.
 
+.. [Uhlmann2014] V\. Uhlmann, R. Delgado-Gonzalo, C. Conti, L. Romani, and M. Unser, “Exponential hermite splines for the analysis of biomedical images,” 2014 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP). IEEE, 2014, pp. 1631–1634
+
 .. [Uhlmann2016] V\. Uhlmann, J. Fageot, and M. Unser, “Hermite snakes with control of tangents,” IEEE Transactions on Image Processing, vol. 25, no. 6, pp. 2803–2816, 2016.
 
-.. [Uhlmann2014] V\. Uhlmann, R. Delgado-Gonzalo, C. Conti, L. Romani, and M. Unser, “Exponential hermite splines for the analysis of biomedical images,” in 2014 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP). Ieee, 2014, pp. 1631–1634
+.. [Badoual2016] A\. Badoual, D. Schmitter, M. Unser, "Local Refinement for 3D Deformable Parametric Surfaces," Proceedings of the 2016 IEEE International Conference on Image Processing (ICIP'16). IEEE, 2016, pp. 1086-1090

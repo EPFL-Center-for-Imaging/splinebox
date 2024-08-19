@@ -5,6 +5,8 @@ Spline curves
    :members:
    :undoc-members:
 
+.. autofunction:: splinebox.spline_curves.padding_function
+
 .. toctree::
    :maxdepth: 1
    :hidden:

@@ -9,19 +9,25 @@ import numpy as np
 
 
 class BasisFunction:
+    """
+    Base class for all basis functions.
+
+    Parameters
+    ----------
+    multigenerator : boolean
+        This indicates if the basis function generates
+        multiple outputs. In practice, this is used to indicate
+        if a basis function is meant for a Hermite spline or not.
+        Basis functions for Hermite splines return two values
+        instead of one.
+    support : float
+        The support of the function, i.e. the size of the area
+        being mapped to non-zero values.
+    """
+
     _unimplemented_message = "This function is not implemented."
 
     def __init__(self, multigenerator, support):
-        """
-        Base class for all basis functions.
-
-        Parameters
-        ----------
-        multigenerator : ???
-        support : float or int?
-            The support of the function, i.e. the size of the area
-            being mapped to non-zero values.
-        """
         self.multigenerator = multigenerator
         self.support = support
 
@@ -31,7 +37,7 @@ class BasisFunction:
 
         Parameters
         ----------
-        t : numpy.array
+        t : float or numpy.array
             The points where the function should be evaluated.
         derivative : [0, 1, 2], default = 0
             Whether to evaluate the function (0) or its first (1)
@@ -63,29 +69,50 @@ class BasisFunction:
 
     def filter_symmetric(self, s):
         """
-        ???
+        The filter used to turn knots into control points for an
+        open spline.
 
         Parameters
         ----------
-        s : ?
-            ?
+        s : numpy.array
+            An array of knots of shape (n, dim) where n is the number
+            of knots and dim is the dimensionality of the codomain, i.e.
+            the space in which the curve lives. Note that the knots should
+            be padded.
+
+        Returns
+        -------
+        control_points : numpy.array
+            The control points for spline passing through the knots provided.
         """
         raise NotImplementedError(BasisFunction._unimplemented_message)
 
     def filter_periodic(self, s):
         """
-        ???
+        The filter used to turn knots into control points for a
+        closed spline.
 
         Parameters
         ----------
-        s : ?
-            ?
+        s : numpy.array
+            An array of knots of shape (n, dim) where n is the number
+            of knots and dim is the dimensionality of the codomain, i.e.
+            the space in which the curve lives. Note that the knots should
+            be padded.
+
+        Returns
+        -------
+        control_points : numpy.array
+            The control points for spline passing through the knots provided.
         """
         raise NotImplementedError(BasisFunction._unimplemented_message)
 
     def refinement_mask(self):
         """
-        ???
+        This function is needed for local refinement (see [Badoual2016]_).
+        Basis splines with the 'local refinement property' can be expressed as a
+        linear combination of themselfs. This is useful when you iteratively want
+        to refine your spline with additional knots in a given interval.
         """
         raise NotImplementedError(BasisFunction._unimplemented_message)
 

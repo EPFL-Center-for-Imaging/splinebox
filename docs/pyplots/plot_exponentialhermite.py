@@ -12,7 +12,7 @@ t = np.linspace(-3, 3, 100)
 basis_0th = basis.eval(t)
 basis_1st = basis.eval(t, derivative=1)
 
-fig.suptitle(f"Etponential Hermite basis function and its derivatives for $M={M}$")
+fig.suptitle(f"Exponential Hermite basis function and its derivatives for $M={M}$")
 axes[0][0].plot(t, basis_0th[0], label=r"$\Phi_1(t)$")
 axes[0][0].legend()
 axes[1][0].plot(t, basis_1st[0], label=r"$\frac{d\Phi_1}{dt}(t)$")

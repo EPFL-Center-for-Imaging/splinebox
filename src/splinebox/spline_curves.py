@@ -8,6 +8,10 @@ import scipy.integrate
 
 
 def padding_function(knots, pad_length):
+    """
+    This is the default padding function of splinebox.
+    It applies constant padding to the ends of the knots.
+    """
     # Add constant padding to the ends
     if knots.ndim == 1:
         knots = knots[:, np.newaxis]
@@ -200,7 +204,7 @@ class Spline:
         .. math::
             wind(\gamma, 0) = \frac{1}{2\pi} \oint_\gamma d\theta = \frac{1}{2\pi} \oint_\gamma \left( \frac{x}{r^2}dy - \frac{y}{r^2}dx \right).
 
-        For a description of :math:`d\theta` check :meth:`splinebox.splines_curves.Spline.dtheta`.
+        For a description of :math:`d\theta` check :meth:`splinebox.spline_curves.Spline.dtheta`.
 
         Parameters
         ----------

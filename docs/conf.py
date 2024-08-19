@@ -32,6 +32,7 @@ author = "Florian Aymanns, Virginie Uhlmann, Edward Ando"
 extensions = [
     "sphinx.ext.mathjax",
     "sphinx.ext.autodoc",
+    "sphinx.ext.autosectionlabel",
     "matplotlib.sphinxext.plot_directive",
     "sphinx_gallery.gen_gallery",
 ]
