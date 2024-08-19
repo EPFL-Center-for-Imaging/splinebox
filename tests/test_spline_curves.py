@@ -163,6 +163,12 @@ def test_arc_length():
     expected = np.linspace(0, 2 * np.pi, 100)
     assert np.allclose(arc_lengths, expected)
 
+    # Check that it is working with vectors
+    permutation = np.random.permutation(len(ts))
+    print(permutation)
+    arc_lengths = spline.arc_length(ts[permutation])
+    assert np.allclose(arc_lengths, expected[permutation])
+
 
 def test_arc_length_to_parameter():
     # Create circular spline with radius sqrt(2)

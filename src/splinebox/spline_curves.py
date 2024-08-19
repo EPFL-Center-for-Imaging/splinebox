@@ -276,20 +276,48 @@ class Spline:
     def arc_length(self, stop=None, start=0, epsabs=1e-6, epsrel=1e-6):
         """
         Compute the arc length of the spline between
-        the two parameter value specified. if
+        the two parameter value specified. If no value for start is give,
+        start from the begining of the spline.
+        If no value for stop is give, go until the end of the spline.
+        When arrays with multiple values are given for start and/or stop,
+        an array with all of the arc lengths is returned.
 
         Parameters
         ----------
-        stop : float (optional)
-            Stop point in parameter space.
-        start : float (optional)
-            Start point in parameter space.
+        stop : np.array / float (optional)
+            Stop point(s) in parameter space.
+        start : np.array / float (optional)
+            Start point(s) in parameter space.
         epsabs : float (optional)
             Absolute error tolerance. Default is 1e-6.
         epsrel : float (optional)
             Relative error tolerance. Default is 1e-6.
         """
         self._check_control_points()
+
+        if isinstance(stop, collections.abc.Iterable):
+            results = np.zeros(len(stop))
+            if isinstance(start, collections.abc.Iterable):
+                if len(stop) != len(start):
+                    raise ValueError(
+                        "If you provide array like objects for start and stop, they need to have the same length."
+                    )
+                for i in range(len(stop)):
+                    results[i] = self.arc_length(stop[i], start[i], epsabs=epsabs, epsrel=epsrel)
+            else:
+                sort_indices = np.argsort(stop)
+                sorted_stop = stop[sort_indices]
+                for i in range(len(stop)):
+                    if i == 0:
+                        results[i] = self.arc_length(sorted_stop[i], start, epsabs=epsabs, epsrel=epsrel)
+                    else:
+                        results[i] = results[i - 1] + self.arc_length(
+                            sorted_stop[i], sorted_stop[i - 1], epsabs=epsabs, epsrel=epsrel
+                        )
+                # Undo the sorting
+                results = results[np.argsort(sort_indices)]
+            return results
+
         if stop is None:
             stop = self.M if self.closed else self.M - 1
 
