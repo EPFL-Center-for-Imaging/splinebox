@@ -547,8 +547,8 @@ def test_curvature():
         curvature = spline.curvature(t)
         assert np.allclose(curvature, 1 / r)
 
-        # If we reverse the direction the curvature should change sign
-        spline.knots = spline.knots[::-1]
+        # If we reverse the direction, the curvature should change sign
+        spline.knots = np.array([[0, r], [-r, 0], [0, -r], [r, 0]])
         curvature = spline.curvature(t)
         assert np.allclose(curvature, -1 / r)
 
@@ -563,3 +563,25 @@ def test_curvature():
     expected = spline.eval(t, derivative=2) / (1 + spline.eval(t, derivative=1) ** 2) ** (3 / 2)
     result = spline.curvature(t)
     assert np.allclose(result, expected)
+
+
+def test_normal():
+    # Create a circular spline
+    M = 4
+    spline = splinebox.spline_curves.Spline(M=M, basis_function=splinebox.basis_functions.Exponential(M), closed=True)
+    t = np.linspace(0, M, 100)
+
+    theta = np.linspace(0, 2 * np.pi, 100)
+    expected = np.stack([np.sin(theta), np.cos(theta)], axis=-1)
+    for r in (1, 1.5, 2):
+        spline.knots = np.array([[0, r], [r, 0], [0, -r], [-r, 0]])
+        normals = spline.normal(t)
+        assert np.allclose(normals, expected)
+
+        # Reversing the direction change the direction of the normal vector
+        spline.knots = np.array([[0, r], [-r, 0], [0, -r], [r, 0]])
+        normals = spline.normal(t[::-1])
+        assert np.allclose(normals, -1 * expected)
+
+        # Check that they are normal vectors
+        assert np.allclose(np.linalg.norm(normals, axis=1), np.ones(len(t)))

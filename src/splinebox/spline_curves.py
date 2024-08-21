@@ -519,6 +519,7 @@ class Spline:
         first_deriv = self.eval(t, derivative=1)
         second_deriv = self.eval(t, derivative=2)
         if first_deriv.ndim == 1:
+            # This assumes a uniform spline, i.e. the derivative of t is constant.
             first_deriv = np.stack([first_deriv, np.ones(len(t))], axis=-1)
             second_deriv = np.stack([second_deriv, np.zeros(len(t))], axis=-1)
         norm_first_deriv = np.linalg.norm(first_deriv, axis=1)
@@ -535,10 +536,15 @@ class Spline:
         return np.squeeze(k)
 
     def normal(self, t):
+        """
+        Returns the normal vector for 1D and 2D splines.
+        The normal vector points to the right of the spline
+        when facing in the direction of increasing t.
+        """
         self._check_control_points()
         if self.control_points.ndim != 2:
-            raise RuntimeError(
-                "The normal vector is only defined for curves in 2D. Your spline's codomain is 1 dimensional."
+            raise NotImplementedError(
+                "The normal vector is only implemented for curves in 2D. Your spline's codomain is 1 dimensional."
             )
         if self.control_points.shape[1] != 2:
             raise RuntimeError(
