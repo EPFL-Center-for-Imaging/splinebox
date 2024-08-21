@@ -534,3 +534,32 @@ def test_curvilinear_reparametrization_energy_scale_invariance(initialized_splin
     spline.scale(0.1)
     val = spline.curvilinear_reparametrization_energy()
     assert np.isclose(val, expected)
+
+
+def test_curvature():
+    # Create a circular spline
+    M = 4
+    spline = splinebox.spline_curves.Spline(M=M, basis_function=splinebox.basis_functions.Exponential(M), closed=True)
+    t = np.linspace(0, M, 100)
+    for r in (1, 1.5, 2):
+        # 2D
+        spline.knots = np.array([[0, r], [r, 0], [0, -r], [-r, 0]])
+        curvature = spline.curvature(t)
+        assert np.allclose(curvature, 1 / r)
+
+        # If we reverse the direction the curvature should change sign
+        spline.knots = spline.knots[::-1]
+        curvature = spline.curvature(t)
+        assert np.allclose(curvature, -1 / r)
+
+        # 3D
+        spline.knots = np.array([[0, 0, r], [0, r, 0], [0, 0, -r], [0, -r, 0]])
+        curvature = spline.curvature(t)
+        assert np.allclose(curvature, 1 / r)
+
+    # 1D
+    spline = splinebox.spline_curves.Spline(M=M, basis_function=splinebox.basis_functions.B3(), closed=False)
+    spline.knots = np.array([1, 5, 4, 2])
+    expected = spline.eval(t, derivative=2) / (1 + spline.eval(t, derivative=1) ** 2) ** (3 / 2)
+    result = spline.curvature(t)
+    assert np.allclose(result, expected)

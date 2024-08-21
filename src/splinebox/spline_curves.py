@@ -519,11 +519,11 @@ class Spline:
         first_deriv = self.eval(t, derivative=1)
         second_deriv = self.eval(t, derivative=2)
         if first_deriv.ndim == 1:
-            first_deriv = first_deriv[np.newaxis, :]
-            second_deriv = second_deriv[np.newaxis, :]
+            first_deriv = np.stack([first_deriv, np.ones(len(t))], axis=-1)
+            second_deriv = np.stack([second_deriv, np.zeros(len(t))], axis=-1)
         norm_first_deriv = np.linalg.norm(first_deriv, axis=1)
         norm_second_deriv = np.linalg.norm(second_deriv, axis=1)
-        if self.control_points.shape[1] == 2:
+        if first_deriv.shape[1] == 2:
             # We use a different formular for the 2D case to get the signed curvature instead of the
             # the unsigned curvature. This is useful when plotting curvature combs.
             nominator = first_deriv[:, 1] * second_deriv[:, 0] - first_deriv[:, 0] * second_deriv[:, 1]
