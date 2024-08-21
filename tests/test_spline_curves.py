@@ -26,6 +26,12 @@ def test_check_control_points_and_tangents(hermite_spline_curve, coeff_gen):
     spline._check_control_points_and_tangents()
 
 
+def test_minimum_number_of_knots(basis_function):
+    M = basis_function.support - 1
+    with pytest.raises(RuntimeError):
+        splinebox.spline_curves.Spline(M, basis_function)
+
+
 def test_eval(
     spline_curve, coeff_gen, derivative, eval_positions, is_hermite_spline, not_differentiable_twice, is_interpolating
 ):
@@ -138,6 +144,42 @@ def test_draw():
     # Check that the presence of the coefficients was verified
     spline._check_control_points.assert_called()
 
+    # You can only draw closed splines
+    spline.closed = False
+    with pytest.raises(RuntimeError):
+        spline.draw(x, y)
+
+    # You can only draw splines in 2D
+    spline = splinebox.spline_curves.Spline(M=4, basis_function=splinebox.basis_functions.B1(), closed=True)
+    spline.knots = np.array([[1, 1, 0.5], [1, 2, 2], [2, 2, 1], [2, 1, 0]])
+    with pytest.raises(RuntimeError):
+        spline.draw(x, y)
+
+
+def test_is_inside():
+    # The function itself is already tested via test_draw.
+    # Here, we will just test that it raises the correct errors
+
+    # Only makes sense for closed splines.
+    spline = splinebox.spline_curves.Spline(M=4, basis_function=splinebox.basis_functions.B1(), closed=False)
+    with pytest.raises(RuntimeError):
+        spline.is_inside(0, 0)
+
+    # Only makes sense for 2D curves
+    spline.closed = True
+    spline.knots = np.array([[1, 2, 3], [4, 3, 2], [6, 5, 1], [4, 7, 9]])
+    with pytest.raises(RuntimeError):
+        spline.is_inside(0, 0)
+
+    # Single value input
+    spline.knots = np.array([[1, 1], [1, 2], [2, 2], [2, 1]])
+    assert not spline.is_inside(0, 0)
+    assert spline.is_inside(1.5, 1.5)
+
+    # x and y vectors with different shapes
+    with pytest.raises(ValueError):
+        spline.is_inside(np.arange(10), np.arange(15))
+
 
 def test_arc_length():
     # Create circular spline with radius sqrt(2)
@@ -163,10 +205,13 @@ def test_arc_length():
     expected = np.linspace(0, 2 * np.pi, 100)
     assert np.allclose(arc_lengths, expected)
 
-    # Check that it is working with vectors
+    # Check that it is working with a vector for stop
     permutation = np.random.permutation(len(ts))
-    print(permutation)
     arc_lengths = spline.arc_length(ts[permutation])
+    assert np.allclose(arc_lengths, expected[permutation])
+
+    # Check that is works with vectors for start and stop
+    arc_lengths = spline.arc_length(ts[permutation], np.zeros(len(ts)))
     assert np.allclose(arc_lengths, expected[permutation])
 
 
@@ -227,6 +272,11 @@ def test_arc_length_to_parameter():
     spline._check_control_points.assert_called()
 
     assert np.allclose(results, expected, atol=atol)
+
+    # Check that is works for a single value
+    expected = to_param(ls[10])
+    result = spline.arc_length_to_parameter(ls[10], atol=atol)
+    assert np.isclose(result, expected, atol=atol)
 
 
 def test_translate(initialized_spline_curve, translation_vector):
@@ -371,6 +421,26 @@ def test_knots(spline_curve, knot_gen, is_hermite_spline, request):
         assert np.allclose(knots[pad:-pad], spline_curve.knots[pad:-pad])
     else:
         assert np.allclose(knots, spline_curve.knots)
+
+
+def test_number_of_knots(spline_curve, knot_gen):
+    for n_knots in (spline_curve.M - 1, spline_curve.M + 1):
+        knots = knot_gen(n_knots)
+        with pytest.raises(ValueError):
+            spline_curve.knots = knots
+
+    if not spline_curve.closed and spline_curve.pad > 0:
+        knots = knot_gen(spline_curve.M)
+
+        # Test with no padding function
+        spline_curve.padding_function = None
+        with pytest.raises(ValueError):
+            spline_curve.knots = knots
+
+        # Test with custom padding function
+        spline_curve.padding_function = lambda knots, pad: knots
+        with pytest.raises(ValueError):
+            spline_curve.knots = knots
 
 
 def test_centroid(spline_curve, coeff_gen, is_hermite_spline):

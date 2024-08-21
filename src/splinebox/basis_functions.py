@@ -3,6 +3,7 @@ This module provides spline basis functions.
 """
 
 import math
+import warnings
 
 import numba
 import numpy as np
@@ -113,6 +114,9 @@ class BasisFunction:
         Basis splines with the 'local refinement property' can be expressed as a
         linear combination of themselfs. This is useful when you iteratively want
         to refine your spline with additional knots in a given interval.
+        This creates a non-uniform spline, which is not supported by splinebox.
+        We keep it here incase we ever decide to support non-uniform splines in the
+        future.
         """
         raise NotImplementedError(BasisFunction._unimplemented_message)
 
@@ -533,6 +537,10 @@ class Exponential(BasisFunction):
         TODO: This fails the tests. They are set to
         xfail for now but this should be checked at some point.
         """
+        warnings.warn(
+            "The refinement_mask method of Exponential currently fails our test. This has to be investigated. Double check your results when using it.",
+            stacklevel=2,
+        )
         order = int(self.support)
         mask = np.zeros(order + 1)
 
@@ -658,7 +666,11 @@ class CubicHermite(BasisFunction):
     def _derivative_2(t):
         raise RuntimeError("CubicHermite isn't twice differentiable.")
 
-    def h31Autocorrelation(self, i, j, M):
+    def h31_autocorrelation(self, i, j, M):  # pragma: no cover
+        """
+        Derived by V. Uhlman during her PhD.
+        """
+        warnings.warn("This function is untested.", stacklevel=2)
         if self.support > M:
             raise ValueError("Cannot compute h31Autocorrelation for M<" + str(self.support))
             return
@@ -671,7 +683,11 @@ class CubicHermite(BasisFunction):
 
         return val
 
-    def h31PeriodicAutocorrelation(self, n, M):
+    def h31_periodic_autocorrelation(self, n, M):  # pragma: no cover
+        """
+        Derived by V. Uhlman during her PhD.
+        """
+        warnings.warn("This function is untested.", stacklevel=2)
         if self.support > M:
             raise ValueError("Cannot compute h31PeriodicAutocorrelation for M<" + str(self.support))
             return
@@ -685,7 +701,11 @@ class CubicHermite(BasisFunction):
 
         return val
 
-    def h32Autocorrelation(self, i, j, M):
+    def h32_autocorrelation(self, i, j, M):  # pragma: no cover
+        """
+        Derived by V. Uhlman during her PhD.
+        """
+        warnings.warn("This function is untested.", stacklevel=2)
         if self.support > M:
             raise ValueError("Cannot compute h32Autocorrelation for M<" + str(self.support))
             return
@@ -698,7 +718,11 @@ class CubicHermite(BasisFunction):
 
         return val
 
-    def h32PeriodicAutocorrelation(self, n, M):
+    def h32_periodic_autocorrelation(self, n, M):  # pragma: no cover
+        """
+        Derived by V. Uhlman during her PhD.
+        """
+        warnings.warn("This function is untested.", stacklevel=2)
         if self.support > M:
             raise ValueError("Cannot compute h32PeriodicAutocorrelation for M<" + str(self.support))
             return
@@ -712,7 +736,11 @@ class CubicHermite(BasisFunction):
 
         return val
 
-    def h3Crosscorrelation(self, i, j, M):
+    def h3_crosscorrelation(self, i, j, M):  # pragma: no cover
+        """
+        Derived by V. Uhlman during her PhD.
+        """
+        warnings.warn("This function is untested.", stacklevel=2)
         if self.support > M:
             raise ValueError("Cannot compute h3Crosscorrelation for M<" + str(self.support))
             return
@@ -730,7 +758,11 @@ class CubicHermite(BasisFunction):
 
         return val
 
-    def h3PeriodicCrosscorrelation(self, n, M):
+    def h3_periodic_crosscorrelation(self, n, M):  # pragma: no cover
+        """
+        Derived by V. Uhlman during her PhD.
+        """
+        warnings.warn("This function is untested.", stacklevel=2)
         if self.support > M:
             raise ValueError("Cannot compute h3PeriodicCrosscorrelation for M<" + str(self.support))
             return
@@ -845,7 +877,6 @@ class ExponentialHermite(BasisFunction):
     @staticmethod
     def _derivative_2(x):
         raise RuntimeError("ExponentialHermite isn't twice differentiable.")
-        return
 
     @staticmethod
     def filter_symmetric(s):

@@ -11,6 +11,18 @@ def padding_function(knots, pad_length):
     """
     This is the default padding function of splinebox.
     It applies constant padding to the ends of the knots.
+
+    Parameters
+    ----------
+    knots : numpy array
+        The knots to be padded.
+    pad_length : int
+        The amount of padding at each end.
+
+    Returns
+    -------
+    padded_knots : numpy array
+        Array of padded knots.
     """
     # Add constant padding to the ends
     if knots.ndim == 1:
@@ -72,6 +84,10 @@ class Spline:
 
     @property
     def control_points(self):
+        """
+        The control points of this spline, i.e. the c[k]
+        in equation :ref:`(1) <theory:eq:1>`.
+        """
         return self._control_points
 
     @control_points.setter
@@ -91,6 +107,10 @@ class Spline:
 
     @property
     def knots(self):
+        """
+        The knots of this spline, i.e. the values of the spline
+        at :math:`t=0,1,...,M`.
+        """
         if self.padding_function is None and not self.closed:
             t = np.arange(-self.pad, self.M + self.pad)
         else:
@@ -129,6 +149,11 @@ class Spline:
 
     @property
     def basis_function(self):
+        """
+        The basis function of the spline. Should be an object
+        of a specific implementation of the abstract base class
+        :class:`splinebox.basis_functions.BasisFunction`.
+        """
         return self._basis_function
 
     @basis_function.setter
@@ -140,11 +165,14 @@ class Spline:
         self._basis_function = value
 
     def copy(self):
+        """
+        Creats a deep copy of this spline.
+        """
         return copy.deepcopy(self)
 
     def draw(self, x, y):
         """
-        Computes a whether a point is inside or outside a closed
+        Computes whether a point is inside or outside a closed
         spline on a regular grid of points.
 
         I would ask the user to provide a grid of points directly instead
@@ -224,9 +252,9 @@ class Spline:
         if self.control_points.ndim != 2 or self.control_points.shape[1] != 2:
             raise RuntimeError("isInside() can only be used with 2D curves.")
 
-        if isinstance(x, float):
+        if isinstance(x, (float, int)):
             x = np.array([x])
-        if isinstance(y, float):
+        if isinstance(y, (float, int)):
             y = np.array([y])
         if not np.allclose(x.shape, y.shape):
             raise ValueError("x and y need to have the same shape")
@@ -245,7 +273,10 @@ class Spline:
                 results[coord] = 0.5
             else:
                 results[coord] = 0
-        return np.squeeze(results)
+        results = np.squeeze(results)
+        if results.ndim == 0:
+            return float(results)
+        return results
 
     def fit(self, points, arc_length_parameterization=False):
         """
