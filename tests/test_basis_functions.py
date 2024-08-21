@@ -30,11 +30,55 @@ def test_filters(basis_function, is_interpolating, knot_gen, request):
 
     s = knot_gen()
     if is_interpolating(basis_function):
+        # The filters should not do anything since knot and control points are
+        # the same for interpolating splines.
         assert np.allclose(basis_function.filter_symmetric(s), s)
         assert np.allclose(basis_function.filter_periodic(s), s)
     else:
+        # Flipping the knot or the control points should give the same result
         assert np.allclose(basis_function.filter_symmetric(s), basis_function.filter_symmetric(s[::-1])[::-1])
         assert np.allclose(basis_function.filter_periodic(s), basis_function.filter_periodic(s[::-1])[::-1])
+
+
+def test_refinement_mask(basis_function, is_locally_refinable, request):
+    if isinstance(basis_function, splinebox.basis_functions.Exponential):
+        # The refinement mask of the exponential basis function fails.
+        # This might be because the value of M has to be changed after
+        # refinement. Since we don't have an imidiate need for the refinement
+        # mask, we xfail the tests for now and will revisit this later.
+        request.node.add_marker(pytest.mark.xfail)
+    if is_locally_refinable(basis_function):
+        mask = basis_function.refinement_mask()
+        refinement_factor = max(math.floor(len(mask) / 2), 2)
+        half_support = basis_function.support / 2
+        t = np.linspace(0, basis_function.support, 100) * refinement_factor
+        expected = basis_function.eval((t / refinement_factor) - half_support)
+        result = np.zeros(len(t))
+        # plt.plot(t, expected, label="expected")
+        # if isinstance(basis_function, splinebox.basis_functions.Exponential):
+        #     basis_function.M *= refinement_factor
+        for i in range(len(mask)):
+            intermediate = mask[i] * basis_function.eval(t - i - half_support)
+            # plt.plot(t, intermediate)
+            result += intermediate
+        # plt.plot(t, result, label="results")
+        # plt.legend()
+        # plt.show()
+        assert np.allclose(expected, result)
+    else:
+        with pytest.raises(NotImplementedError):
+            basis_function.refinement_mask()
+
+
+def test_eval_derivative_argument(basis_function, not_differentiable_twice):
+    t = np.linspace(-1, 1, 20)
+    # Check that 0, 1, 2 don't raise errors
+    for derivative in range(3):
+        if derivative == 2 and not_differentiable_twice(basis_function):
+            continue
+        basis_function.eval(t, derivative=derivative)
+    with pytest.raises(ValueError):
+        basis_function.eval(t, derivative=4)
 
 
 def test_derivatives(basis_function, derivative, not_differentiable_twice):

@@ -164,7 +164,7 @@ class B1(BasisFunction):
     def refinement_mask(self):
         order = int(self.support)
         mask = np.zeros(order + 1)
-        _multinomial(order, 2, np.zeros(2), 0, 2, order, mask)
+        _multinomial(order, 2, np.zeros(2, dtype=int), 0, 2, order, mask)
         return mask
 
 
@@ -218,7 +218,7 @@ class B2(BasisFunction):
     def refinement_mask(self):
         order = int(self.support)
         mask = np.zeros(order + 1)
-        _multinomial(order, 2, np.zeros(2), 0, 2, order, mask)
+        _multinomial(order, 2, np.zeros(2, dtype=int), 0, 2, order, mask)
         return mask
 
 
@@ -347,7 +347,7 @@ class B3(BasisFunction):
     def refinement_mask(self):
         order = int(self.support)
         mask = np.zeros(order + 1)
-        _multinomial(order, 2, np.zeros(2), 0, 2, order, mask)
+        _multinomial(order, 2, np.zeros(2, dtype=int), 0, 2, order, mask)
         return mask
 
 
@@ -529,12 +529,16 @@ class Exponential(BasisFunction):
         return c
 
     def refinement_mask(self):
+        """
+        TODO: This fails the tests. They are set to
+        xfail for now but this should be checked at some point.
+        """
         order = int(self.support)
         mask = np.zeros(order + 1)
 
         denominator = 2 ** (order - 1)
         mask[0] = 1 / denominator
-        mask[1] = (2 * np.cos(self.alpha) + 1) / denominator
+        mask[1] = (2 * np.cos(np.pi / self.M) + 1) / denominator
         mask[2] = mask[1]
         mask[3] = 1 / denominator
 

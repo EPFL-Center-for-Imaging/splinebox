@@ -54,6 +54,21 @@ def hermite_basis_function(request):
     return basis_function(**params)
 
 
+@pytest.fixture
+def is_locally_refinable():
+    def _is_locally_refinable(basis_function):
+        return not isinstance(
+            basis_function,
+            (
+                splinebox.basis_functions.CubicHermite,
+                splinebox.basis_functions.ExponentialHermite,
+                splinebox.basis_functions.CatmullRom,
+            ),
+        )
+
+    return _is_locally_refinable
+
+
 @pytest.fixture(params=[4, 5, 8])
 def M(request):
     return request.param
