@@ -10,6 +10,7 @@ Developed by the [EPFL Center for Imaging](https://imaging.epfl.ch/) as part of 
 [![Python Version](https://img.shields.io/pypi/pyversions/splinebox.svg?color=green)](https://python.org)
 [![tests](https://github.com/EPFL-Center-for-Imaging/splinebox/workflows/tests/badge.svg)](https://github.com/EPFL-Center-for-Imaging/splinebox/actions)
 [![codecov](https://codecov.io/gh/EPFL-Center-for-Imaging/splinebox/branch/main/graph/badge.svg)](https://codecov.io/gh/EPFL-Center-for-Imaging/splinebox)
+[![DOI](https://zenodo.org/badge/759892900.svg)](https://zenodo.org/doi/10.5281/zenodo.13358354)
 
 ## Features
 * Flexible spline fitting for various applications.
@@ -26,7 +27,7 @@ pip install splinebox
 
 ## Usage
 
-Here is a minimal example of cubic B-spline in 2D with 3 knots.
+Here is a minimal example of a cubic B-spline in 2D with 3 knots.
 
 ```python
 import splinebox
@@ -52,6 +53,31 @@ If you encounter any problems, please [file and issue](https://github.com/EPFL-C
 ## Contributing
 
 We welcome contributions! Before you submit a pull request, please ensure that the tests are passing. You can run the tests with [pytest](https://docs.pytest.org/en/stable/). If you are unsure how to implement something, feel free to open an issue to discuss.
+
+## Citing splinebox
+
+If you use splinebox in the context of scientific publication, please cite it as follows.
+Note, that you will have to fill in the version yourself. If you are unsure what version you are running,
+you can find out by running
+
+```python
+import splinebox
+print(splinbox.__version__)`
+```
+
+BibTeX:
+
+```
+@misc{splinebox,
+  author = {Aymanns, Florian and Andò, Edward and Uhlmann, Virginie},
+  title = {splinebox},
+  url = {https://pypi.org/project/splinebox/},
+  doi = {10.5281/zenodo.13358354},
+  note = {{V}ersion V.V.Vb1},
+  year = 2024,
+}
+```
+
 
 ## License
 
