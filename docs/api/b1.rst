@@ -2,5 +2,3 @@ B1
 ==
 
 .. autoclass:: splinebox.basis_functions.B1
-
-.. plot:: pyplots/plot_b1.py

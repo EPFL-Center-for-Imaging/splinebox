@@ -87,7 +87,7 @@ html_theme_options = {
     "show_toc_level": 2,
     "navbar_align": "content",  # [left, content, right] For testing that the navbar items align properly
     "navbar_center": ["navbar-nav"],
-    "navbar_start": ["navbar-logo", "version-switcher"],
+    "navbar_start": ["navbar-logo"],
     "navbar_end": ["theme-switcher", "navbar-icon-links"],
     "secondary_sidebar_items": ["page-toc", "searchbox", "edit-this-page", "sourcelink"],
     "footer_start": ["copyright"],

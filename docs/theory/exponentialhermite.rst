@@ -1,5 +1,5 @@
-Exponential Hermite
-===================
+Exponential Hermite basis
+=========================
 
 See [Uhlmann2014]_.
 

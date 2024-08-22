@@ -1,5 +1,7 @@
-Spline curves
+spline_curves
 =============
+
+This submodule provides the classes used to create :class:`spline <splinebox.spline_curves.Spline>` and :class:`hermite spline <splinebox.spline_curves.HermiteSpline>` objects.
 
 .. autoclass:: splinebox.spline_curves.Spline
    :members:

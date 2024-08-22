@@ -41,7 +41,7 @@ class Spline:
     basis_function : :class:`splinebox.basis_functions.BasisFunction`
         The basis function used to construct the spline.
     closed : boolean
-        Whether or not the spline is closed, i.e. the two ends connect.
+        Whether or not the spline is closed, i.e. the two ends are connected.
     control_points : np.array
         The control points of the spline. Optional, can be provided later.
     padding_function : callable
@@ -166,7 +166,7 @@ class Spline:
 
     def copy(self):
         """
-        Creats a deep copy of this spline.
+        Returns a deep copy of this spline.
         """
         return copy.deepcopy(self)
 
@@ -175,9 +175,12 @@ class Spline:
         Computes whether a point is inside or outside a closed
         spline on a regular grid of points.
 
-        I would ask the user to provide a grid of points directly instead
-        of asking for the dimensions. Like that the user can choose how densly
-        they want to sample the grid.
+        Parameters
+        ----------
+        x : numpy array
+            A 1D array containing the x values of the grid of points.
+        y : numpy array
+            A 1D array containing the y values of the grid of points.
         """
         self._check_control_points()
 
@@ -282,6 +285,7 @@ class Spline:
         """
         Fit the provided points with the spline using
         least squares.
+        For details refer to :ref:`Data approximation`.
 
         Parameters
         ----------
@@ -307,7 +311,7 @@ class Spline:
     def arc_length(self, stop=None, start=0, epsabs=1e-6, epsrel=1e-6):
         """
         Compute the arc length of the spline between
-        the two parameter value specified. If no value for start is give,
+        the two parameter values specified. If no value for start is give,
         start from the begining of the spline.
         If no value for stop is give, go until the end of the spline.
         When arrays with multiple values are given for start and/or stop,
@@ -455,51 +459,31 @@ class Spline:
 
         return np.squeeze(results)
 
-    def sampleArcLength(self, numSamples, dt=False):
-        """
-        Evaluate the spline equidistantly spaced along its trajectory.
-        Perhaps it makes sense to ask the user to provide an array of distances
-        instead of the numSamples.
-        """
-        self._check_control_points()
-
-        if len(self.control_points.shape) == 1 or (
-            len(self.control_points.shape) == 2 and self.control_points.shape[1] == 2
-        ):
-            N = numSamples if self.closed else numSamples - 1
-            L = self.arc_length()
-
-            ts = [0]
-            for n in range(1, N):
-                s = n * L / N
-                t = self.lengthToParameter(s)
-                ts.append(t)
-            if self.closed:
-                ts.append(self.M)
-            else:
-                ts.append(self.M - 1)
-
-            curve = np.array([self.eval(t, dt=dt) for t in ts])
-
-            curve = (
-                curve[~np.all(curve == 0)]
-                if len(self.control_points.shape) == 1
-                else curve[~np.all(curve == 0, axis=1)]
-            )
-
-        else:
-            raise RuntimeError(self.wrongArraySizeMessage)
-
-        return np.stack(curve)
-
     def curvilinear_reparametrization_energy(self, epsabs=1e-6, epsrel=1e-6):
         """
         This energy can be used to enforce equal spacing of the knots.
 
-        Implements equation 25 from Jaboc, et al. 2004
-        https://infoscience.epfl.ch/record/63117?ln=fr&v=pdf
+        Implements equation 25 from [Jacob2004]_.
         In order to make the energy scale invariant,
-        we added a factor of length^-4 to the integral.
+        we added a factor of (arc length)^-4 to the integral.
+
+        Parameters
+        ----------
+        epsabs : float
+            The absolute accuracy for the integration.
+            Default is 1e-6.
+            For details see scipy.integrate.quad_.
+        epsrel : float
+            The relative accuracy for the integration.
+            Default is 1e-6.
+            For details see scipy.integrate.quad_.
+
+        Returns
+        -------
+        energy : float
+            The curvilinear reparametrization energy of the spline.
+
+        .. _scipy.integrate.quad: https://docs.scipy.org/doc/scipy-1.14.0/reference/generated/scipy.integrate.quad.html
         """
         arc_length = self.arc_length()
         c = (arc_length / self.M) ** 2
@@ -516,6 +500,22 @@ class Spline:
         return integral[0] / arc_length**4
 
     def curvature(self, t):
+        """
+        Compute the curcature of the spline at position(s) t.
+        For splines in 1 and 2 dimensions, the signed curvature
+        is returned. Otherwise the unsigned curvature is returned.
+
+        Parameters
+        ----------
+        t : float or numpy array
+            The paramter value(s) at which the curvature
+            should be calculated.
+
+        Returns
+        -------
+        k : float or numpy array
+            The curvature value.
+        """
         first_deriv = self.eval(t, derivative=1)
         second_deriv = self.eval(t, derivative=2)
         if first_deriv.ndim == 1:
@@ -540,6 +540,17 @@ class Spline:
         Returns the normal vector for 1D and 2D splines.
         The normal vector points to the right of the spline
         when facing in the direction of increasing t.
+
+        Parameters
+        ----------
+        t : float or numpy array
+            The parameter value(s) for which the normal
+            vector(s) are computed.
+
+        Returns
+        -------
+        normals : numpy array
+            The normal vectors.
         """
         self._check_control_points()
         if self.control_points.ndim != 2:
@@ -654,9 +665,7 @@ class Spline:
 
     def scale(self, scaling_factor):
         """
-        Enlarge or shrink the spline.
-        This should probably use :meth:`splinebox.spline_curves.Spline.translate`
-        `scalingFactor` can be renamed to `factor`.
+        Enlarge or shrink the spline by the provided factor.
         """
         self._check_control_points()
         centroid = self._control_points_centroid()
@@ -691,15 +700,21 @@ class Spline:
 class HermiteSpline(Spline):
     """
     Class for the construction of a Hermite spline.
+    It inherits from :class:`splinebox.spline_curves.Spline`.
+    Here, we only document the additional methods and attributes.
+    For information on the inherited methods and attributes refere to the
+    documentation of :class:`splinebox.spline_curves.Spline`.
 
     Parameters
     ----------
     M : int
         Number of control points.
     basis_function : :class:`splinebox.basis_functions.BasisFunction`
-        The basis function used to construct the spline.
+        The basis function used to construct the spline. The :class:`multigenerator <splinebox.basis_functions.BasisFunction>`
+        attribute has to be true and the :func:`eval <splinebox.basis_functions.BasisFunction.eval>` method has to return two values
+        instead of one.
     closed : boolean
-        Whether or not the spline is closed, i.e. the two ends connect.
+        Whether or not the spline is closed, i.e. the two ends are connected.
     """
 
     _coef_tangent_mismatch_msg = "It looks like control_points and tangents have different shapes."
@@ -723,6 +738,9 @@ class HermiteSpline(Spline):
 
     @property
     def tangents(self):
+        """
+        The tangents of this spline.
+        """
         return self._tangents
 
     @tangents.setter
@@ -770,18 +788,6 @@ class HermiteSpline(Spline):
         self.tangents = solution[half:]
 
     def eval(self, t, derivative=0):
-        """
-        Evalute the spline or one of its derivatives at
-        parameter value(s) `t`.
-
-        Parameters
-        ----------
-        t : numpy.array, float
-            A 1D numpy array or a single float value.
-        derivative : int
-            Can be 0, 1, 2 for the spline, and its
-            first and second derivative respectively.
-        """
         self._check_control_points_and_tangents()
 
         tval = self._get_tval(t)

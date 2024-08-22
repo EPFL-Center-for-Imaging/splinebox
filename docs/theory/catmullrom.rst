@@ -1,5 +1,5 @@
-Catmull Rom
-===========
+Catmull Rom basis
+=================
 
 See [Keys1981]_.
 

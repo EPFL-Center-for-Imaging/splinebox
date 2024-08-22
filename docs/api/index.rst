@@ -8,7 +8,8 @@ API
    basis_functions.rst
    spline_curves.rst
 
-Splinbox's API is split into two submodules: `basis_functions`, `spline_curves`.
-basis_functions provides a plethora or basis function classes that implement everything that is specific to the type of basis function.
-This makes it easy to try different kind of splines as you only have to replace the basis function object used when you create your spline.
-The second submodule, `spline_curves`, provides the classes used for constructing splines with all of the methods for fitting and inference of the spline.
+SplineBox's API is divided into two main submodules: :ref:`basis_functions` and :ref:`spline_curves`.
+
+- **basis_functions**: This submodule offers a variety of basis function classes, each tailored to a specific type of basis function. This modularity allows you to easily experiment with different spline types by simply swapping the basis function object when creating your spline.
+
+- **spline_curves**: This submodule provides the classes necessary for constructing splines, along with all the methods required for spline fitting and inference.

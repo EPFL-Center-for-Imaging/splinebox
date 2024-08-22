@@ -84,7 +84,7 @@ class BasisFunction:
         Returns
         -------
         control_points : numpy.array
-            The control points for spline passing through the knots provided.
+            The control points for the spline passing through the knots provided.
         """
         raise NotImplementedError(BasisFunction._unimplemented_message)
 
@@ -104,7 +104,7 @@ class BasisFunction:
         Returns
         -------
         control_points : numpy.array
-            The control points for spline passing through the knots provided.
+            The control points for the spline passing through the knots provided.
         """
         raise NotImplementedError(BasisFunction._unimplemented_message)
 
@@ -123,10 +123,16 @@ class BasisFunction:
 
 class B1(BasisFunction):
     r"""
-    Basis spline of degree 1.
+    Basis function for a linear (:math:`1^{\text{st}}` order) polynomial basis spline.
 
-    .. math::
-        f(t) = \begin{cases}1 - \lvert t \rvert & \text{for } -1 \leq t \leq 1 \\ 0 & \text{otherwise}\end{cases}
+    For a detailed theoretical description, including the equation and
+    a plot of the function, refer to the :ref:`Polynomial basis (B-spline)`
+    section in the documentation.
+
+    The constructor does not require any arguments.
+
+    For more information on the methods and attributes available in this class,
+    please see the documentation for :class:`splinebox.basis_functions.BasisFunction`.
     """
 
     def __init__(self):
@@ -174,10 +180,16 @@ class B1(BasisFunction):
 
 class B2(BasisFunction):
     r"""
-    Basis spline of degree 2.
+    Basis function for a quadratic (:math:`2^{\text{nd}}` order) polynomial basis spline.
 
-    .. math::
-        f(t) = \begin{cases}\frac{t^2}{2} + \frac{3}{2} t + \frac{9}{8} & \text{for } -\frac{3}{2} \leq t \leq -\frac{1}{2} \\ -t^2 + \frac{3}{4} & \text{for } -\frac{1}{2} < t \leq \frac{1}{2} \\ \frac{1}{2} t^2 - \frac{3}{2} t + \frac{9}{8} & \text{for } \frac{1}{2} < t \leq \frac{3}{2} \\ 0 & \text{otherwise}\end{cases}
+    For a detailed theoretical description, including the equation and
+    a plot of the function, refer to the :ref:`Polynomial basis (B-spline)`
+    section in the documentation.
+
+    The constructor does not require any arguments.
+
+    For more information on the methods and attributes available in this class,
+    please see the documentation for :class:`splinebox.basis_functions.BasisFunction`.
     """
 
     def __init__(self):
@@ -228,13 +240,16 @@ class B2(BasisFunction):
 
 class B3(BasisFunction):
     r"""
-    Basis spline of degree 3.
+    Basis function for a cubic (:math:`3^{\text{rd}}` order) polynomial basis spline.
 
-    .. math::
-        f(t) = \begin{cases}
-        \frac{2}{3} - \lvert t \rvert^2 + \frac{\lvert t \rvert^3}{2} & \text{for } 0 \leq \lvert t \rvert < 1 \\
-        \frac{1}{6}(2 - \lvert t \rvert)^3 & \text{for } 1 \leq \lvert t \rvert \leq 2 \\
-        0 & \text{otherwise}\end{cases}
+    For a detailed theoretical description, including the equation and
+    a plot of the function, refer to the :ref:`Polynomial basis (B-spline)`
+    section in the documentation.
+
+    The constructor does not require any arguments.
+
+    For more information on the methods and attributes available in this class,
+    please see the documentation for :class:`splinebox.basis_functions.BasisFunction`.
     """
 
     def __init__(self):
@@ -357,27 +372,16 @@ class B3(BasisFunction):
 
 class Exponential(BasisFunction):
     r"""
-    ???
+    Basis function for an exponential spline.
 
-    .. math::
-        f(t) = \begin{cases}
-        \frac{L}{\alpha^2} 2 \sin(\frac{\alpha}{2} t)^2 & \text{for } 0 \leq t < 1 \\
-        \frac{L}{\alpha^2} (\cos(\alpha (t - 2)) + \cos(\alpha (t - 1)) - 2 \cos(\alpha)) & \text{for } 1 \leq t < 2 \\
-        \frac{L}{\alpha^2} 2 \sin(\frac{\alpha}{2} (t - 3))^2 & \text{for } 2 \leq t \leq 3 \\
-        0 & \text{otherwise}\end{cases}
+    For a detailed theoretical description, including the equation and
+    a plot of the function, refer to the :ref:`Exponential basis`
+    section in the documentation.
 
-    .. math::
-        \text{where } L=(\frac{\sin(\pi / M)}{\pi / M})^{-2}\text{ and }t = t + \frac{support}{2}
+    The constructor requires `M`, the number of knots in the spline, as an argument.
 
-    .. math::
-        f(t) = \begin{cases}
-        2 L \sin(\alpha t)^2 & \text{for } 0 \leq t < 1 \\
-        L (\cos(2\alpha (t - 2)) + \cos(2\alpha (t - 1)) - 2 \cos(2\alpha)) & \text{for } 1 \leq t < 2 \\
-        2 L \sin(\alpha (t - 3))^2 & \text{for } 2 \leq t \leq 3 \\
-        0 & \text{otherwise}\end{cases}
-
-    .. math::
-        \text{where } \alpha=\frac{\pi}{M}, L=\frac{1}{4 \sin(\alpha)^2} \text{ and }t = t + \frac{3}{2}
+    For more information on the methods and attributes available in this class,
+    please see the documentation for :class:`splinebox.basis_functions.BasisFunction`.
     """
 
     def __init__(self, M):
@@ -554,8 +558,17 @@ class Exponential(BasisFunction):
 
 
 class CatmullRom(BasisFunction):
-    """
-    ???
+    r"""
+    Basis function for a Catmull Rom spline.
+
+    For a detailed theoretical description, including the equation and
+    a plot of the function, refer to the :ref:`Catmull Rom basis`
+    section in the documentation.
+
+    The constructor does not require any arguments.
+
+    For more information on the methods and attributes available in this class,
+    please see the documentation for :class:`splinebox.basis_functions.BasisFunction`.
     """
 
     def __init__(self):
@@ -609,8 +622,20 @@ class CatmullRom(BasisFunction):
 
 
 class CubicHermite(BasisFunction):
-    """
-    ???
+    r"""
+    Basis function for a cubic Hermite spline.
+
+    For a detailed theoretical description, including the equation and
+    a plot of the function, refer to the :ref:`Cubic Hermite basis`
+    section in the documentation.
+
+    The constructor does not require any arguments.
+
+    For more information on the methods and attributes available in this class,
+    please see the documentation for :class:`splinebox.basis_functions.BasisFunction`.
+
+    **Note**: This is basis function is a :class:`multigenerator <splinebox.basis_functions.BasisFunction>` and
+    :func:`eval <splinebox.basis_functions.BasisFunction.eval>` returns two values.
     """
 
     def __init__(self):
@@ -787,8 +812,20 @@ class CubicHermite(BasisFunction):
 
 
 class ExponentialHermite(BasisFunction):
-    """
-    ???
+    r"""
+    Basis function for an exponential Hermite spline.
+
+    For a detailed theoretical description, including the equation and
+    a plot of the function, refer to the :ref:`Exponential Hermite basis`
+    section in the documentation.
+
+    The constructor requires `M`, the number of knots in the spline, as an argument.
+
+    For more information on the methods and attributes available in this class,
+    please see the documentation for :class:`splinebox.basis_functions.BasisFunction`.
+
+    **Note**: This is basis function is a :class:`multigenerator <splinebox.basis_functions.BasisFunction>` and
+    :func:`eval <splinebox.basis_functions.BasisFunction.eval>` returns two values.
     """
 
     def __init__(self, M):

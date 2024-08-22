@@ -18,7 +18,7 @@ with itself :math:`n` times, \emph{i.e.}
 
    \beta_n(t) = (\smash[b]{\underbrace{\beta_0 \ast ... \ast \beta_0}_\text{$n$ times}}).
 
-See~\cite{unser1999} for more details.
+See [Unser1999]_ for more details.
 
 Linear (:math:`1^{\text{st}}` order) polynomial basis
 

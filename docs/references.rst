@@ -12,3 +12,5 @@ References
 .. [Uhlmann2016] V\. Uhlmann, J. Fageot, and M. Unser, “Hermite snakes with control of tangents,” IEEE Transactions on Image Processing, vol. 25, no. 6, pp. 2803–2816, 2016.
 
 .. [Badoual2016] A\. Badoual, D. Schmitter, M. Unser, "Local Refinement for 3D Deformable Parametric Surfaces," Proceedings of the 2016 IEEE International Conference on Image Processing (ICIP'16). IEEE, 2016, pp. 1086-1090
+
+.. [Jacob2004] M\. Jacob, T. Blu, M. Unser, "Efficient Energies and Algorithms for Parametric Snakes," IEEE Transactions on Image Processing, vol. 13, no. 9, pp 1231-1244, 2004.

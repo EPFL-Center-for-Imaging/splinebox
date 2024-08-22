@@ -1,5 +1,5 @@
-Exponential spline basis
-========================
+Exponential basis
+=================
 
 See [Delgado2012]_.
 

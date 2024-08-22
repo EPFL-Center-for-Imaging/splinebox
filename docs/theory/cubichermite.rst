@@ -1,5 +1,5 @@
-Cubic Hermite
-=============
+Cubic Hermite basis
+===================
 
 See [Uhlmann2016]_.
 

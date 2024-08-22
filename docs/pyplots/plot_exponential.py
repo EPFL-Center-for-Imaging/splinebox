@@ -13,7 +13,7 @@ basis_0th = basis.eval(t)
 basis_1st = basis.eval(t, derivative=1)
 basis_2nd = basis.eval(t, derivative=2)
 
-fig.suptitle(f"Etponential basis function and its derivatives for $M={M}$")
+fig.suptitle(f"Exponential basis function and its derivatives for $M={M}$")
 axes[0].plot(t, basis_0th, label=r"$\Phi(t)$")
 axes[0].legend()
 axes[1].plot(t, basis_1st, label=r"$\frac{d\Phi}{dt}(t)$")
