@@ -1,4 +1,4 @@
 Example gallery
 ===============
 
-The examples below show some common use cases for splinebox.
+The examples below show some common use cases for SplineBox.

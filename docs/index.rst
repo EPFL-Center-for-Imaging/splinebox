@@ -115,20 +115,20 @@
        </svg>
        <p>
          <strong> High performance </strong> <br/>
-         Just-in-time compilation allows us to match and in some cases overcome the performance of scipy's fortran based splines.
+         Just-in-time compilation allows us to match and in some cases overcome the performance of SciPy's fortran based splines.
        </p>
      </div>
 
    </div>
 
-   <h1 class="homepage-title">Comparison with scipy</h1>
+   <h1 class="homepage-title">Comparison with SciPy</h1>
 
    <h2>Ease of use</h2>
 
    <p>
      A common task in image anlysis is to fit a closed spline of a given order with a
      fixed number of knots to a countour. Let's compare how we can achieve this task
-     in splinebox and scipy.<br>
+     in SplineBox and SciPy.<br>
      <a href="./auto_examples/plot_splinebox_vs_scipy_coin.html">See full example →</a>
    </p>
 
@@ -139,7 +139,7 @@
      .. raw:: html
 
        <p style="margin-right: 3em">
-         In splinebox all we need to do is select a basis function and specify
+         In SplineBox all we need to do is select a basis function and specify
          the number of knots M and that the spline is closed in the spline constructor.
          The spline can then be fit to the data using its fit method.
        </p>
@@ -191,7 +191,7 @@
 .. raw:: html
 
   <p style="margin-top: 3em">
-    For additional examples comparing splinebox to scipy check out our example gallery.
+    For additional examples comparing SplineBox to SciPy check out our example gallery.
     <br>
     <a href="./auto_examples/index.html">See examples →</a>
   </p>
@@ -205,14 +205,14 @@
     .. raw:: html
 
       <p>
-        We compare the performance to splinbox to scipy's splines
+        We compare the performance to splinbox to SciPy's splines
         on three main tasks:
         <ul>
         <li>Spline creation give a set of knots</li>
         <li>Evaluation of a spline at a given parameter value</li>
         <li>Data approximation using least-squares fitting</li>
         </ul>
-        Splinebox out performs scipy by approximately two orders of maginitued on the first two tasks and achives comparable performance for least-squares fitting of splines with 10 knots.
+        Splinebox out performs SciPy by approximately two orders of maginitued on the first two tasks and achives comparable performance for least-squares fitting of splines with 10 knots.
         <a href="./auto_examples/plot_performance_comparison_with_scipy.html">See detailed comparison →</a>
       </p>
 
