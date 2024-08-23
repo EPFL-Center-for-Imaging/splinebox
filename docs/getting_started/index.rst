@@ -1,23 +1,28 @@
 Getting Started
 ===============
 
+.. toctree::
+   :maxdepth: 2
+   :hidden:
+
+   padding.rst
+
 Installation
 ------------
-SplineBox can be installed using pip by running:
+SplineBox can be installed using pip:
 
 .. code-block::
 
    pip install splinebox
 
-This will only install the minimal dependencies.
-If you wish to install splinebox with the dependencies necessary to run the examples,
-you can do so with the following command:
+This will install the minimal dependencies.
+To install SplineBox with the dependencies required for running examples, use:
 
 .. code-block::
 
    pip install "splinebox[examples]"
 
-Similarly, you can install the depencies for building the docs or running the test suits.
+Similarly, you can install dependencies for building the docs or running the test suites:
 
 .. code-block::
 
@@ -29,63 +34,69 @@ or
 
    pip install "splinebox[docs]"
 
-To install all dependencies run:
+To install all dependencies:
 
 .. code-block::
 
    pip install "splinebox[all]"
 
-Constructing your first spline
+Constructing Your First Spline
 ------------------------------
-Constructing a spline with spline box is easy.
-You just have to decide:
-- how many knots/controlpoints your spline should have
-- what type of spline you want to construct, i.e. choose a basis function
-- whether your spline should be closed or open, i.e. are the two ends connected to each other to form a loop
 
-For this example, we will construc a cubic B-spline with, 5 knots, that is closed.
+**Note**: If you are unfamiliar with spline terminology, such as knots and control points, refer to our :ref:`theory introduction <Theory>`.
+
+Constructing a spline with SplineBox is straightforward. You need to decide:
+
+- The number of knots/control points your spline should have.
+- The type of spline you want to construct, i.e., choose a basis function.
+- Whether your spline should be closed or open (i.e., whether the two ends are connected to form a loop).
+
+For this example, we will construct a cubic B-spline with 5 knots that is not closed.
 
 .. code-block:: python
 
    import splinebox
-   spline = splinebox.Spline(M=5, basis_function=basis_function, closed=True)
+   spline = splinebox.Spline(M=5, basis_function=splinebox.B3(), closed=False)
 
-For now, we haven't set any control points or knots yet.
-TODO: Mention ndim
-To give the spline it's shape you have three options:
+At this point, we haven't set any control points or knots.
+To shape the spline in `ndim` dimensions, you have three options:
 
-1. Directly provide the knots:
-
-   .. code-block:: python
-
-      spline.knots = np.random.rand(size=(ndim, 5))
-
-2. Directly provide the control points:
+1. **Directly provide the knots**:
 
    .. code-block:: python
 
-      spline.control_points = np.random.rand(size=(ndim, 7))
+      spline.knots = np.random.rand(5, ndim)
 
-   Note that we need to provide 7 control points instead of 5.
-   This is because the splines are padded at the end.
-
-3. Approximating some data with a least squared fit:
+2. **Directly provide the control points**:
 
    .. code-block:: python
 
-      spline.fit(np.random.rand(size=(ndim, 100))
+      spline.control_points = np.random.rand(7, ndim)
 
-   You can learn more about how ``fit`` works in the theory section on :ref:`Data approximation` theory section or by checking the API :meth:`splinebox.spline_curves.Spline.fit`.
+   Note that 7 control points are needed instead of 5 because splines are padded at the end.
 
-Fitting a spline to pixel values
---------------------------------
+3. **Approximate data with a least squares fit**:
 
-Padding
--------
-Open splines have to be padded at the ends if the support of the basis function is larger than two.
-This can be easily understood by looking at eq1.
+   .. code-block:: python
 
-If they are not padded at the ends if the
+      spline.fit(np.random.rand(100, ndim))
 
-Controlling boundary conditions
--------------------------------
+   Learn more about how ``fit`` works in the theory section on :ref:`Data approximation` or by checking the API :meth:`splinebox.spline_curves.Spline.fit`.
+
+Evaluating/Sampling a Spline
+----------------------------
+
+Knots are conventionally placed at integer values of the parameter `t` starting from zero.
+To sample an open spline with `M` knots:
+
+.. code-block:: python
+
+    t = np.linspace(0, M-1, 100)
+    vals = spline.eval(t)
+
+For a closed spline, continue past the last knot to sample all the way around:
+
+.. code-block:: python
+
+    t = np.linspace(0, M, 100)
+    vals = spline.eval(t)

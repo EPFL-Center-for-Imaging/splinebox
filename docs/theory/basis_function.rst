@@ -51,7 +51,7 @@ The basis function :math:`\phi` has the following important properties.
   The knots also correspond to the junction points of the different intervals of the spline.
 
   Knots and control points are related through the so-called *inverse filter* of :math:`\phi`.
-  Details can be found in [Unser1999]_, but for the purpose of using the \texttt{splinebox} library it is sufficient to understand that control points and knots are related, and that each of these sequences can be transformed into one another.
+  Details can be found in [Unser1999]_, but for the purpose of using splinebox it is sufficient to understand that control points and knots are related, and that each of these sequences can be transformed into one another.
 
 * **Degree and regularity.** The degree and regularity of :math:`\phi` dictates respectively the degree of the intervals and the regularity at the knots in the resulting spline.
   For instance, if :math:`\phi` is a cubic polynomial, then :math:`r` will be piecewise cubic and twice differentiable at the knots.
