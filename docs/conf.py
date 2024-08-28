@@ -35,7 +35,7 @@ extensions = [
     "sphinx.ext.autosectionlabel",
     "matplotlib.sphinxext.plot_directive",
     "sphinx_gallery.gen_gallery",
-    "sphinx-design",
+    "sphinx_design",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
