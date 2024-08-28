@@ -1,6 +1,9 @@
 :html_theme.sidebar_secondary.remove:
 :sd_hide_title: true
 
+SplineBox
+=========
+
 .. raw:: html
 
    <style>
@@ -12,7 +15,6 @@
        margin: 0.5em 0 0.5em;
      }
    </style>
-
 .. toctree::
    :maxdepth: 1
    :hidden:

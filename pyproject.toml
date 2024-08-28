@@ -106,6 +106,7 @@ docs = [
     "splinebox[examples]",
     "sphinx-gallery",
     "pydata-sphinx-theme",
+    "sphinx-design",
 ]
 all = [
     "splinebox[test,examples,docs]",
