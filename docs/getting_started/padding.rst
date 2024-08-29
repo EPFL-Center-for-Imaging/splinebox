@@ -27,7 +27,7 @@ By padding with two additional points on the circle, this behavior is corrected.
 When you directly set control points for a spline, you must handle the padding yourself.
 This design choice allows full control over the spline's behavior at the ends.
 
-.. code-block::
+.. code-block:: python
 
    spline = splinebox.Spline(M=5, basis_function=splinebox.B3(), closed=False)
    spline.control_points = np.random.rand((7, ndim))

@@ -6,6 +6,7 @@ Getting Started
    :hidden:
 
    padding.rst
+   citation.rst
 
 Installation
 ------------
