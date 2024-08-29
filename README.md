@@ -70,7 +70,7 @@ BibTeX:
 ```
 @misc{splinebox,
   author = {Aymanns, Florian and Andò, Edward and Uhlmann, Virginie},
-  title = {splinebox},
+  title = {{S}pline{B}ox},
   url = {https://pypi.org/project/splinebox/},
   doi = {10.5281/zenodo.13358354},
   note = {{V}ersion V.V.Vb1},
