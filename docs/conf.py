@@ -18,10 +18,11 @@
 # -- Project information -----------------------------------------------------
 
 import cycler
+import matplotlib as mpl
 
 project = "splinebox"
-copyright = "2024, Florian Aymanns, Virginie Uhlmann, Edward Ando"  # noqa: A001
-author = "Florian Aymanns, Virginie Uhlmann, Edward Ando"
+copyright = "2024, Florian Aymanns, Edward Ando, Virginie Uhlmann"  # noqa: A001
+author = "Florian Aymanns, Edward Ando, Virginie Uhlmann"
 
 
 # -- General configuration ---------------------------------------------------
@@ -109,11 +110,17 @@ html_context = {
 html_static_path = ["_static"]
 html_css_files = ["css/custom.css"]
 
+
+def reset_mpl(gallery_conf, fname):
+    mpl.rcParams["axes.prop_cycle"] = cycler.cycler(color=["#228b18"])
+
+
 # Example gallery configuration
 sphinx_gallery_conf = {
     "examples_dirs": "../examples",  # path to your example scripts
     "gallery_dirs": "auto_examples",  # path to where to save gallery generated output
     "matplotlib_animations": True,
+    "reset_modules": (reset_mpl,),
 }
 
 # Matplotlib sphinxext configuration
