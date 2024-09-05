@@ -2,9 +2,11 @@
 Comparison splinebox and scipy: contour approximation
 -----------------------------------------------------
 
-This example compares splinebox and scipy when trying to approximate a contour/shape
+This example compares ``splinebox`` and ``scipy`` when trying to approximate a contour/shape
 with a closed spline with a fixe number of control points.
 """
+
+# sphinx_gallery_thumbnail_number = 4
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,8 +14,10 @@ import scipy
 import skimage
 import splinebox
 
+scipy_blue = "#0053a6"
+
 # %%
-# Let's load the astronaut example image from skimage and crop out a single coins using slicing.
+# Let's load the astronaut example image from ``skimage`` and crop out a single coins using slicing.
 img = skimage.data.coins()[90:150, 240:300]
 plt.imshow(img, cmap="gray")
 plt.show()
@@ -54,8 +58,7 @@ ts = np.linspace(0, M, 100)
 splinebox_vals = spline.eval(ts)
 splinebox_control_points = spline.control_points
 
-plt.imshow(mask, cmap="gray", alpha=0.5)
-# plt.scatter(contours[0][:, 1], contours[0][:, 0], label="contour")
+plt.imshow(img, cmap="gray", alpha=0.5)
 plt.plot(splinebox_vals[:, 1], splinebox_vals[:, 0], label="splinebox")
 plt.scatter(splinebox_control_points[:, 1], splinebox_control_points[:, 0])
 plt.legend()
@@ -70,24 +73,23 @@ k = 3
 
 # %%
 # To get a spline with a specific number of control points in scipy
-# we have to precalculate the parameters values `t` for the knots and the parameter values `u`
+# we have to precalculate the parameters values ``t`` for the knots and the parameter values ``u``
 # for the data points. It is important that we account for the periodicity and padding of the knots.
 t = np.arange(-k, M + k + 1)
 u = np.linspace(0, M, N + 1)[:-1]
 
 # %%
-# When constructinc the spline using `splprep` we have to specify the oder of the basis spline,
-# the `u` and `t` we just computed, and the periodicity. Since we don't want to smooth our fit
-# but instead regularize it by fixing the number of control points we need to set `s=0` and
-# `task=-1`.
+# When constructinc the spline using ``splprep`` we have to specify the oder of the basis spline,
+# the ``u`` and ``t`` we just computed, and the periodicity. Since we don't want to smooth our fit
+# but instead regularize it by fixing the number of control points we need to set ``s=0`` and
+# ``task=-1``.
 tck, u = scipy.interpolate.splprep(contour.T, k=k, u=u, t=t, task=-1, s=0, per=N)
 ts = np.linspace(0, M, 100)
 scipy_vals = scipy.interpolate.splev(ts, tck)
 scipy_control_points = tck[1]
 
-plt.imshow(mask, cmap="gray", alpha=0.5)
-# plt.scatter(contours[0][:, 1], contours[0][:, 0], label="contour")
-plt.plot(scipy_vals[1], scipy_vals[0], label="scipy")
-plt.scatter(scipy_control_points[1], scipy_control_points[0])
+plt.imshow(img, cmap="gray", alpha=0.5)
+plt.plot(scipy_vals[1], scipy_vals[0], label="scipy", color=scipy_blue)
+plt.scatter(scipy_control_points[1], scipy_control_points[0], color=scipy_blue)
 plt.legend()
 plt.show()

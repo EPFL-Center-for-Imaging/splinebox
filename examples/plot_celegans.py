@@ -15,6 +15,8 @@ Preprocessing:
 * Image Adjustment: Rotation, contrast adjustment, and conversion to 8-bit.
 """
 
+# sphinx_gallery_thumbnail_number = 3
+
 import matplotlib.animation
 import matplotlib.pyplot as plt
 import numpy as np
@@ -33,7 +35,7 @@ def _update0(i):
     return (mpl_img,)
 
 
-fig, ax = plt.subplots()
+fig, ax = plt.subplots(figsize=(7, 3))
 mpl_img = ax.imshow(stack[0], cmap="Greys_r")
 ax.set(xlim=(0, stack.shape[2]), ylim=(0, stack.shape[1]))
 animation = matplotlib.animation.FuncAnimation(fig, _update0, len(stack), interval=100, blit=True)
@@ -54,7 +56,7 @@ def _update1(i):
     return (mpl_img, mpl_mask)
 
 
-fig, ax = plt.subplots()
+fig, ax = plt.subplots(figsize=(7, 3))
 mpl_img = ax.imshow(stack[0], cmap="Greys_r")
 mpl_mask = ax.imshow(mask[0], cmap="Reds", alpha=0.5)
 ax.set(xlim=(0, stack.shape[2]), ylim=(0, stack.shape[1]))
@@ -94,7 +96,7 @@ def _update2(i):
     return (mpl_img, mpl_line)
 
 
-fig, ax = plt.subplots()
+fig, ax = plt.subplots(figsize=(7, 3))
 mpl_img = ax.imshow(stack[0], cmap="Greys_r")
 vals = splines[0].eval(t)
 (mpl_line,) = ax.plot(vals[:, 1], vals[:, 0])
@@ -144,8 +146,8 @@ mpl_teeth = []
 ps = np.arange(0, len(comb), 10)
 for p in ps:
     mpl_teeth.extend(ax.plot([vals[p, 1], comb[p, 1]], [vals[p, 0], comb[p, 0]], color="#568b22"))
-(mpl_curvature,) = ax.plot(comb[:, 1], comb[:, 0], color="#568b22")
-(mpl_line,) = ax.plot(vals[:, 1], vals[:, 0], color="#228b22")
+(mpl_curvature,) = ax.plot(comb[:, 1], comb[:, 0])
+(mpl_line,) = ax.plot(vals[:, 1], vals[:, 0])
 ax.set(xlim=(-60, 60), ylim=(-25, 25))
 animation = matplotlib.animation.FuncAnimation(fig, _update3, len(stack), interval=100, blit=True)
 plt.show()
