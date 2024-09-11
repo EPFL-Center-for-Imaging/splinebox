@@ -107,6 +107,8 @@ docs = [
     "sphinx-gallery",
     "pydata-sphinx-theme",
     "sphinx-design",
+    "pyvista[jupyter]",
+    "skan",
 ]
 all = [
     "splinebox[test,examples,docs]",

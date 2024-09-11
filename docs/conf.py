@@ -14,11 +14,25 @@
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
 
-
-# -- Project information -----------------------------------------------------
+import os
 
 import cycler
 import matplotlib as mpl
+import pyvista
+from pyvista.plotting.utilities.sphinx_gallery import DynamicScraper
+
+# Ensure that offscreen rendering is used for docs generation
+pyvista.OFF_SCREEN = True  # Not necessary - simply an insurance policy
+# Preferred plotting style for documentation
+pyvista.set_plot_theme("document")
+
+# necessary when building the sphinx gallery
+pyvista.BUILDING_GALLERY = True
+os.environ["PYVISTA_BUILDING_GALLERY"] = "true"
+
+
+# -- Project information -----------------------------------------------------
+
 
 project = "splinebox"
 copyright = "2024, Florian Aymanns, Edward Ando, Virginie Uhlmann"  # noqa: A001
@@ -34,8 +48,10 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx.ext.autodoc",
     "sphinx.ext.autosectionlabel",
-    "matplotlib.sphinxext.plot_directive",
     "sphinx_gallery.gen_gallery",
+    # "matplotlib.sphinxext.plot_directive",
+    "pyvista.ext.plot_directive",
+    "pyvista.ext.viewer_directive",
     "sphinx_design",
 ]
 
@@ -121,6 +137,15 @@ sphinx_gallery_conf = {
     "gallery_dirs": "auto_examples",  # path to where to save gallery generated output
     "matplotlib_animations": True,
     "reset_modules": (reset_mpl,),
+    # Remove sphinx configuration comments from code blocks
+    "remove_config_comments": True,
+    # directory where function granular galleries are stored
+    # "backreferences_dir": None,
+    # Modules for which function level galleries are created.
+    "doc_module": "pyvista",
+    "image_scrapers": (DynamicScraper(), "matplotlib"),
+    "first_notebook_cell": ("%matplotlib inline\nfrom pyvista import set_plot_theme\nset_plot_theme('document')\n"),
+    "reset_modules_order": "both",
 }
 
 # Matplotlib sphinxext configuration
