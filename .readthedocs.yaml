@@ -15,6 +15,8 @@ build:
     # rust: "1.64"
     # golang: "1.19"
     #
+  commands:
+    - pip install vtk-osmesa --index-url https://gitlab.kitware.com/api/v4/projects/13/packages/pypi/simple
 
 # Specify that the extra dependcies for docs listed in the
 # pyproject.toml are installed.
@@ -24,8 +26,6 @@ python:
       path: .
       extra_requirements:
         - docs
-    - method: pip
-      path: vtk-osmesa --index-url https://gitlab.kitware.com/api/v4/projects/13/packages/pypi/simple
 
 # Build documentation in the "docs/" directory with Sphinx
 sphinx:
