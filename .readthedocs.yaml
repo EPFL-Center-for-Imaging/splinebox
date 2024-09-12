@@ -24,6 +24,8 @@ python:
       path: .
       extra_requirements:
         - docs
+    - method: pip
+      path: vtk-osmesa --index-url https://gitlab.kitware.com/api/v4/projects/13/packages/pypi/simple
 
 # Build documentation in the "docs/" directory with Sphinx
 sphinx:
