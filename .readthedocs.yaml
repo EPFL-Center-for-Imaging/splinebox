@@ -15,8 +15,6 @@ build:
     # rust: "1.64"
     # golang: "1.19"
     #
-  commands:
-    - pip install vtk-osmesa --index-url https://gitlab.kitware.com/api/v4/projects/13/packages/pypi/simple
 
 # Specify that the extra dependcies for docs listed in the
 # pyproject.toml are installed.
@@ -26,6 +24,7 @@ python:
       path: .
       extra_requirements:
         - docs
+    - requirements: docs/requirements.txt
 
 # Build documentation in the "docs/" directory with Sphinx
 sphinx:
@@ -35,10 +34,3 @@ sphinx:
 # formats:
 #    - pdf
 #    - epub
-
-# Optional but recommended, declare the Python requirements required
-# to build your documentation
-# See https://docs.readthedocs.io/en/stable/guides/reproducible-builds.html
-# python:
-#    install:
-#    - requirements: docs/requirements.txt
