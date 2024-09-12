@@ -49,8 +49,8 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.autosectionlabel",
     "sphinx_gallery.gen_gallery",
-    # "matplotlib.sphinxext.plot_directive",
-    "pyvista.ext.plot_directive",
+    "matplotlib.sphinxext.plot_directive",
+    # "pyvista.ext.plot_directive",
     "pyvista.ext.viewer_directive",
     "sphinx_design",
 ]
