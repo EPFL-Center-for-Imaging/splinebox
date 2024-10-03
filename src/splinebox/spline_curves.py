@@ -1,10 +1,13 @@
 import collections
 import copy
+import json
 import math
 
 import numba
 import numpy as np
 import scipy.integrate
+
+import splinebox.basis_functions
 
 
 def padding_function(knots, pad_length):
@@ -169,6 +172,27 @@ class Spline:
         Returns a deep copy of this spline.
         """
         return copy.deepcopy(self)
+
+    def to_json(self, path):
+        dictionary_representation = {
+            "basis_function": str(self.basis_function),
+            "closed": self.closed,
+            "control_points": self.control_points.tolist(),
+        }
+        with open(path, "w") as f:
+            json.dump(dictionary_representation, f)
+
+    @classmethod
+    def from_json(cls, path):
+        with open(path) as f:
+            data = json.load(f)
+        closed = data["closed"]
+        control_points = data["control_points"]
+        M = len(control_points)
+        basis_function = data["basis_function"]
+        if basis_function == "B1":
+            basis_function = splinebox.basis_functions.B1()
+        cls(M=M, closed=closed, basis_function=basis_function, control_points=control_points)
 
     def draw(self, x, y):
         """

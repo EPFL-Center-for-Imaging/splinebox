@@ -585,3 +585,13 @@ def test_normal():
 
         # Check that they are normal vectors
         assert np.allclose(np.linalg.norm(normals, axis=1), np.ones(len(t)))
+
+
+def test_to_json_and_from_json(initialized_spline_curve, tmpdir):
+    spline = initialized_spline_curve
+    path = tmpdir / "spline.json"
+    spline.to_json(path)
+    loaded_spline_curve = splinebox.spline_curves.Spline.from_json(path)
+    assert spline.M == loaded_spline_curve.M
+    assert spline.closed == loaded_spline_curve.closed
+    assert np.allclose(spline.control_points, loaded_spline_curve.control_points)
