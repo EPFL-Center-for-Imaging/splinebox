@@ -138,6 +138,12 @@ class B1(BasisFunction):
     def __init__(self):
         super().__init__(False, 2)
 
+    def __str__(self):
+        return "B1"
+
+    def __repr__(self):
+        return "B1()"
+
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
     def _func(t):  # pragma: no cover
@@ -194,6 +200,12 @@ class B2(BasisFunction):
 
     def __init__(self):
         super().__init__(False, 3)
+
+    def __str__(self):
+        return "B2"
+
+    def __repr__(self):
+        return "B2()"
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
@@ -254,6 +266,12 @@ class B3(BasisFunction):
 
     def __init__(self):
         super().__init__(False, 4)
+
+    def __str__(self):
+        return "B3"
+
+    def __repr__(self):
+        return "B3()"
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
@@ -387,6 +405,12 @@ class Exponential(BasisFunction):
     def __init__(self, M):
         super().__init__(False, 3)
         self.M = M
+
+    def __str__(self):
+        return "Exponential"
+
+    def __repr__(self):
+        return f"Exponential(M={self.M})"
 
     def _func(self, t):
         return self.__func(t, self.support / 2, self.M)
@@ -574,6 +598,12 @@ class CatmullRom(BasisFunction):
     def __init__(self):
         super().__init__(False, 4)
 
+    def __str__(self):
+        return "CatmullRom"
+
+    def __repr__(self):
+        return "CatmullRom()"
+
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
     def _func(t):  # pragma: no cover
@@ -640,6 +670,12 @@ class CubicHermite(BasisFunction):
 
     def __init__(self):
         super().__init__(True, 2)
+
+    def __str__(self):
+        return "CubicHermite"
+
+    def __repr__(self):
+        return "CubicHermite()"
 
     def _func(self, t):
         return np.array([self.h31(t), self.h32(t)])
@@ -831,6 +867,12 @@ class ExponentialHermite(BasisFunction):
     def __init__(self, M):
         super().__init__(True, 2)
         self.M = M
+
+    def __str__(self):
+        return "ExponentialHermite"
+
+    def __repr__(self):
+        return f"ExponentialHermite(M={self.M})"
 
     def _func(self, t):
         return np.array([self._he31(t, self.M), self._he32(t, self.M)])
