@@ -32,6 +32,19 @@ class BasisFunction:
         self.multigenerator = multigenerator
         self.support = support
 
+    def __str__(self):
+        return "BasisFunction"
+
+    def __repr__(self):
+        return f"splinebox.basis_functions.BasisFunction(multigenerator={self.multigenerator}, support={self.support})"
+
+    def __eq__(self, other):
+        return (
+            isinstance(other, type(self))
+            and other.multigenerator == self.multigenerator
+            and other.support == self.support
+        )
+
     def eval(self, t, derivative=0):
         """
         Evaluate the function at position(s) `t`.
@@ -142,7 +155,7 @@ class B1(BasisFunction):
         return "B1"
 
     def __repr__(self):
-        return "B1()"
+        return "splinebox.basis_functions.B1()"
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
@@ -205,7 +218,7 @@ class B2(BasisFunction):
         return "B2"
 
     def __repr__(self):
-        return "B2()"
+        return "splinebox.basis_functions.B2()"
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
@@ -271,7 +284,7 @@ class B3(BasisFunction):
         return "B3"
 
     def __repr__(self):
-        return "B3()"
+        return "splinebox.basis_functions.B3()"
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
@@ -410,7 +423,10 @@ class Exponential(BasisFunction):
         return "Exponential"
 
     def __repr__(self):
-        return f"Exponential(M={self.M})"
+        return f"splinebox.basis_functions.Exponential(M={self.M})"
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and other.M == self.M
 
     def _func(self, t):
         return self.__func(t, self.support / 2, self.M)
@@ -602,7 +618,7 @@ class CatmullRom(BasisFunction):
         return "CatmullRom"
 
     def __repr__(self):
-        return "CatmullRom()"
+        return "splinebox.basis_functions.CatmullRom()"
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
@@ -675,7 +691,7 @@ class CubicHermite(BasisFunction):
         return "CubicHermite"
 
     def __repr__(self):
-        return "CubicHermite()"
+        return "splinebox.basis_functions.CubicHermite()"
 
     def _func(self, t):
         return np.array([self.h31(t), self.h32(t)])
@@ -872,7 +888,10 @@ class ExponentialHermite(BasisFunction):
         return "ExponentialHermite"
 
     def __repr__(self):
-        return f"ExponentialHermite(M={self.M})"
+        return f"splinebox.basis_functions.ExponentialHermite(M={self.M})"
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and other.M == self.M
 
     def _func(self, t):
         return np.array([self._he31(t, self.M), self._he32(t, self.M)])

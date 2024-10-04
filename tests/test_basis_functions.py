@@ -132,3 +132,18 @@ def test_partition_of_unity(basis_function):
             vals = vals[:, 0]
         summed += vals
     assert np.allclose(summed, np.ones_like(summed))
+
+
+def test_repr(basis_function):
+    assert eval(repr(basis_function)) == basis_function
+    if isinstance(basis_function, splinebox.basis_functions.Exponential):
+        assert eval(repr(basis_function)) != splinebox.basis_functions.Exponential(M=basis_function.M + 1)
+    elif isinstance(basis_function, splinebox.basis_functions.ExponentialHermite):
+        assert eval(repr(basis_function)) != splinebox.basis_functions.ExponentialHermite(M=basis_function.M + 1)
+
+
+def test_repr_base_class(multigenerator, support):
+    basis_function = splinebox.basis_functions.BasisFunction(multigenerator, support)
+    assert eval(repr(basis_function)) == basis_function
+    assert eval(repr(basis_function)) != splinebox.basis_functions.BasisFunction(not multigenerator, support)
+    assert eval(repr(basis_function)) != splinebox.basis_functions.BasisFunction(multigenerator, support + 1)
