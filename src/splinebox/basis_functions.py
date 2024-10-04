@@ -36,7 +36,7 @@ class BasisFunction:
         return "BasisFunction"
 
     def __repr__(self):
-        return f"splinebox.basis_functions.BasisFunction(multigenerator={self.multigenerator}, support={self.support})"
+        return f"splinebox.basis_functions.BasisFunction(multigenerator={repr(self.multigenerator)}, support={repr(self.support)})"
 
     def __eq__(self, other):
         return (
@@ -423,7 +423,7 @@ class Exponential(BasisFunction):
         return "Exponential"
 
     def __repr__(self):
-        return f"splinebox.basis_functions.Exponential(M={self.M})"
+        return f"splinebox.basis_functions.Exponential(M={repr(self.M)})"
 
     def __eq__(self, other):
         return isinstance(other, type(self)) and other.M == self.M
@@ -888,7 +888,7 @@ class ExponentialHermite(BasisFunction):
         return "ExponentialHermite"
 
     def __repr__(self):
-        return f"splinebox.basis_functions.ExponentialHermite(M={self.M})"
+        return f"splinebox.basis_functions.ExponentialHermite(M={repr(self.M)})"
 
     def __eq__(self, other):
         return isinstance(other, type(self)) and other.M == self.M
