@@ -162,8 +162,17 @@ def test_repr_base_class(multigenerator, support):
     assert eval(repr(basis_function)) == basis_function
 
 
-def test_eq_base_blass(multigenerator, support):
+def test_eq_base_class(multigenerator, support):
     basis_function = splinebox.basis_functions.BasisFunction(multigenerator, support)
     assert basis_function == splinebox.basis_functions.BasisFunction(multigenerator, support)
     assert basis_function != splinebox.basis_functions.BasisFunction(not multigenerator, support)
     assert basis_function != splinebox.basis_functions.BasisFunction(multigenerator, support + 1)
+
+
+def test_str(basis_function):
+    assert isinstance(str(basis_function), str)
+
+
+def test_str_base_class(multigenerator, support):
+    basis_function = splinebox.basis_functions.BasisFunction(multigenerator, support)
+    assert isinstance(str(basis_function), str)

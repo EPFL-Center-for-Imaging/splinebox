@@ -633,3 +633,7 @@ def test_eq_spline(spline_curve, basis_function, closed, coeff_gen, is_hermite_s
             M=spline.M + 1, basis_function=spline.basis_function, closed=spline.closed
         )
     assert spline != other
+
+
+def test_str(initialized_spline_curve):
+    assert isinstance(str(initialized_spline_curve), str)
