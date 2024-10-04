@@ -275,3 +275,13 @@ def n_points(request):
 def points(codomain_dimensionality, n_points):
     rng = np.random.default_rng(seed=5544)
     return np.squeeze(rng.random((n_points, codomain_dimensionality)))
+
+
+@pytest.fixture(params=[False, True])
+def multigenerator(request):
+    return request.param
+
+
+@pytest.fixture(params=[2, 3, 4])
+def support(request):
+    return request.param

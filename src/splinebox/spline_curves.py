@@ -82,6 +82,25 @@ class Spline:
         if self.control_points is None:
             raise RuntimeError(self._no_control_points_msg)
 
+    def __str__(self):
+        closed_str = "closed" if self.closed else "open"
+        if self.control_points is None:
+            return f"uninitialized {closed_str} {self.basis_function} spline with {self.M} knots"
+        else:
+            nD = 1 if self.control_points.ndim == 1 else self.control_points.shape[1]
+            return f"{closed_str} {nD}D {self.basis_function} spline with {self.M} knots"
+
+    def __repr__(self):
+        return f"splinebox.spline_curves.Spline(M={repr(self.M)}, basis_function={repr(self.basis_function)}, closed={repr(self.closed)}, control_points=np.{repr(self.control_points)})"
+
+    def __eq__(self, other):
+        return (
+            self.M == other.M
+            and self.basis_function == other.basis_function
+            and self.closed == other.closed
+            and np.all(self.control_points == other.control_points)
+        )
+
     @property
     def control_points(self):
         """
@@ -735,6 +754,12 @@ class HermiteSpline(Spline):
         self._check_control_points()
         if self.tangents is None:
             raise RuntimeError(self._no_tangents_msg)
+
+    def __repr__(self):
+        return f"splinebox.spline_curves.HermiteSpline(M={repr(self.M)}, basis_function={repr(self.basis_function)}, closed={repr(self.closed)}, control_points=np.{repr(self.control_points)}, tangents=np.{repr(self.tangents)})"
+
+    def __eq__(self, other):
+        return super().__eq__(other) and np.all(self.tangents == other.tangents)
 
     @property
     def tangents(self):

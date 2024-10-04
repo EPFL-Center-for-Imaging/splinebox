@@ -585,3 +585,55 @@ def test_normal():
 
         # Check that they are normal vectors
         assert np.allclose(np.linalg.norm(normals, axis=1), np.ones(len(t)))
+
+
+def test_repr(initialized_spline_curve, is_hermite_spline):
+    spline = initialized_spline_curve
+    # The rounding is necessary because the precision is limited in the string representation
+    spline.control_points = np.round(spline.control_points, decimals=np.get_printoptions()["precision"])
+    if is_hermite_spline(spline):
+        spline.tangents = np.round(spline.tangents, decimals=np.get_printoptions()["precision"])
+    assert eval(repr(spline)) == spline
+
+
+def test_eq_spline(spline_curve, basis_function, closed, coeff_gen, is_hermite_spline):
+    spline = spline_curve
+    basis_function = basis_function
+    if is_hermite_spline(spline):
+        other = splinebox.spline_curves.HermiteSpline(
+            M=spline.M, basis_function=basis_function, closed=closed, control_points=spline.control_points
+        )
+    else:
+        other = splinebox.spline_curves.Spline(
+            M=spline.M, basis_function=basis_function, closed=closed, control_points=spline.control_points
+        )
+    if spline.basis_function != basis_function or spline.closed != closed:
+        assert spline != other
+    else:
+        assert spline == other
+
+        spline.control_points = coeff_gen(spline.M, spline.basis_function.support, spline.closed)
+        if is_hermite_spline(spline):
+            spline.tangents = coeff_gen(spline.M, spline.basis_function.support, spline.closed)
+        assert spline != other
+
+        other.control_points = spline.control_points
+        if is_hermite_spline(spline) and is_hermite_spline(other):
+            # The tangents should not be equal yet
+            assert spline != other
+            other.tangents = spline.tangents
+        assert spline == other
+
+    if is_hermite_spline(spline):
+        other = splinebox.spline_curves.HermiteSpline(
+            M=spline.M + 1, basis_function=spline.basis_function, closed=spline.closed
+        )
+    else:
+        other = splinebox.spline_curves.Spline(
+            M=spline.M + 1, basis_function=spline.basis_function, closed=spline.closed
+        )
+    assert spline != other
+
+
+def test_str(initialized_spline_curve):
+    assert isinstance(str(initialized_spline_curve), str)
