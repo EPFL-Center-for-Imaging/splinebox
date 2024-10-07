@@ -192,26 +192,23 @@ class Spline:
         """
         return copy.deepcopy(self)
 
-    def to_json(self, path):
+    def _to_dict(self):
         dictionary_representation = {
+            "M": self.M,
             "basis_function": str(self.basis_function),
             "closed": self.closed,
             "control_points": self.control_points.tolist(),
         }
+        return dictionary_representation
+
+    def to_json(self, path):
         with open(path, "w") as f:
-            json.dump(dictionary_representation, f)
+            json.dump(self._to_dict(), f, indent=2)
 
     @classmethod
     def from_json(cls, path):
-        with open(path) as f:
-            data = json.load(f)
-        closed = data["closed"]
-        control_points = data["control_points"]
-        M = len(control_points)
-        basis_function = data["basis_function"]
-        if basis_function == "B1":
-            basis_function = splinebox.basis_functions.B1()
-        cls(M=M, closed=closed, basis_function=basis_function, control_points=control_points)
+        data = _json_to_dict(path)
+        return cls(**data)
 
     def draw(self, x, y):
         """
@@ -858,3 +855,32 @@ class HermiteSpline(Spline):
 
         for k in range(len(self.tangents)):
             self.tangents[k] = np.matmul(rotation_matrix, self.tangents[k])
+
+    def _to_dict(self):
+        dictionary_representation = super()._to_dict()
+        dictionary_representation["tangents"] = self.tangents.tolist()
+        return dictionary_representation
+
+
+def _json_to_dict(path):
+    with open(path) as f:
+        data = json.load(f)
+
+    if not isinstance(data["M"], int):
+        raise ValueError("M has to be an integer.")
+
+    data["basis_function"] = splinebox.basis_functions.basis_function_from_name(data["basis_function"], M=data["M"])
+
+    data["closed"] = str(data["closed"]).lower()
+    true_strings = ["true", "1", "t", "y", "yes"]
+    false_strings = ["false", "0", "f", "n", "no"]
+    if data["closed"] not in true_strings and data["closed"] not in false_strings:
+        raise ValueError(f"closed should be a string that can be interpreted as a boolean not {data['closed']}.")
+    data["closed"] = data["closed"] in true_strings
+
+    if "control_points" in data:
+        data["control_points"] = np.array(data["control_points"])
+    if "tangents" in data:
+        data["tangents"] = np.array(data["tangents"])
+
+    return data
