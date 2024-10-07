@@ -1,3 +1,4 @@
+import json
 import math
 import unittest.mock
 
@@ -639,11 +640,38 @@ def test_str(initialized_spline_curve):
     assert isinstance(str(initialized_spline_curve), str)
 
 
-def test_to_json_and_from_json(initialized_spline_curve, tmpdir):
+def test_to_json_and_from_json(initialized_spline_curve, tmpdir, is_hermite_spline):
     spline = initialized_spline_curve
     path = tmpdir / "spline.json"
     spline.to_json(path)
-    loaded_spline_curve = splinebox.spline_curves.Spline.from_json(path)
-    assert spline.M == loaded_spline_curve.M
-    assert spline.closed == loaded_spline_curve.closed
-    assert np.allclose(spline.control_points, loaded_spline_curve.control_points)
+    if is_hermite_spline(initialized_spline_curve):
+        loaded_spline_curve = splinebox.spline_curves.HermiteSpline.from_json(path)
+    else:
+        loaded_spline_curve = splinebox.spline_curves.Spline.from_json(path)
+    assert spline == loaded_spline_curve
+
+
+def test_from_json(tmpdir):
+    # Check float M
+    data = {"M": 4.5, "basis_function": str(splinebox.basis_functions.B3()), "closed": True}
+    path = tmpdir / "spline.json"
+    with open(path, "w") as f:
+        json.dump(data, f)
+    with pytest.raises(ValueError):
+        splinebox.spline_curves.Spline.from_json(path)
+
+    # Check non existent basis function name
+    data = {"M": 4, "basis_function": "FakeBasisFunction", "closed": True}
+    path = tmpdir / "spline.json"
+    with open(path, "w") as f:
+        json.dump(data, f)
+    with pytest.raises(ValueError):
+        splinebox.spline_curves.Spline.from_json(path)
+
+    # Check wrong entry for "closed"
+    data = {"M": 4, "basis_function": str(splinebox.basis_functions.B3()), "closed": "random_string"}
+    path = tmpdir / "spline.json"
+    with open(path, "w") as f:
+        json.dump(data, f)
+    with pytest.raises(ValueError):
+        splinebox.spline_curves.Spline.from_json(path)
