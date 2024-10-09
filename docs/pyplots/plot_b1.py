@@ -6,7 +6,7 @@ fig, axes = plt.subplots(2, 1, sharex=True)
 
 b1 = splinebox.basis_functions.B1()
 
-t = np.linspace(-2, 2, 100)
+t = np.linspace(-2, 2, 1000)
 
 b1_0th = b1.eval(t)
 b1_1st = b1.eval(t, derivative=1)

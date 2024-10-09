@@ -201,11 +201,7 @@ def not_differentiable_twice(is_spline):
         basis_function = obj.basis_function if is_spline(obj) else obj
         return isinstance(
             basis_function,
-            (
-                splinebox.basis_functions.B1,
-                splinebox.basis_functions.CubicHermite,
-                splinebox.basis_functions.ExponentialHermite,
-            ),
+            (splinebox.basis_functions.B1,),
         )
 
     return _not_differentiable_twice

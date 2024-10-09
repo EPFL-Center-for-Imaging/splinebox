@@ -739,9 +739,28 @@ class CubicHermite(BasisFunction):
             val = 3 * t * t + 4 * t + 1
         return val
 
+    def _derivative_2(self, t):
+        return np.array([self.h31primeprime(t), self.h32primeprime(t)])
+
     @staticmethod
-    def _derivative_2(t):
-        raise RuntimeError("CubicHermite isn't twice differentiable.")
+    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
+    def h31primeprime(t):  # pragma: no cover
+        val = 0
+        if t >= 0 and t <= 1:
+            val = 12 * t - 6
+        elif t < 0 and t >= -1:
+            val = -12 * t - 6
+        return val
+
+    @staticmethod
+    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
+    def h32primeprime(t):  # pragma: no cover
+        val = 0
+        if t >= 0 and t <= 1:
+            val = 6 * t - 4
+        elif t < 0 and t >= -1:
+            val = 6 * t + 4
+        return val
 
     def h31_autocorrelation(self, i, j, M):  # pragma: no cover
         """
@@ -972,9 +991,40 @@ class ExponentialHermite(BasisFunction):
         val = _g2prime(t, M) if t >= 0 else _g2prime(-t, M)
         return val
 
+    def _derivative_2(self, t):
+        return np.array([self._he31primeprime(t, self.M), self._he32primeprime(t, self.M)])
+
     @staticmethod
-    def _derivative_2(x):
-        raise RuntimeError("ExponentialHermite isn't twice differentiable.")
+    @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
+    def _he31primeprime(t, M):  # pragma: no cover
+        def _g1primeprime(t, M):
+            val = 0
+            if t >= 0 and t <= 1:
+                alpha = np.pi / M
+                denom = (alpha * np.cos(alpha)) - np.sin(alpha)
+                num = 2 * alpha**2 * np.sin(alpha - (2 * alpha * t))
+                val = num / denom
+            return val
+
+        val = _g1primeprime(t, M) if t >= 0 else _g1primeprime(-t, M)
+        return val
+
+    @staticmethod
+    @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
+    def _he32primeprime(t, M):  # pragma: no cover
+        def _g2primeprime(t, M):
+            val = 0
+            if t >= 0 and t <= 1:
+                alpha = np.pi / M
+                denom = ((alpha * np.cos(alpha)) - np.sin(alpha)) * 8 * alpha * np.sin(alpha)
+                num = +(8 * alpha**2 * np.sin(alpha) * np.cos(2 * alpha * (t - 0.5))) - (
+                    8 * alpha**3 * np.cos(2 * alpha * (t - 1))
+                )
+                val = num / denom
+            return val
+
+        val = _g2primeprime(t, M) if t >= 0 else -1 * _g2primeprime(-t, M)
+        return val
 
     @staticmethod
     def filter_symmetric(s):
