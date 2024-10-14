@@ -6,7 +6,7 @@ fig, axes = plt.subplots(3, 1, sharex=True)
 
 basis = splinebox.basis_functions.CatmullRom()
 
-t = np.linspace(-3, 3, 100)
+t = np.linspace(-3, 3, 1000)
 
 basis_0th = basis.eval(t)
 basis_1st = basis.eval(t, derivative=1)

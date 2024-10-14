@@ -11,7 +11,7 @@ control_points = np.concatenate([np.zeros((1, 2)), control_points, np.zeros((1, 
 
 spline.control_points = control_points
 
-t = np.linspace(0, spline.M - 1, 100)
+t = np.linspace(0, spline.M - 1, 1000)
 vals = spline.eval(t)
 
 plt.figure(figsize=(6, 3))
