@@ -688,3 +688,25 @@ def test_from_json(tmpdir):
         json.dump(data, f)
     with pytest.raises(ValueError):
         splinebox.spline_curves.Spline.from_json(path)
+
+
+def test_saving_and_loading_of_multiple_splines(is_hermite_basis_function, tmpdir, coeff_gen, M, closed):
+    splines = []
+    for basis_function_name in splinebox.basis_functions.inventory():
+        basis_function = splinebox.basis_functions.basis_function_from_name(basis_function_name, M=M)
+        if is_hermite_basis_function(basis_function):
+            spline = splinebox.spline_curves.HermiteSpline(M=M, basis_function=basis_function, closed=closed)
+            spline.control_points = coeff_gen(spline.M, spline.basis_function.support, spline.closed)
+            spline.tangents = coeff_gen(spline.M, spline.basis_function.support, spline.closed)
+        else:
+            spline = splinebox.spline_curves.Spline(M=M, basis_function=basis_function, closed=closed)
+            spline.control_points = coeff_gen(spline.M, spline.basis_function.support, spline.closed)
+        splines.append(spline)
+
+    path = tmpdir / "splines.json"
+    splinebox.spline_curves.splines_to_json(path, splines)
+
+    loaded_splines = splinebox.spline_curves.splines_from_json(path)
+
+    for spline, loaded_spline in zip(splines, loaded_splines):
+        assert spline == loaded_spline

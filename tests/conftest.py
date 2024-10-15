@@ -27,6 +27,20 @@ def basis_function(request, M):
     return basis_function(**params)
 
 
+@pytest.fixture
+def is_hermite_basis_function():
+    def _is_hermite_basis_function(basis_function):
+        return isinstance(
+            basis_function,
+            (
+                splinebox.basis_functions.CubicHermite,
+                splinebox.basis_functions.ExponentialHermite,
+            ),
+        )
+
+    return _is_hermite_basis_function
+
+
 @pytest.fixture(
     params=[
         (splinebox.basis_functions.B1, {}),
