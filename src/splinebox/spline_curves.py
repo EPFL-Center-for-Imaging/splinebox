@@ -192,8 +192,9 @@ class Spline:
         """
         return copy.deepcopy(self)
 
-    def _to_dict(self):
+    def _to_dict(self, version):
         dictionary_representation = {
+            "version": version,
             "M": self.M,
             "basis_function": str(self.basis_function),
             "closed": self.closed,
@@ -201,9 +202,9 @@ class Spline:
         }
         return dictionary_representation
 
-    def to_json(self, path):
+    def to_json(self, path, version=1):
         with open(path, "w") as f:
-            json.dump(self._to_dict(), f, indent=2)
+            json.dump(self._to_dict(version), f, indent=2)
 
     @classmethod
     def from_json(cls, path):
@@ -856,8 +857,8 @@ class HermiteSpline(Spline):
         for k in range(len(self.tangents)):
             self.tangents[k] = np.matmul(rotation_matrix, self.tangents[k])
 
-    def _to_dict(self):
-        dictionary_representation = super()._to_dict()
+    def _to_dict(self, version):
+        dictionary_representation = super()._to_dict(version)
         dictionary_representation["tangents"] = self.tangents.tolist()
         return dictionary_representation
 
@@ -865,6 +866,9 @@ class HermiteSpline(Spline):
 def _json_to_dict(path):
     with open(path) as f:
         data = json.load(f)
+
+    if not isinstance(data["version"], int):
+        raise ValueError("version has to be an integer.")
 
     if not isinstance(data["M"], int):
         raise ValueError("M has to be an integer.")
@@ -882,5 +886,8 @@ def _json_to_dict(path):
         data["control_points"] = np.array(data["control_points"])
     if "tangents" in data:
         data["tangents"] = np.array(data["tangents"])
+
+    # The version of the json file is only required for parsing
+    del data["version"]
 
     return data

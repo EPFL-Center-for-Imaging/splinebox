@@ -653,7 +653,20 @@ def test_to_json_and_from_json(initialized_spline_curve, tmpdir, is_hermite_spli
 
 def test_from_json(tmpdir):
     # Check float M
-    data = {"M": 4.5, "basis_function": str(splinebox.basis_functions.B3()), "closed": True}
+    data = {"version": 1, "M": 4.5, "basis_function": str(splinebox.basis_functions.B3()), "closed": True}
+    path = tmpdir / "spline.json"
+    with open(path, "w") as f:
+        json.dump(data, f)
+    with pytest.raises(ValueError):
+        splinebox.spline_curves.Spline.from_json(path)
+
+    # Check wrong version
+    data = {
+        "version": "none_existent_version",
+        "M": 4.5,
+        "basis_function": str(splinebox.basis_functions.B3()),
+        "closed": True,
+    }
     path = tmpdir / "spline.json"
     with open(path, "w") as f:
         json.dump(data, f)
@@ -661,7 +674,7 @@ def test_from_json(tmpdir):
         splinebox.spline_curves.Spline.from_json(path)
 
     # Check non existent basis function name
-    data = {"M": 4, "basis_function": "FakeBasisFunction", "closed": True}
+    data = {"version": 1, "M": 4, "basis_function": "FakeBasisFunction", "closed": True}
     path = tmpdir / "spline.json"
     with open(path, "w") as f:
         json.dump(data, f)
@@ -669,7 +682,7 @@ def test_from_json(tmpdir):
         splinebox.spline_curves.Spline.from_json(path)
 
     # Check wrong entry for "closed"
-    data = {"M": 4, "basis_function": str(splinebox.basis_functions.B3()), "closed": "random_string"}
+    data = {"version": 1, "M": 4, "basis_function": str(splinebox.basis_functions.B3()), "closed": "random_string"}
     path = tmpdir / "spline.json"
     with open(path, "w") as f:
         json.dump(data, f)
