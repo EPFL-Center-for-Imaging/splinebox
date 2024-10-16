@@ -29,7 +29,7 @@ def plot_splines(spline1, spline2, t_min=None, s_min=None):
     if t_min is not None and s_min is not None:
         point1 = spline1.eval(t_min)
         point2 = spline2.eval(s_min)
-        plt.plot([point1[1], point2[1]], [point1[0], point2[0]])
+        plt.plot([point1[1], point2[1]], [point1[0], point2[0]], color="k", linestyle="--")
 
     plt.gca().set_aspect("equal", "box")
 
