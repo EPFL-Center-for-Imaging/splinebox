@@ -1,10 +1,13 @@
 import collections
 import copy
+import json
 import math
 
 import numba
 import numpy as np
 import scipy.integrate
+
+import splinebox.basis_functions
 
 
 def padding_function(knots, pad_length):
@@ -188,6 +191,58 @@ class Spline:
         Returns a deep copy of this spline.
         """
         return copy.deepcopy(self)
+
+    def _to_dict(self, version):
+        """
+        Helper function that creates a dictionary
+        representing the spline that can be saved as a json.
+        This is implemented separately from :meth:`splinebox.spline_curves.Spline.to_json`
+        to allow the :class:`splinebox.spline_curves.HermiteSpline` to inherit this
+        conversion only adding the addiontion tangents.
+
+        Paramters
+        ---------
+        version : int
+            The version of the convertion for future compatibility.
+        """
+        dictionary_representation = {
+            "version": version,
+            "M": self.M,
+            "basis_function": str(self.basis_function),
+            "closed": self.closed,
+            "control_points": self.control_points.tolist(),
+        }
+        return dictionary_representation
+
+    def to_json(self, path, version=1):
+        """
+        Saves the spline as a json file.
+
+        Parameters
+        ----------
+        path : str or pathlib.Path
+            The path where the json file should be saved.
+        version : int
+            The version of the json file. Default is latest version.
+        """
+        with open(path, "w") as f:
+            json.dump(self._to_dict(version), f, indent=2)
+
+    @classmethod
+    def from_json(cls, path):
+        """
+        Constructs a spline from a json file that was saved using
+        :meth:`splinebox.spline_curves.Spline.to_json`.
+
+        Parameters
+        ----------
+        path : str or pathlib.Path
+            Path to the json file.
+        """
+        with open(path) as f:
+            data = json.load(f)
+        data = _prepared_dict_for_constructor(data)
+        return cls(**data)
 
     def draw(self, x, y):
         """
@@ -834,3 +889,104 @@ class HermiteSpline(Spline):
 
         for k in range(len(self.tangents)):
             self.tangents[k] = np.matmul(rotation_matrix, self.tangents[k])
+
+    def _to_dict(self, version):
+        dictionary_representation = super()._to_dict(version)
+        dictionary_representation["tangents"] = self.tangents.tolist()
+        return dictionary_representation
+
+
+def _prepared_dict_for_constructor(data):
+    """
+    Helper function that processes the dictionaries loaded from
+    json files. It ensure all of the values are valid and prepares
+    a dictionary that can be passed to the constructor using `**`.
+
+    Parameters
+    ----------
+    data : dict
+        The dictionary from the json file.
+    """
+    if not isinstance(data["version"], int):
+        raise ValueError("version has to be an integer.")
+
+    if not isinstance(data["M"], int):
+        raise ValueError("M has to be an integer.")
+
+    data["basis_function"] = splinebox.basis_functions.basis_function_from_name(data["basis_function"], M=data["M"])
+
+    data["closed"] = str(data["closed"]).lower()
+    true_strings = ["true", "1", "t", "y", "yes"]
+    false_strings = ["false", "0", "f", "n", "no"]
+    if data["closed"] not in true_strings and data["closed"] not in false_strings:
+        raise ValueError(f"closed should be a string that can be interpreted as a boolean not {data['closed']}.")
+    data["closed"] = data["closed"] in true_strings
+
+    if "control_points" in data:
+        data["control_points"] = np.array(data["control_points"])
+    if "tangents" in data:
+        data["tangents"] = np.array(data["tangents"])
+
+    # The version of the json file is only required for parsing
+    del data["version"]
+
+    return data
+
+
+def splines_to_json(path, splines, version=1):
+    """
+    Saves multiple splines in a single json file.
+
+    Parameters
+    ----------
+    path : str or pathlib.Path
+        The path where the json should be saved.
+    splines : iterable
+        For instance a list of :class:`splinebox.spline_curves.Spline`
+        and :class:`splinebox.spline_curves.HermiteSpline` objects.
+    version : int
+        The version used to produce the json file.
+    """
+    dicts = []
+
+    for spline in splines:
+        dicts.append(spline._to_dict(version))
+
+    with open(path, "w") as f:
+        json.dump(dicts, f, indent=2)
+
+
+def splines_from_json(path):
+    """
+    Loades multiple splines from a json file generated using
+    :func:`splinebox.spline_curves.splines_to_json`.
+
+    Parameters
+    ----------
+    path : str or pathlib.Path
+        Path to the json file.
+
+    Returns
+    -------
+    splines : list
+        A list of :class:`splinebox.spline_curves.Spline` and
+        :class:`splinebox.spline_curves.HermiteSpline` objects.
+    """
+    splines = []
+    with open(path) as f:
+        data = json.load(f)
+
+    if isinstance(data, dict):
+        # this is a json file of a single spline
+        data = [data]
+
+    for spline_data in data:
+        spline_data = _prepared_dict_for_constructor(spline_data)
+
+        if spline_data["basis_function"].multigenerator:
+            # This is a basis function for a Hermite spline
+            splines.append(HermiteSpline(**spline_data))
+        else:
+            splines.append(Spline(**spline_data))
+
+    return splines

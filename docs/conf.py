@@ -135,6 +135,7 @@ def reset_mpl(gallery_conf, fname):
 sphinx_gallery_conf = {
     "examples_dirs": "../examples",  # path to your example scripts
     "gallery_dirs": "auto_examples",  # path to where to save gallery generated output
+    "default_thumb_file": "./_static/favicon.png",
     "matplotlib_animations": True,
     "reset_modules": (reset_mpl,),
     # Remove sphinx configuration comments from code blocks

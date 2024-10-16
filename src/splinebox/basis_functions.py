@@ -2,7 +2,9 @@
 This module provides spline basis functions.
 """
 
+import inspect
 import math
+import sys
 import warnings
 
 import numba
@@ -1075,3 +1077,55 @@ def _multinomial(
             )
 
     return
+
+
+def inventory():
+    """
+    This function returns a dictionary with all
+    implemented basis function.
+    The keys are the names of the basis function and the
+    values are the classes.
+    """
+    _inventory = inspect.getmembers(sys.modules[__name__])
+    # Filter out everything that is not a class
+    _inventory = list(filter(lambda pair: inspect.isclass(pair[1]), _inventory))
+    # Remove the base class from the inventory
+    _inventory = dict(filter(lambda pair: pair[0] != "BasisFunction", _inventory))
+    return _inventory
+
+
+def basis_function_from_name(name, **kwargs):
+    """
+    Returns a basis function object based on the name of the basis function.
+
+    Parameters
+    ----------
+    name : str
+        The name of the basis function, e.g. 'B1', 'ExponentialHermite', ...
+    kwargs
+        Additional keyword arguments that might be required to create some basis functions,
+        such as M (i.e. the number of knots/control points) for Exponential basis functions.
+
+    Returns
+    -------
+    basis_function : Object of one of the subcases of :class:`splinebox.basis_functions.BasisFunction`.
+        The basis function object required for the construction of a spline.
+    """
+    basis_function_inventory = inventory()
+    if name not in basis_function_inventory:
+        raise ValueError(
+            f"Unknown basis function '{name}'. Available basis functions are {list(basis_function_inventory.keys())}."
+        )
+    basis_function_class = basis_function_inventory[name]
+    signature = inspect.signature(basis_function_class)
+    basis_functions_kwargs = {}
+    for param in signature.parameters.values():
+        if param.name in kwargs:
+            basis_functions_kwargs[param.name] = kwargs[param.name]
+        elif param.default is not param.empty:
+            basis_functions_kwargs[param.name] = param.default
+        else:
+            raise RuntimeError(
+                f"{name} requires a keyword argument {param.name}, please specify it when calling `basis_function_from_name`"
+            )
+    return basis_function_class(**basis_functions_kwargs)
