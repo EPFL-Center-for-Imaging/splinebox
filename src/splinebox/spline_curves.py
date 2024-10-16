@@ -208,7 +208,9 @@ class Spline:
 
     @classmethod
     def from_json(cls, path):
-        data = _json_to_dict(path)
+        with open(path) as f:
+            data = json.load(f)
+        data = _prepared_dict_for_constructor(data)
         return cls(**data)
 
     def draw(self, x, y):
@@ -863,10 +865,7 @@ class HermiteSpline(Spline):
         return dictionary_representation
 
 
-def _json_to_dict(path):
-    with open(path) as f:
-        data = json.load(f)
-
+def _prepared_dict_for_constructor(data):
     if not isinstance(data["version"], int):
         raise ValueError("version has to be an integer.")
 
@@ -891,3 +890,34 @@ def _json_to_dict(path):
     del data["version"]
 
     return data
+
+
+def splines_to_json(path, splines, version=1):
+    dicts = []
+
+    for spline in splines:
+        dicts.append(spline._to_dict(version))
+
+    with open(path, "w") as f:
+        json.dump(dicts, f, indent=2)
+
+
+def splines_from_json(path):
+    splines = []
+    with open(path) as f:
+        data = json.load(f)
+
+    if isinstance(data, dict):
+        # this is a json file of a single spline
+        data = [data]
+
+    for spline_data in data:
+        spline_data = _prepared_dict_for_constructor(spline_data)
+
+        if spline_data["basis_function"].multigenerator:
+            # This is a basis function for a Hermite spline
+            splines.append(HermiteSpline(**spline_data))
+        else:
+            splines.append(Spline(**spline_data))
+
+    return splines
