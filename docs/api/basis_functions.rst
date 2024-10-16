@@ -16,6 +16,10 @@ Currently the following basis functions are implemented: :ref:`B1`, :ref:`B2`, :
    :undoc-members:
    :exclude-members: refinement_mask
 
+.. autofunction:: splinebox.basis_functions.inventory
+
+.. autofunction:: splinebox.basis_functions.basis_function_from_name
+
 
 .. toctree::
    :maxdepth: 1
