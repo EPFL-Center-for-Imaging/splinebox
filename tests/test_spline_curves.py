@@ -710,3 +710,26 @@ def test_saving_and_loading_of_multiple_splines(is_hermite_basis_function, tmpdi
 
     for spline, loaded_spline in zip(splines, loaded_splines):
         assert spline == loaded_spline
+
+
+def test_distance(initialized_spline_curve):
+    spline = initialized_spline_curve
+
+    if spline.control_points.ndim == 1:
+        with pytest.raises(RuntimeError):
+            spline.distance(np.array((1.0,)))
+        return
+
+    point = np.array([1] * spline.control_points.shape[1])
+    distance = spline.distance(point)
+
+    # Check that a set of equality spaced points on the spline are at as far away as the distance
+    t = np.linspace(0, spline.M if spline.closed else spline.M - 1, spline.M * 10)
+    points_on_spline = spline.eval(t)
+    distances = np.linalg.norm(points_on_spline - point[np.newaxis], axis=-1)
+    assert np.all(distances >= distance)
+
+    # Check that the returned t corresponds to the correct distance
+    distance, t = spline.distance(point, return_t=True)
+    point_on_spline = spline.eval(t)
+    assert np.isclose(distance, np.linalg.norm(point - point_on_spline))
