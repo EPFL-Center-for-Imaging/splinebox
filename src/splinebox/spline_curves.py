@@ -770,6 +770,50 @@ class Spline:
         if centred:
             self.translate(centroid)
 
+    def distance(self, point, return_t=False):
+        """
+        Computes the distance of point from the spline.
+
+        Parameters
+        ----------
+        point : numpy.array
+            Array with the coordinates of the point.
+        return_t : bool
+            Whether to return the paramter t of the spline.
+            `spline.eval(t)` gives the location on the spline
+            closest to the point.
+
+        Returns
+        -------
+        distance : float
+            The distance between the point and the spline.
+        t : float
+            Only returned if `return_t=True`. This is the parameter
+            corresponding to the location on the spline closest
+            to the point.
+        """
+        self._check_control_points()
+        if self.control_points.ndim == 1:
+            raise RuntimeError("Cannot compute distance for 1D splines.")
+
+        max_t = self.M if self.closed else self.M - 1
+        t = np.linspace(0, max_t, self.M * 10)
+        points_on_spline = self.eval(t)
+        distances = np.linalg.norm(points_on_spline - point[np.newaxis], axis=-1)
+        t_initial = t[np.argmin(distances)]
+
+        def _distance(t):
+            return np.linalg.norm(self.eval(t) - point)
+
+        result = scipy.optimize.minimize(_distance, np.array((t_initial,)), bounds=((0, max_t),))
+
+        min_distance = np.linalg.norm(self.eval(result.x) - point)
+
+        if return_t:
+            return (min_distance, result.x)
+
+        return min_distance
+
 
 class HermiteSpline(Spline):
     """
