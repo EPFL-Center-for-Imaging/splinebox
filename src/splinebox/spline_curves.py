@@ -906,6 +906,81 @@ class Spline:
 
         return min_distance
 
+    def mesh(self, radius=None, resolution=0.1, mesh_type="surface", angular_resolution=10, cap_ends=False):
+        t = np.arange(0, self.M if self.closed else self.M - 1 + resolution, resolution)
+        if radius is None:
+            vertices = self.eval(t)
+            connections = np.stack((np.arange(len(vertices)), np.arange(len(vertices)) + 1), axis=-1)
+            if self.closed:
+                # Connect end to the beginning
+                connections[-1, -1] = 0
+            else:
+                connections = connections[:-1]
+        else:
+            _radius = (lambda t, phi: np.full((len(t),), radius)) if not callable(radius) else radius
+
+            if mesh_type == "surface":
+                phi = np.arange(0, 360, angular_resolution)
+                phiphi, tt = np.meshgrid(phi, t)
+                tt = tt.flatten()
+                phiphi = phiphi.flatten()
+                centers = self.eval(tt.flatten())
+                rr = _radius(tt, phiphi)
+                # This should be changed once the no twist framework is implemented
+                deriv = self.eval(t, derivative=1)
+                normal1 = np.zeros((len(t), 3))
+                normal1[:, 1] = deriv[:, 2]
+                normal1[:, 2] = -deriv[:, 1]
+                normal2 = np.zeros((len(t), 3))
+                normal2 = np.cross(deriv, normal1)
+                normal1 /= np.linalg.norm(normal1, axis=1)[:, np.newaxis]
+                normal2 /= np.linalg.norm(normal2, axis=1)[:, np.newaxis]
+
+                n_angles = len(phi)
+                n_t = len(t)
+                normals = (
+                    np.repeat(normal1, n_angles, axis=0) * np.sin(np.deg2rad(phiphi))[:, np.newaxis]
+                    + np.repeat(normal2, n_angles, axis=0) * np.cos(np.deg2rad(phiphi))[:, np.newaxis]
+                )
+
+                vertices = centers + rr[:, np.newaxis] * normals
+                if self.closed:
+                    connections = np.zeros((2 * n_angles * n_t, 3), dtype=int)
+                else:
+                    connections = np.zeros((2 * n_angles * (n_t - 1), 3), dtype=int)
+                face = 0
+                n_vertices = len(vertices)
+                for i in range(n_t if self.closed else n_t - 1):
+                    for j in range(n_angles):
+                        connections[face] = [
+                            i * n_angles + j,
+                            ((i + 1) * n_angles + j) % n_vertices,
+                            ((i + 1) * n_angles + (j + 1) % n_angles) % n_vertices,
+                        ]
+                        face += 1
+                        connections[face] = [
+                            i * n_angles + j,
+                            ((i + 1) * n_angles + (j + 1) % n_angles) % n_vertices,
+                            (i * n_angles + (j + 1) % n_angles) % n_vertices,
+                        ]
+                        face += 1
+                if cap_ends and not self.closed:
+                    vertices = np.concatenate(
+                        (centers[0].reshape((1, -1)), vertices, centers[-1].reshape((1, -1))), axis=0
+                    )
+                    start_connections = np.zeros((n_angles, 3), dtype=int)
+                    start_connections[:, 1] = np.arange(1, n_angles + 1)
+                    start_connections[:, 2] = np.roll(start_connections[:, 1], -1)
+                    end_connections = np.zeros((n_angles, 3), dtype=int)
+                    end_connections[:, 0] = n_vertices
+                    end_connections[:, 1] = np.arange(n_vertices - 1, n_vertices - 1 - n_angles, -1)
+                    end_connections[:, 2] = np.roll(end_connections[:, 1], -1)
+                    connections = np.concatenate((start_connections, connections + 1, end_connections))
+            elif mesh_type == "volume":
+                pass
+
+        return vertices, connections
+
 
 class HermiteSpline(Spline):
     """
