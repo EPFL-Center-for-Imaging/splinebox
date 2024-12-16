@@ -566,7 +566,7 @@ def test_curvature():
     assert np.allclose(result, expected)
 
 
-def test_normal():
+def test_normal_2D():
     # Create a circular spline
     M = 4
     spline = splinebox.spline_curves.Spline(M=M, basis_function=splinebox.basis_functions.Exponential(M), closed=True)
@@ -586,6 +586,29 @@ def test_normal():
 
         # Check that they are normal vectors
         assert np.allclose(np.linalg.norm(normals, axis=1), np.ones(len(t)))
+
+
+def test_normal_3D():
+    M = 4
+    spline = splinebox.spline_curves.Spline(M=M, basis_function=splinebox.basis_functions.B3(), closed=False)
+    t = np.linspace(0, M - 1, 100)
+
+    # This is a straight line
+    spline.control_points = np.stack([np.arange(M + 2), np.arange(M + 2), np.ones(M + 2)]).T
+    normals = spline.normal(t, frame="bishop", initial_vector=np.array([0.0, 0.0, 1.0]))
+    # check that the normals don't change
+    assert np.isclose(np.sum(np.diff(normals, axis=0)), 0)
+
+    spline.knots = np.array([[1, 0, 0], [0, 1, 1], [-1, 0, 2], [0, -1, 3]])
+    t = t[1:-1]
+    normals = spline.normal(t, frame="frenet")
+    tangents = spline.eval(t, derivative=1)
+    # Check that both normals are orthogonal t the tangents (dot product)
+    dot = np.sum(normals * tangents[:, np.newaxis], axis=-1)
+    assert np.allclose(dot, 0)
+    # Check that the normals are orthogonal to each other
+    dot = np.sum(normals[:, 0] * normals[:, 1])
+    assert np.isclose(dot, 0)
 
 
 def test_repr(initialized_spline_curve, is_hermite_spline):
@@ -733,3 +756,75 @@ def test_distance(initialized_spline_curve):
     distance, t = spline.distance(point, return_t=True)
     point_on_spline = spline.eval(t)
     assert np.isclose(distance, np.linalg.norm(point - point_on_spline))
+
+
+def test_moving_frame(initialized_spline_curve, not_differentiable_twice):
+    spline = initialized_spline_curve
+    t = np.linspace(0, spline.M if spline.closed else spline.M - 1, spline.M * 10)
+
+    if isinstance(spline.basis_function, splinebox.basis_functions.B1):
+        # The derivative of B1 splines at the knots is not defined so we
+        # remove all of the integers from t
+        t = t[(t % 1) != 0]
+
+    if spline.control_points.ndim != 2 or spline.control_points.shape[1] != 3:
+        with pytest.raises(RuntimeError):
+            frame = spline.moving_frame(t)
+    else:
+        if not_differentiable_twice(spline):
+            with pytest.raises(RuntimeError):
+                frame = spline.moving_frame(t, kind="frenet")
+        else:
+            frame = spline.moving_frame(t, kind="frenet")
+
+            # Check that they are unit vectors
+            assert np.allclose(np.linalg.norm(frame, axis=-1), 1)
+
+            # Check if the frame forms an orthogonal basis using the dot product
+            assert np.allclose(np.sum(frame[:, 0] * frame[:, 1], axis=-1), 0)
+            assert np.allclose(np.sum(frame[:, 0] * frame[:, 2], axis=-1), 0)
+            assert np.allclose(np.sum(frame[:, 1] * frame[:, 2], axis=-1), 0)
+
+            # Check that T is parallel to the first derivative
+            assert np.allclose(np.cross(frame[:, 0], spline.eval(t, derivative=1)), 0)
+
+            # N = dT/ds and T = dr/ds so N should be parallel to d^2r/ds^2 - proj_T(d^2/ds^2)
+            # Removing the projection on T is equivalent to removing the part of the
+            # derivative that changes the length of the first derivative.
+            # This part should not be present in N since it is the derivative of the
+            # unit vector T, which has constant length.
+            deriv2 = spline.eval(t, derivative=2)
+            # use Gram Schmidt to remove the scaling component
+            deriv2 -= np.sum(deriv2 * frame[:, 0], axis=-1)[:, np.newaxis] * frame[:, 0]
+            assert np.allclose(np.cross(frame[:, 1], deriv2), 0)
+
+        with pytest.raises(ValueError):
+            # Missing initial_vector
+            frame = spline.moving_frame(t, kind="bishop")
+
+        with pytest.raises(ValueError):
+            # Non-orthogonal initial vector
+            frame = spline.moving_frame(t, kind="bishop", initial_vector=np.ones(3))
+
+        initial_vector = np.zeros(3)
+        tangent = spline.eval(t[0], derivative=1)
+        initial_vector[1] = -tangent[2]
+        initial_vector[2] = tangent[1]
+        frame = spline.moving_frame(t, kind="bishop", initial_vector=initial_vector)
+
+        # Check that they are unit vectors
+        assert np.allclose(np.linalg.norm(frame, axis=-1), 1)
+
+        # Check if the frame forms an orthogonal basis using the dot product
+        assert np.allclose(np.sum(frame[:, 0] * frame[:, 1], axis=-1), 0)
+        assert np.allclose(np.sum(frame[:, 0] * frame[:, 2], axis=-1), 0)
+        assert np.allclose(np.sum(frame[:, 1] * frame[:, 2], axis=-1), 0)
+
+        # Check that T is parallel to the first derivative
+        assert np.allclose(np.cross(frame[:, 0], spline.eval(t, derivative=1)), 0)
+
+        # Torsion tau = dN/ds * B(s) (dot product) should be zero in the Bishop frame
+        # dnds = np.gradient(frame[:, 1], axis=0)
+        # tau = np.sum(dnds * frame[:, 2], axis=-1)
+        # print(tau)
+        # assert np.allclose(tau, 0)
