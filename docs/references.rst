@@ -14,3 +14,5 @@ References
 .. [Badoual2016] A\. Badoual, D. Schmitter, M. Unser, "Local Refinement for 3D Deformable Parametric Surfaces," Proceedings of the 2016 IEEE International Conference on Image Processing (ICIP'16). IEEE, 2016, pp. 1086-1090
 
 .. [Jacob2004] M\. Jacob, T. Blu, M. Unser, "Efficient Energies and Algorithms for Parametric Snakes," IEEE Transactions on Image Processing, vol. 13, no. 9, pp 1231-1244, 2004.
+
+.. [Bishop1975] R\. Bishop, "There is More than One Way to Frame a Curve," The American Mathematical Monthly, Vol. 82, No. 3, pp 246-251, 1975.
