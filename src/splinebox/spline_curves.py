@@ -609,7 +609,7 @@ class Spline:
         k = nominator / norm_first_deriv**3
         return np.squeeze(k)
 
-    def normal(self, t):
+    def normal(self, t, frame="bishop", initial_vector=None):
         """
         Returns the normal vector for 1D and 2D splines.
         The normal vector points to the right of the spline
@@ -620,6 +620,11 @@ class Spline:
         t : float or numpy array
             The parameter value(s) for which the normal
             vector(s) are computed.
+        frame : "bishop" | "frenet"
+            The type of frame used for 3D curves.
+        initial_vector : numpy array
+            Fixes the initial orientation of the normals at
+            position t[0].
 
         Returns
         -------
@@ -629,16 +634,103 @@ class Spline:
         self._check_control_points()
         if self.control_points.ndim != 2:
             raise NotImplementedError(
-                "The normal vector is only implemented for curves in 2D. Your spline's codomain is 1 dimensional."
+                "The normal vector is only implemented for curves in 2D and 3D. Your spline's codomain is 1 dimensional."
             )
-        if self.control_points.shape[1] != 2:
+        if self.control_points.shape[1] == 2:
+            first_deriv = self.eval(t, derivative=1)
+            normals = (np.array([[0, -1], [1, 0]]) @ first_deriv.T).T
+            normals /= np.linalg.norm(normals, axis=1)[:, np.newaxis]
+        elif self.control_points.shape[1] == 3:
+            frame = self.moving_frame(t, kind=frame, initial_vector=initial_vector)
+            normals = frame[:, 1:]
+        else:
             raise RuntimeError(
-                f"The normal vector is only defined for curves in 2D. Your spline's codomain is {self.control_points.shape[1]} dimensional."
+                f"The normal vector is only defined for curves in 2D and 3D. Your spline's codomain is {self.control_points.shape[1]} dimensional."
             )
-        first_deriv = self.eval(t, derivative=1)
-        normals = (np.array([[0, -1], [1, 0]]) @ first_deriv.T).T
-        normals /= np.linalg.norm(normals, axis=1)[:, np.newaxis]
         return normals
+
+    def moving_frame(self, t, kind="frenet", initial_vector=None):
+        """
+        This function defines two of the `moving frames` on the spline curve,
+        the Frenet-Serre frame and the Bishop frame. It returns an orthonormal
+        basis for each t. The Bishop frame [Bishop1975]_ is constructed such that
+        it does not twist around the curve, i.e. it has zero torsion.
+
+        Parameters
+        ----------
+        t : np.array
+            The parameters values of the spline for which the frame should be
+            evaluated.
+        kind : string
+            The type of frame. Can be "frenet" or "bishop".
+        initial_vector : np.array or None
+            The initial vector for the Bishop frame. It has to be orthogonal
+            to the tangent at :code:`t[0]` and defines the orientation of the basis
+            at :code:`t[0]`. This orientation is then propagated along the spline
+            since the Bishop frame does not allow the basis to twist around
+            the curve.
+
+        Returns
+        -------
+        frame : np.array
+            A numpy array with 3 dimensions. The first dimension corresponds
+            to t, the second to the 3 basis vectors and the last one are the
+            components of each basis vector.
+
+        .. _moving frames: https://en.wikipedia.org/wiki/Moving_frame
+        """
+        self._check_control_points()
+        if self.control_points.ndim != 2 or self.control_points.shape[1] != 3:
+            raise RuntimeError("A frame can only be computed for splines in 3D.")
+        first_derivative = self.eval(t, derivative=1)
+
+        frame = np.zeros((len(t), 3, 3))
+        frame[:, 0] = first_derivative / np.linalg.norm(first_derivative, axis=-1)[:, np.newaxis]
+
+        if kind == "frenet":
+            second_derivative = self.eval(t, derivative=2)
+            frame[:, 2] = np.cross(first_derivative, second_derivative)
+            norm_binormal = np.linalg.norm(frame[:, 2], axis=-1)[:, np.newaxis]
+            if np.any(np.isclose(norm_binormal, 0)):
+                if np.isclose(norm_binormal[0], 0) or np.isclose(norm_binormal[-1], 0):
+                    raise RuntimeError(
+                        "The Frenet frame cannot be computed at one or both ends of the spline. This is often due to edge padding of the knots. Try to skip t=0 and t=M-1 or change the padding."
+                    )
+                raise RuntimeError(
+                    "The Frenet frame is not defined for splines with inflection points or straight segments, try the Bishop frame instead."
+                )
+            frame[:, 2] /= norm_binormal
+            frame[:, 1] = np.cross(frame[:, 2], frame[:, 0])
+        elif kind == "bishop":
+            if initial_vector is None:
+                raise ValueError("The bishop frame requires the keyword argument initial_vector.")
+            initial_vector /= np.linalg.norm(initial_vector)
+            if not np.isclose(np.dot(frame[0, 0], initial_vector), 0):
+                raise ValueError("The initial vector has to be orthogonal to the tangent at t[0].")
+            frame[0, 1] = initial_vector
+            frame[0, 2] = np.cross(frame[0, 0], initial_vector)
+            for i in range(1, len(t)):
+                n = np.cross(frame[i - 1, 0], frame[i, 0])
+                norm_n = np.linalg.norm(n)
+                if np.isclose(norm_n, 0):
+                    frame[i, 1] = frame[i - 1, 1]
+                    frame[i, 2] = frame[i - 1, 2]
+                else:
+                    n /= norm_n
+                    phi = np.arccos(np.dot(frame[i - 1, 0], frame[i, 0]))
+                    frame[i, 1] = (
+                        frame[i - 1, 1] * np.cos(phi)
+                        + np.cross(n, frame[i - 1, 1]) * np.sin(phi)
+                        + n * np.dot(n, frame[i - 1, 1]) * (1 - np.cos(phi))
+                    )
+                    frame[i, 2] = (
+                        frame[i - 1, 2] * np.cos(phi)
+                        + np.cross(n, frame[i - 1, 2]) * np.sin(phi)
+                        + n * np.dot(n, frame[i - 1, 2]) * (1 - np.cos(phi))
+                    )
+        else:
+            raise ValueError(f"Unkown kind of frame {kind}.")
+        return frame
 
     def eval(self, t, derivative=0):
         """
