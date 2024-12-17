@@ -917,7 +917,7 @@ class Spline:
         initial_vector=None,
     ):
         t = np.arange(0, self.M if self.closed else self.M - 1 + resolution, resolution)
-        if radius is None:
+        if radius is None or radius == 0:
             vertices = self.eval(t)
             connections = np.stack((np.arange(len(vertices)), np.arange(len(vertices)) + 1), axis=-1)
             if self.closed:
