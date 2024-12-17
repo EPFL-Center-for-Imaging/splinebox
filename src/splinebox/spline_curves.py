@@ -906,7 +906,16 @@ class Spline:
 
         return min_distance
 
-    def mesh(self, radius=None, resolution=0.1, mesh_type="surface", angular_resolution=10, cap_ends=False):
+    def mesh(
+        self,
+        radius=None,
+        resolution=0.1,
+        mesh_type="surface",
+        angular_resolution=10,
+        cap_ends=False,
+        frame="bishop",
+        initial_vector=None,
+    ):
         t = np.arange(0, self.M if self.closed else self.M - 1 + resolution, resolution)
         if radius is None:
             vertices = self.eval(t)
@@ -919,28 +928,21 @@ class Spline:
         else:
             _radius = (lambda t, phi: np.full((len(t),), radius)) if not callable(radius) else radius
 
+            phi = np.arange(0, 360, angular_resolution)
+
             if mesh_type == "surface":
-                phi = np.arange(0, 360, angular_resolution)
                 phiphi, tt = np.meshgrid(phi, t)
                 tt = tt.flatten()
                 phiphi = phiphi.flatten()
                 centers = self.eval(tt.flatten())
                 rr = _radius(tt, phiphi)
-                # This should be changed once the no twist framework is implemented
-                deriv = self.eval(t, derivative=1)
-                normal1 = np.zeros((len(t), 3))
-                normal1[:, 1] = deriv[:, 2]
-                normal1[:, 2] = -deriv[:, 1]
-                normal2 = np.zeros((len(t), 3))
-                normal2 = np.cross(deriv, normal1)
-                normal1 /= np.linalg.norm(normal1, axis=1)[:, np.newaxis]
-                normal2 /= np.linalg.norm(normal2, axis=1)[:, np.newaxis]
+                normals = self.normal(t, frame=frame, initial_vector=initial_vector)
 
                 n_angles = len(phi)
                 n_t = len(t)
                 normals = (
-                    np.repeat(normal1, n_angles, axis=0) * np.sin(np.deg2rad(phiphi))[:, np.newaxis]
-                    + np.repeat(normal2, n_angles, axis=0) * np.cos(np.deg2rad(phiphi))[:, np.newaxis]
+                    np.repeat(normals[:, 0], n_angles, axis=0) * np.sin(np.deg2rad(phiphi))[:, np.newaxis]
+                    + np.repeat(normals[:, 1], n_angles, axis=0) * np.cos(np.deg2rad(phiphi))[:, np.newaxis]
                 )
 
                 vertices = centers + rr[:, np.newaxis] * normals
@@ -977,7 +979,49 @@ class Spline:
                     end_connections[:, 2] = np.roll(end_connections[:, 1], -1)
                     connections = np.concatenate((start_connections, connections + 1, end_connections))
             elif mesh_type == "volume":
-                pass
+                phiphi, tt = np.meshgrid(phi, t)
+                rr = _radius(tt, phiphi)
+                # Add columns for the center points
+                rr = np.hstack((np.zeros((rr.shape[0], 1)), rr))
+                tt = np.hstack((tt[:, 0][:, np.newaxis], tt))
+                phiphi = np.hstack((phiphi[:, 0][:, np.newaxis], phiphi))
+
+                tt = tt.flatten()
+                phiphi = phiphi.flatten()
+                rr = rr.flatten()
+
+                centers = self.eval(tt.flatten())
+                normals = self.normal(t, frame=frame, initial_vector=initial_vector)
+
+                n_angles = len(phi)
+                n_t = len(t)
+                normals = (
+                    np.repeat(normals[:, 0], n_angles + 1, axis=0) * np.sin(np.deg2rad(phiphi))[:, np.newaxis]
+                    + np.repeat(normals[:, 1], n_angles + 1, axis=0) * np.cos(np.deg2rad(phiphi))[:, np.newaxis]
+                )
+                vertices = centers + rr[:, np.newaxis] * normals
+                if self.closed:
+                    connections = np.zeros((2 * n_angles * n_t, 4), dtype=int)
+                else:
+                    connections = np.zeros((2 * n_angles * (n_t - 1), 4), dtype=int)
+                vol = 0
+                n_vertices = len(vertices)
+                for i in range(n_t if self.closed else n_t - 1):
+                    for j in range(1, n_angles + 1):
+                        connections[vol] = [
+                            i * (n_angles + 1) + j,
+                            ((i + 1) * (n_angles + 1) + j) % n_vertices,
+                            ((i + 1) * (n_angles + 1) + 1 + j % n_angles) % n_vertices,
+                            (i + 1) * (n_angles + 1),
+                        ]
+                        vol += 1
+                        connections[vol] = [
+                            i * (n_angles + 1) + j,
+                            ((i + 1) * (n_angles + 1) + 1 + j % n_angles) % n_vertices,
+                            (i * (n_angles + 1) + 1 + j % n_angles) % n_vertices,
+                            i * (n_angles + 1),
+                        ]
+                        vol += 1
 
         return vertices, connections
 
