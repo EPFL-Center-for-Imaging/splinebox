@@ -926,7 +926,7 @@ class Spline:
             else:
                 connections = connections[:-1]
         else:
-            _radius = (lambda t, phi: np.full((len(t),), radius)) if not callable(radius) else radius
+            _radius = (lambda t, phi: np.full(t.shape, radius)) if not callable(radius) else radius
 
             phi = np.arange(0, 360, angular_resolution)
 
