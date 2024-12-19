@@ -24,16 +24,16 @@ spline.knots = np.array([[0, 0, 1], [0, 1, 0], [0, 0, -1], [0, -1, 0]])
 # The resolution determines how fine the resulting mesh is an corresponds
 # to the step size in the spline parameter space t.
 # Setting the radius to :code:`None` or 0 results in points along the spline connected by lines.
-vertices, connections = spline.mesh(resolution=0.1, radius=None)
+points, connectivity = spline.mesh(resolution=0.1, radius=None)
 
 # %%
-# To visulainze the "mesh" with pyvista we have to preprend the number of vertices
-# that are connected by a specific connection. In this case the number of vertices
+# To visulainze the "mesh" with pyvista we have to preprend the number of points
+# that are connected by a specific connection. In this case the number of points
 # is two since we are simply connecing a two points with a line.
-# Lastly, we have to turn the vertices and connections into a pyvista mesh using the
+# Lastly, we have to turn the points and connectivity into a pyvista mesh using the
 # :code:`PolyData` class.
-connections = np.hstack((np.full((connections.shape[0], 1), 2), connections))
-mesh = pyvista.PolyData(vertices, lines=connections)
+connectivity = np.hstack((np.full((connectivity.shape[0], 1), 2), connectivity))
+mesh = pyvista.PolyData(points, lines=connectivity)
 mesh.plot()
 
 # %%
@@ -41,12 +41,12 @@ mesh.plot()
 # ---------------
 # Next, we will use a fixed radius to generate a surface mesh ("tube").
 # We choose the Frenet-Serret frame in order to avoid having to choose an initial vector.
-vertices, connections = spline.mesh(resolution=0.1, radius=0.2, frame="frenet")
+points, connectivity = spline.mesh(resolution=0.1, radius=0.2, frame="frenet")
 # %%
-# Once again, we have to prepend the number how vertices in each connection.
+# Once again, we have to prepend the number how points in each connection.
 # Since, our mesh consists of triangles we choose 3.
-connections = np.hstack((np.full((connections.shape[0], 1), 3), connections))
-mesh = pyvista.PolyData(vertices, faces=connections)
+connectivity = np.hstack((np.full((connectivity.shape[0], 1), 3), connectivity))
+mesh = pyvista.PolyData(points, faces=connectivity)
 mesh.plot(show_edges=True)
 
 # %%
@@ -66,9 +66,9 @@ def elliptical_radius(t, phi):
     return r
 
 
-vertices, connections = spline.mesh(resolution=0.1, angular_resolution=36, radius=elliptical_radius, frame="frenet")
-connections = np.hstack((np.full((connections.shape[0], 1), 3), connections))
-mesh = pyvista.PolyData(vertices, faces=connections)
+points, connectivity = spline.mesh(resolution=0.1, angular_resolution=36, radius=elliptical_radius, frame="frenet")
+connectivity = np.hstack((np.full((connectivity.shape[0], 1), 3), connectivity))
+mesh = pyvista.PolyData(points, faces=connectivity)
 mesh.plot(show_edges=True)
 
 # %%
@@ -79,9 +79,9 @@ def radius(t, phi):
     return 0.1 + 0.03 * np.sin(t / spline.M * 16 * np.pi)
 
 
-vertices, connections = spline.mesh(resolution=0.1, angular_resolution=36, radius=radius, frame="frenet")
-connections = np.hstack((np.full((connections.shape[0], 1), 3), connections))
-mesh = pyvista.PolyData(vertices, faces=connections)
+points, connectivity = spline.mesh(resolution=0.1, angular_resolution=36, radius=radius, frame="frenet")
+connectivity = np.hstack((np.full((connectivity.shape[0], 1), 3), connectivity))
+mesh = pyvista.PolyData(points, faces=connectivity)
 mesh.plot(show_edges=True)
 
 # %%
@@ -103,9 +103,9 @@ spline.control_points = np.array(
     ]
 )
 
-vertices, connections = spline.mesh(resolution=0.1, angular_resolution=36, radius=elliptical_radius, frame="frenet")
-connections = np.hstack((np.full((connections.shape[0], 1), 3), connections))
-mesh = pyvista.PolyData(vertices, faces=connections)
+points, connectivity = spline.mesh(resolution=0.1, angular_resolution=36, radius=elliptical_radius, frame="frenet")
+connectivity = np.hstack((np.full((connectivity.shape[0], 1), 3), connectivity))
+mesh = pyvista.PolyData(points, faces=connectivity)
 mesh.plot(show_edges=True)
 
 # %%
@@ -117,11 +117,11 @@ tangent = spline.eval(0, derivative=1)
 initial_vector[1] = tangent[2]
 initial_vector[2] = -tangent[1]
 
-vertices, connections = spline.mesh(
+points, connectivity = spline.mesh(
     resolution=0.1, angular_resolution=36, radius=elliptical_radius, frame="bishop", initial_vector=initial_vector
 )
-connections = np.hstack((np.full((connections.shape[0], 1), 3), connections))
-mesh = pyvista.PolyData(vertices, faces=connections)
+connectivity = np.hstack((np.full((connectivity.shape[0], 1), 3), connectivity))
+mesh = pyvista.PolyData(points, faces=connectivity)
 mesh.plot(show_edges=True)
 
 # %%
@@ -129,11 +129,11 @@ mesh.plot(show_edges=True)
 
 initial_vector = np.array([0.5, -0.5, 1])
 
-vertices, connections = spline.mesh(
+points, connectivity = spline.mesh(
     resolution=0.1, angular_resolution=36, radius=elliptical_radius, frame="bishop", initial_vector=initial_vector
 )
-connections = np.hstack((np.full((connections.shape[0], 1), 3), connections))
-mesh = pyvista.PolyData(vertices, faces=connections)
+connectivity = np.hstack((np.full((connectivity.shape[0], 1), 3), connectivity))
+mesh = pyvista.PolyData(points, faces=connectivity)
 mesh.plot(show_edges=True)
 
 # %%
@@ -141,13 +141,13 @@ mesh.plot(show_edges=True)
 # --------------
 # Besides a surface mesh, we can also turn the spline into a volume mesh.
 
-vertices, connections = spline.mesh(
+points, connectivity = spline.mesh(
     radius=radius, resolution=0.5, angular_resolution=72, initial_vector=initial_vector, mesh_type="volume"
 )
-connections = np.hstack((np.full((connections.shape[0], 1), 4), connections))
-cell_types = np.full(len(connections), fill_value=pyvista.CellType.TETRA, dtype=np.uint8)
+connectivity = np.hstack((np.full((connectivity.shape[0], 1), 4), connectivity))
+cell_types = np.full(len(connectivity), fill_value=pyvista.CellType.TETRA, dtype=np.uint8)
 
-mesh = pyvista.UnstructuredGrid(connections, cell_types, vertices)
+mesh = pyvista.UnstructuredGrid(connectivity, cell_types, points)
 mesh.plot(show_edges=True)
 
 # %%

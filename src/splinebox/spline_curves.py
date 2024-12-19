@@ -918,13 +918,13 @@ class Spline:
     ):
         t = np.arange(0, self.M if self.closed else self.M - 1 + resolution, resolution)
         if radius is None or radius == 0:
-            vertices = self.eval(t)
-            connections = np.stack((np.arange(len(vertices)), np.arange(len(vertices)) + 1), axis=-1)
+            points = self.eval(t)
+            connectivity = np.stack((np.arange(len(points)), np.arange(len(points)) + 1), axis=-1)
             if self.closed:
                 # Connect end to the beginning
-                connections[-1, -1] = 0
+                connectivity[-1, -1] = 0
             else:
-                connections = connections[:-1]
+                connectivity = connectivity[:-1]
         else:
             _radius = (lambda t, phi: np.full(t.shape, radius)) if not callable(radius) else radius
 
@@ -945,39 +945,37 @@ class Spline:
                     + np.repeat(normals[:, 1], n_angles, axis=0) * np.cos(np.deg2rad(phiphi))[:, np.newaxis]
                 )
 
-                vertices = centers + rr[:, np.newaxis] * normals
+                points = centers + rr[:, np.newaxis] * normals
                 if self.closed:
-                    connections = np.zeros((2 * n_angles * n_t, 3), dtype=int)
+                    connectivity = np.zeros((2 * n_angles * n_t, 3), dtype=int)
                 else:
-                    connections = np.zeros((2 * n_angles * (n_t - 1), 3), dtype=int)
+                    connectivity = np.zeros((2 * n_angles * (n_t - 1), 3), dtype=int)
                 face = 0
-                n_vertices = len(vertices)
+                n_points = len(points)
                 for i in range(n_t if self.closed else n_t - 1):
                     for j in range(n_angles):
-                        connections[face] = [
+                        connectivity[face] = [
                             i * n_angles + j,
-                            ((i + 1) * n_angles + j) % n_vertices,
-                            ((i + 1) * n_angles + (j + 1) % n_angles) % n_vertices,
+                            ((i + 1) * n_angles + j) % n_points,
+                            ((i + 1) * n_angles + (j + 1) % n_angles) % n_points,
                         ]
                         face += 1
-                        connections[face] = [
+                        connectivity[face] = [
                             i * n_angles + j,
-                            ((i + 1) * n_angles + (j + 1) % n_angles) % n_vertices,
-                            (i * n_angles + (j + 1) % n_angles) % n_vertices,
+                            ((i + 1) * n_angles + (j + 1) % n_angles) % n_points,
+                            (i * n_angles + (j + 1) % n_angles) % n_points,
                         ]
                         face += 1
                 if cap_ends and not self.closed:
-                    vertices = np.concatenate(
-                        (centers[0].reshape((1, -1)), vertices, centers[-1].reshape((1, -1))), axis=0
-                    )
-                    start_connections = np.zeros((n_angles, 3), dtype=int)
-                    start_connections[:, 1] = np.arange(1, n_angles + 1)
-                    start_connections[:, 2] = np.roll(start_connections[:, 1], -1)
-                    end_connections = np.zeros((n_angles, 3), dtype=int)
-                    end_connections[:, 0] = n_vertices + 1
-                    end_connections[:, 1] = np.arange(n_vertices, n_vertices - n_angles, -1)
-                    end_connections[:, 2] = np.roll(end_connections[:, 1], -1)
-                    connections = np.concatenate((start_connections, connections + 1, end_connections))
+                    points = np.concatenate((centers[0].reshape((1, -1)), points, centers[-1].reshape((1, -1))), axis=0)
+                    start_connectivity = np.zeros((n_angles, 3), dtype=int)
+                    start_connectivity[:, 1] = np.arange(1, n_angles + 1)
+                    start_connectivity[:, 2] = np.roll(start_connectivity[:, 1], -1)
+                    end_connectivity = np.zeros((n_angles, 3), dtype=int)
+                    end_connectivity[:, 0] = n_points + 1
+                    end_connectivity[:, 1] = np.arange(n_points, n_points - n_angles, -1)
+                    end_connectivity[:, 2] = np.roll(end_connectivity[:, 1], -1)
+                    connectivity = np.concatenate((start_connectivity, connectivity + 1, end_connectivity))
             elif mesh_type == "volume":
                 phiphi, tt = np.meshgrid(phi, t)
                 rr = _radius(tt, phiphi)
@@ -999,31 +997,31 @@ class Spline:
                     np.repeat(normals[:, 0], n_angles + 1, axis=0) * np.sin(np.deg2rad(phiphi))[:, np.newaxis]
                     + np.repeat(normals[:, 1], n_angles + 1, axis=0) * np.cos(np.deg2rad(phiphi))[:, np.newaxis]
                 )
-                vertices = centers + rr[:, np.newaxis] * normals
+                points = centers + rr[:, np.newaxis] * normals
                 if self.closed:
-                    connections = np.zeros((2 * n_angles * n_t, 4), dtype=int)
+                    connectivity = np.zeros((2 * n_angles * n_t, 4), dtype=int)
                 else:
-                    connections = np.zeros((2 * n_angles * (n_t - 1), 4), dtype=int)
+                    connectivity = np.zeros((2 * n_angles * (n_t - 1), 4), dtype=int)
                 vol = 0
-                n_vertices = len(vertices)
+                n_points = len(points)
                 for i in range(n_t if self.closed else n_t - 1):
                     for j in range(1, n_angles + 1):
-                        connections[vol] = [
+                        connectivity[vol] = [
                             i * (n_angles + 1) + j,
-                            ((i + 1) * (n_angles + 1) + j) % n_vertices,
-                            ((i + 1) * (n_angles + 1) + 1 + j % n_angles) % n_vertices,
+                            ((i + 1) * (n_angles + 1) + j) % n_points,
+                            ((i + 1) * (n_angles + 1) + 1 + j % n_angles) % n_points,
                             (i + 1) * (n_angles + 1),
                         ]
                         vol += 1
-                        connections[vol] = [
+                        connectivity[vol] = [
                             i * (n_angles + 1) + j,
-                            ((i + 1) * (n_angles + 1) + 1 + j % n_angles) % n_vertices,
-                            (i * (n_angles + 1) + 1 + j % n_angles) % n_vertices,
+                            ((i + 1) * (n_angles + 1) + 1 + j % n_angles) % n_points,
+                            (i * (n_angles + 1) + 1 + j % n_angles) % n_points,
                             i * (n_angles + 1),
                         ]
                         vol += 1
 
-        return vertices, connections
+        return points, connectivity
 
 
 class HermiteSpline(Spline):
