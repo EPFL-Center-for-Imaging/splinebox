@@ -909,14 +909,50 @@ class Spline:
     def mesh(
         self,
         radius=None,
-        resolution=0.1,
+        step_t=0.1,
+        step_angle="auto",
         mesh_type="surface",
-        angular_resolution=10,
         cap_ends=False,
         frame="bishop",
-        initial_vector=None,
+        initial_vector="auto",
     ):
-        t = np.arange(0, self.M if self.closed else self.M - 1 + resolution, resolution)
+        """
+        Creats a mesh around the spline curve in 3D. The distance of the mesh
+        from the spline can be changes using the :code:`radius` paramters.
+        The mesh can either be a surface with triangular cells or a volume mesh
+        with tetrahedral cells.
+
+        Parameters
+        ----------
+        radius : float or callable
+            A float value results in a constant radius. Alternatively, it can be a function that takes
+            the spline parameter t and the polar angle in the normal plane as arguments and returns
+            a float.
+        step_t : float or "auto"
+            The step size of the spline parameter t. If "auto", step_angle has to be a float.
+        step_angle : float or "auto"
+            The step size of the polar angle. If "auto", step_t has to be a float.
+        mesh_type : str
+            Can be "surface" or "volume".
+        cap_ends : boolean
+            If True, the ends of the surface mesh are closed with orthogonal planes.
+        frame : str
+            Can be "frenet" or "bishop". See :meth:`splinebox.spline_curves.moving_frame`.
+        initial_vector : numpy array or "auto"
+            The initial vector determining the orientation of the Bishop frame.
+            See :meth:`splinebox.spline_curves.moving_frame`.
+
+        Returns
+        -------
+        points : numpy array
+            A 2D numpy array. The second dimension encodes the coordinates of each point in 3D space.
+        connectivity : numpy array
+            A 2D numpy array. Each row corresponds to an element in the mesh.
+            The values are the indices of the points in :code:`points` that form the element.
+        """
+        if self.control_points.ndim != 2 or self.control_points.shape[1] != 3:
+            raise NotImplementedError("Meshes are only implemented for splines in 3D.")
+        t = np.arange(0, self.M if self.closed else self.M - 1 + step_t, step_t)
         if radius is None or radius == 0:
             points = self.eval(t)
             connectivity = np.stack((np.arange(len(points)), np.arange(len(points)) + 1), axis=-1)
@@ -928,7 +964,7 @@ class Spline:
         else:
             _radius = (lambda t, phi: np.full(t.shape, radius)) if not callable(radius) else radius
 
-            phi = np.arange(0, 360, angular_resolution)
+            phi = np.arange(0, 360, step_angle)
 
             if mesh_type == "surface":
                 phiphi, tt = np.meshgrid(phi, t)
