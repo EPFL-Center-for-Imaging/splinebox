@@ -1054,7 +1054,7 @@ class Spline:
                             i * (n_angles + 1) + j,
                             ((i + 1) * (n_angles + 1) + j) % n_points,
                             ((i + 1) * (n_angles + 1) + 1 + j % n_angles) % n_points,
-                            (i + 1) * (n_angles + 1),
+                            (i + 1) * (n_angles + 1) % n_points,
                         ]
                         vol += 1
                         connectivity[vol] = [
@@ -1067,7 +1067,7 @@ class Spline:
                         connectivity[vol] = [
                             i * (n_angles + 1) + j,
                             ((i + 1) * (n_angles + 1) + 1 + j % n_angles) % n_points,
-                            (i + 1) * (n_angles + 1),
+                            (i + 1) * (n_angles + 1) % n_points,
                             i * (n_angles + 1),
                         ]
                         vol += 1
