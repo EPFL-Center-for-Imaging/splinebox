@@ -668,7 +668,7 @@ class Spline:
             to the tangent at :code:`t[0]` and defines the orientation of the basis
             at :code:`t[0]`. This orientation is then propagated along the spline
             since the Bishop frame does not allow the basis to twist around
-            the curve.
+            the curve. If None, an initial vector is computed automatically.
 
         Returns
         -------
@@ -703,7 +703,11 @@ class Spline:
             frame[:, 1] = np.cross(frame[:, 2], frame[:, 0])
         elif kind == "bishop":
             if initial_vector is None:
-                raise ValueError("The bishop frame requires the keyword argument initial_vector.")
+                initial_vector = np.zeros(3)
+                tangent = frame[0, 0]
+                max_axis = np.argmax(tangent)
+                initial_vector[max_axis] = tangent[(max_axis + 1) % 1]
+                initial_vector[(max_axis + 1) % 1] = -tangent[max_axis]
             initial_vector /= np.linalg.norm(initial_vector)
             if not np.isclose(np.dot(frame[0, 0], initial_vector), 0):
                 raise ValueError("The initial vector has to be orthogonal to the tangent at t[0].")
@@ -914,7 +918,7 @@ class Spline:
         mesh_type="surface",
         cap_ends=False,
         frame="bishop",
-        initial_vector="auto",
+        initial_vector=None,
     ):
         """
         Creats a mesh around the spline curve in 3D. The distance of the mesh
@@ -938,7 +942,7 @@ class Spline:
             If True, the ends of the surface mesh are closed with orthogonal planes.
         frame : str
             Can be "frenet" or "bishop". See :meth:`splinebox.spline_curves.moving_frame`.
-        initial_vector : numpy array or "auto"
+        initial_vector : numpy array or None
             The initial vector determining the orientation of the Bishop frame.
             See :meth:`splinebox.spline_curves.moving_frame`.
 
