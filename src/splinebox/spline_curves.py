@@ -999,9 +999,9 @@ class Spline:
                 )
                 points = centers + rr[:, np.newaxis] * normals
                 if self.closed:
-                    connectivity = np.zeros((2 * n_angles * n_t, 4), dtype=int)
+                    connectivity = np.zeros((3 * n_angles * n_t, 4), dtype=int)
                 else:
-                    connectivity = np.zeros((2 * n_angles * (n_t - 1), 4), dtype=int)
+                    connectivity = np.zeros((3 * n_angles * (n_t - 1), 4), dtype=int)
                 vol = 0
                 n_points = len(points)
                 for i in range(n_t if self.closed else n_t - 1):
@@ -1017,6 +1017,13 @@ class Spline:
                             i * (n_angles + 1) + j,
                             ((i + 1) * (n_angles + 1) + 1 + j % n_angles) % n_points,
                             (i * (n_angles + 1) + 1 + j % n_angles) % n_points,
+                            i * (n_angles + 1),
+                        ]
+                        vol += 1
+                        connectivity[vol] = [
+                            i * (n_angles + 1) + j,
+                            ((i + 1) * (n_angles + 1) + 1 + j % n_angles) % n_points,
+                            (i + 1) * (n_angles + 1),
                             i * (n_angles + 1),
                         ]
                         vol += 1
