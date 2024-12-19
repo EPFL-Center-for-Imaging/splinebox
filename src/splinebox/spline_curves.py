@@ -918,7 +918,7 @@ class Spline:
         self,
         radius=None,
         step_t=0.1,
-        step_angle="auto",
+        step_angle=5,
         mesh_type="surface",
         cap_ends=False,
         frame="bishop",
@@ -936,10 +936,10 @@ class Spline:
             A float value results in a constant radius. Alternatively, it can be a function that takes
             the spline parameter t and the polar angle in the normal plane as arguments and returns
             a float.
-        step_t : float or "auto"
-            The step size of the spline parameter t. If "auto", step_angle has to be a float.
-        step_angle : float or "auto"
-            The step size of the polar angle. If "auto", step_t has to be a float.
+        step_t : float
+            The step size of the spline parameter t.
+        step_angle : float
+            The step size of the polar angle.
         mesh_type : str
             Can be "surface" or "volume".
         cap_ends : boolean
