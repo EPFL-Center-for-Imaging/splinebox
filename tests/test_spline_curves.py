@@ -823,8 +823,53 @@ def test_moving_frame(initialized_spline_curve, not_differentiable_twice):
         # Check that T is parallel to the first derivative
         assert np.allclose(np.cross(frame[:, 0], spline.eval(t, derivative=1)), 0)
 
-        # Torsion tau = dN/ds * B(s) (dot product) should be zero in the Bishop frame
-        # dnds = np.gradient(frame[:, 1], axis=0)
-        # tau = np.sum(dnds * frame[:, 2], axis=-1)
-        # print(tau)
-        # assert np.allclose(tau, 0)
+
+def test_mesh(
+    initialized_spline_curve, radius, step_t, step_angle, mesh_type, cap_ends, frame, not_differentiable_twice
+):
+    spline = initialized_spline_curve
+
+    if spline.control_points.ndim != 2 or spline.control_points.shape[1] != 3:
+        # mesh is only implemented for splines in 3D
+        with pytest.raises(RuntimeError):
+            spline.mesh(
+                radius=radius, step_t=step_t, step_angle=step_angle, mesh_type=mesh_type, cap_ends=cap_ends, frame=frame
+            )
+    elif not_differentiable_twice(spline) and radius is not None:
+        with pytest.raises(RuntimeError):
+            spline.mesh(
+                radius=radius, step_t=step_t, step_angle=step_angle, mesh_type=mesh_type, cap_ends=cap_ends, frame=frame
+            )
+    else:
+        points, connectivity = spline.mesh(
+            radius=radius, step_t=step_t, step_angle=step_angle, mesh_type=mesh_type, cap_ends=cap_ends, frame=frame
+        )
+
+        # Check that all points are part of at least one element
+        assert np.all(np.arange(len(points)) == np.sort(np.unique(connectivity)))
+
+        if mesh_type == "surface" and (cap_ends or spline.closed):
+            # Compute the Euler characteristic to check that the mesh is closed
+
+            # Number of verices
+            V = len(points)
+            # Number of faces
+            F = len(connectivity) if connectivity.shape[1] > 2 else 0
+            # Collect all in a set (no duplicates)
+            edges = set()
+            for i in range(len(connectivity)):
+                edges.add(tuple(sorted([connectivity[i, 0], connectivity[i, 1]])))
+                if radius is not None:
+                    edges.add(tuple(sorted([connectivity[i, 0], connectivity[i, 2]])))
+                    edges.add(tuple(sorted([connectivity[i, 1], connectivity[i, 2]])))
+            # Number of edges
+            E = len(edges)
+
+            if radius is None and not spline.closed:
+                assert V + F - E == 1
+            elif spline.closed:
+                # toroidal polyhedra have Euler characteristic 0
+                assert V + F - E == 0
+            elif cap_ends:
+                # spherical polyhedra have Euler characteristic 2
+                assert V + F - E == 2
