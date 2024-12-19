@@ -49,6 +49,7 @@ tangent = spline.eval(t[0], derivative=1)
 initial_vector = np.zeros(3)
 initial_vector[1] = -tangent[2]
 initial_vector[2] = tangent[1]
+initial_vector = None
 
 bishop_frame = spline.moving_frame(t, kind="bishop", initial_vector=initial_vector)
 

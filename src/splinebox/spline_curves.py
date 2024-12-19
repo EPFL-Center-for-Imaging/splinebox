@@ -703,11 +703,15 @@ class Spline:
             frame[:, 1] = np.cross(frame[:, 2], frame[:, 0])
         elif kind == "bishop":
             if initial_vector is None:
-                initial_vector = np.zeros(3)
                 tangent = frame[0, 0]
-                max_axis = np.argmax(tangent)
-                initial_vector[max_axis] = tangent[(max_axis + 1) % 1]
-                initial_vector[(max_axis + 1) % 1] = -tangent[max_axis]
+                # Try to do the same as for the Frenet frame
+                initial_vector = np.cross(np.cross(tangent, self.eval(t[0], derivative=2)), tangent)
+                if np.isclose(np.linalg.norm(initial_vector), 0) or np.any(np.isnan(initial_vector)):
+                    initial_vector = np.zeros(3)
+                    max_axis = np.argmax(np.abs(tangent))
+                    other_axis = (max_axis + 1) % 3
+                    initial_vector[max_axis] = tangent[other_axis]
+                    initial_vector[other_axis] = -tangent[max_axis]
             initial_vector /= np.linalg.norm(initial_vector)
             if not np.isclose(np.dot(frame[0, 0], initial_vector), 0):
                 raise ValueError("The initial vector has to be orthogonal to the tangent at t[0].")
