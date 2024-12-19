@@ -974,8 +974,8 @@ class Spline:
                     start_connections[:, 1] = np.arange(1, n_angles + 1)
                     start_connections[:, 2] = np.roll(start_connections[:, 1], -1)
                     end_connections = np.zeros((n_angles, 3), dtype=int)
-                    end_connections[:, 0] = n_vertices
-                    end_connections[:, 1] = np.arange(n_vertices - 1, n_vertices - 1 - n_angles, -1)
+                    end_connections[:, 0] = n_vertices + 1
+                    end_connections[:, 1] = np.arange(n_vertices, n_vertices - n_angles, -1)
                     end_connections[:, 2] = np.roll(end_connections[:, 1], -1)
                     connections = np.concatenate((start_connections, connections + 1, end_connections))
             elif mesh_type == "volume":
