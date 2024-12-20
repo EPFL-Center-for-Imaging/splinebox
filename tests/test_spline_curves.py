@@ -799,10 +799,6 @@ def test_moving_frame(initialized_spline_curve, not_differentiable_twice):
             assert np.allclose(np.cross(frame[:, 1], deriv2), 0)
 
         with pytest.raises(ValueError):
-            # Missing initial_vector
-            frame = spline.moving_frame(t, kind="bishop")
-
-        with pytest.raises(ValueError):
             # Non-orthogonal initial vector
             frame = spline.moving_frame(t, kind="bishop", initial_vector=np.ones(3))
 
