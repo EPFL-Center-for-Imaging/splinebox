@@ -990,26 +990,8 @@ class Spline:
                 )
 
                 points = centers + rr[:, np.newaxis] * normals
-                if self.closed:
-                    connectivity = np.zeros((2 * n_angles * n_t, 3), dtype=int)
-                else:
-                    connectivity = np.zeros((2 * n_angles * (n_t - 1), 3), dtype=int)
-                face = 0
                 n_points = len(points)
-                for i in range(n_t if self.closed else n_t - 1):
-                    for j in range(n_angles):
-                        connectivity[face] = [
-                            i * n_angles + j,
-                            ((i + 1) * n_angles + j) % n_points,
-                            ((i + 1) * n_angles + (j + 1) % n_angles) % n_points,
-                        ]
-                        face += 1
-                        connectivity[face] = [
-                            i * n_angles + j,
-                            ((i + 1) * n_angles + (j + 1) % n_angles) % n_points,
-                            (i * n_angles + (j + 1) % n_angles) % n_points,
-                        ]
-                        face += 1
+                connectivity = self._surface_mesh_connectivity(self.closed, n_angles, n_t, n_points)
                 if cap_ends and not self.closed:
                     points = np.concatenate((centers[0].reshape((1, -1)), points, centers[-1].reshape((1, -1))), axis=0)
                     start_connectivity = np.zeros((n_angles, 3), dtype=int)
@@ -1020,6 +1002,7 @@ class Spline:
                     end_connectivity[:, 1] = np.arange(n_points, n_points - n_angles, -1)
                     end_connectivity[:, 2] = np.roll(end_connectivity[:, 1], -1)
                     connectivity = np.concatenate((start_connectivity, connectivity + 1, end_connectivity))
+
             elif mesh_type == "volume":
                 phiphi, tt = np.meshgrid(phi, t)
                 rr = _radius(tt, phiphi)
@@ -1042,37 +1025,68 @@ class Spline:
                     + np.repeat(normals[:, 1], n_angles + 1, axis=0) * np.cos(np.deg2rad(phiphi))[:, np.newaxis]
                 )
                 points = centers + rr[:, np.newaxis] * normals
-                if self.closed:
-                    connectivity = np.zeros((3 * n_angles * n_t, 4), dtype=int)
-                else:
-                    connectivity = np.zeros((3 * n_angles * (n_t - 1), 4), dtype=int)
-                vol = 0
                 n_points = len(points)
-                for i in range(n_t if self.closed else n_t - 1):
-                    for j in range(1, n_angles + 1):
-                        connectivity[vol] = [
-                            i * (n_angles + 1) + j,
-                            ((i + 1) * (n_angles + 1) + j) % n_points,
-                            ((i + 1) * (n_angles + 1) + 1 + j % n_angles) % n_points,
-                            (i + 1) * (n_angles + 1) % n_points,
-                        ]
-                        vol += 1
-                        connectivity[vol] = [
-                            i * (n_angles + 1) + j,
-                            ((i + 1) * (n_angles + 1) + 1 + j % n_angles) % n_points,
-                            (i * (n_angles + 1) + 1 + j % n_angles) % n_points,
-                            i * (n_angles + 1),
-                        ]
-                        vol += 1
-                        connectivity[vol] = [
-                            i * (n_angles + 1) + j,
-                            ((i + 1) * (n_angles + 1) + 1 + j % n_angles) % n_points,
-                            (i + 1) * (n_angles + 1) % n_points,
-                            i * (n_angles + 1),
-                        ]
-                        vol += 1
+
+                connectivity = self._volume_mesh_connectivity(self.closed, n_angles, n_t, n_points)
 
         return points, connectivity
+
+    @staticmethod
+    @numba.jit(nopython=True, nogil=True, cache=True)
+    def _surface_mesh_connectivity(closed, n_angles, n_t, n_points):
+        if closed:
+            connectivity = np.zeros((2 * n_angles * n_t, 3), dtype=numba.int64)
+        else:
+            connectivity = np.zeros((2 * n_angles * (n_t - 1), 3), dtype=numba.int64)
+        face = 0
+        for i in range(n_t if closed else n_t - 1):
+            for j in range(n_angles):
+                connectivity[face] = [
+                    i * n_angles + j,
+                    ((i + 1) * n_angles + j) % n_points,
+                    ((i + 1) * n_angles + (j + 1) % n_angles) % n_points,
+                ]
+                face += 1
+                connectivity[face] = [
+                    i * n_angles + j,
+                    ((i + 1) * n_angles + (j + 1) % n_angles) % n_points,
+                    (i * n_angles + (j + 1) % n_angles) % n_points,
+                ]
+                face += 1
+        return connectivity
+
+    @staticmethod
+    @numba.jit(nopython=True, nogil=True, cache=True)
+    def _volume_mesh_connectivity(closed, n_angles, n_t, n_points):
+        if closed:
+            connectivity = np.zeros((3 * n_angles * n_t, 4), dtype=numba.int64)
+        else:
+            connectivity = np.zeros((3 * n_angles * (n_t - 1), 4), dtype=numba.int64)
+        vol = 0
+        for i in range(n_t if closed else n_t - 1):
+            for j in range(1, n_angles + 1):
+                connectivity[vol] = [
+                    i * (n_angles + 1) + j,
+                    ((i + 1) * (n_angles + 1) + j) % n_points,
+                    ((i + 1) * (n_angles + 1) + 1 + j % n_angles) % n_points,
+                    (i + 1) * (n_angles + 1) % n_points,
+                ]
+                vol += 1
+                connectivity[vol] = [
+                    i * (n_angles + 1) + j,
+                    ((i + 1) * (n_angles + 1) + 1 + j % n_angles) % n_points,
+                    (i * (n_angles + 1) + 1 + j % n_angles) % n_points,
+                    i * (n_angles + 1),
+                ]
+                vol += 1
+                connectivity[vol] = [
+                    i * (n_angles + 1) + j,
+                    ((i + 1) * (n_angles + 1) + 1 + j % n_angles) % n_points,
+                    (i + 1) * (n_angles + 1) % n_points,
+                    i * (n_angles + 1),
+                ]
+                vol += 1
+        return connectivity
 
 
 class HermiteSpline(Spline):
