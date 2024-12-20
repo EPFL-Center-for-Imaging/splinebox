@@ -1,7 +1,7 @@
 """
 Spline to mesh
 ==============
-This example demonstrates how you can turn a spline curve in 3D into a mesh.
+This guide demonstrates how to convert a 3D spline curve into various types of meshes using SplineBox.
 """
 
 # sphinx_gallery_thumbnail_number = 4
@@ -11,51 +11,51 @@ import pyvista
 import splinebox
 
 # %%
-# 1. Construct a spline
-# ---------------------
-# We begin by constructing a circular spline.
+# 1. Constructing a Spline
+# ------------------------
+# We begin by creating a circular spline.
 M = 4
 spline = splinebox.Spline(M=M, basis_function=splinebox.Exponential(M), closed=True)
 spline.knots = np.array([[0, 0, 1], [0, 1, 0], [0, 0, -1], [0, -1, 0]])
 
 # %%
-# 2. Generate a mesh with no radius
-# ---------------------------------
-# The resolution determines how fine the resulting mesh is an corresponds
-# to the step size in the spline parameter space t.
-# Setting the radius to :code:`None` or 0 results in points along the spline connected by lines.
-points, connectivity = spline.mesh(resolution=0.1, radius=None)
+# 2. Generating a Mesh Without Radius
+# -----------------------------------
+# The :code:`step_t` parameter determines the granularity of the resulting mesh, corresponding to the step size in the spline parameter space (t).
+# Setting the radius to None or 0 results in a line mesh.
 
-# %%
-# To visulainze the "mesh" with pyvista we have to preprend the number of points
-# that are connected by a specific connection. In this case the number of points
-# is two since we are simply connecing a two points with a line.
-# Lastly, we have to turn the points and connectivity into a pyvista mesh using the
-# :code:`PolyData` class.
+# Generate a simple line mesh
+points, connectivity = spline.mesh(step_t=0.1, radius=None)
+
+# Prepend the number of points in each element (2 for a line) for PyVista
 connectivity = np.hstack((np.full((connectivity.shape[0], 1), 2), connectivity))
+
+# Create and plot the PyVista mesh
 mesh = pyvista.PolyData(points, lines=connectivity)
 mesh.plot()
 
 # %%
-# 3. Fixed radius
-# ---------------
-# Next, we will use a fixed radius to generate a surface mesh ("tube").
-# We choose the Frenet-Serret frame in order to avoid having to choose an initial vector.
-points, connectivity = spline.mesh(resolution=0.1, radius=0.2, frame="frenet")
-# %%
-# Once again, we have to prepend the number how points in each connection.
-# Since, our mesh consists of triangles we choose 3.
+# 3. Mesh with a Fixed Radius
+# ---------------------------
+# Here, we generate a surface mesh (a "tube") using a fixed radius.
+# We employ the Frenet-Serret frame to avoid selecting an initial vector.
+
+# Generate a surface mesh with a fixed radius
+points, connectivity = spline.mesh(step_t=0.1, radius=0.2, frame="frenet")
+
+# Prepend the number of points in each element (3 for triangles) for PyVista
 connectivity = np.hstack((np.full((connectivity.shape[0], 1), 3), connectivity))
+
+# Create and plot the PyVista mesh
 mesh = pyvista.PolyData(points, faces=connectivity)
 mesh.plot(show_edges=True)
 
 # %%
-# 3. Eliptical cross section
-# --------------------------
-# In order to create, a spline with a custom cross section we can specify
-# the radius as a function. The function was to take the spline parameter :code:`t`
-# and the angle polar angle :code:`phi` as arguments in that order.
-# For this example we create an elliptical cross section.
+# 3. Mesh with an Elliptical Cross-Section
+# ----------------------------------------
+# You can define a custom cross-section shape by specifying the radius as a function of the spline parameter (:code:`t`) and the polar angle (:code:`phi`).
+# Example 1: Elliptical Cross-Section
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 
 def elliptical_radius(t, phi):
@@ -66,84 +66,93 @@ def elliptical_radius(t, phi):
     return r
 
 
-points, connectivity = spline.mesh(resolution=0.1, angular_resolution=36, radius=elliptical_radius, frame="frenet")
+points, connectivity = spline.mesh(step_t=0.1, step_angle=36, radius=elliptical_radius, frame="frenet")
+
 connectivity = np.hstack((np.full((connectivity.shape[0], 1), 3), connectivity))
+
 mesh = pyvista.PolyData(points, faces=connectivity)
 mesh.plot(show_edges=True)
 
 # %%
-# Or you can change the radius along the spline.
+# Example 2: Varying Radius Along the Spline
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 
 def radius(t, phi):
     return 0.1 + 0.03 * np.sin(t / spline.M * 16 * np.pi)
 
 
-points, connectivity = spline.mesh(resolution=0.1, angular_resolution=36, radius=radius, frame="frenet")
+points, connectivity = spline.mesh(step_t=0.1, step_angle=36, radius=radius, frame="frenet")
+
 connectivity = np.hstack((np.full((connectivity.shape[0], 1), 3), connectivity))
+
 mesh = pyvista.PolyData(points, faces=connectivity)
 mesh.plot(show_edges=True)
 
 # %%
-# 4. Bishop frame
-# ---------------
+# 5. Bishop Frame for Mesh Generation
+# -----------------------------------
 # The Frenet-Serret frame is not defined on straight segments and at inflections point.
-# In those cases we can use the Bishop frame instead. Another advantage of the Bishop frame
+# In those cases, we can use the Bishop frame instead. Another advantage of the Bishop frame
 # is that it does not twist around the spline.
-# Let's create a spline with some unwated twist and see how the Bishop frame fixes it.
+#
+# Correcting Twists with the Bishop Frame
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+# Create a spline with for which the Frenet frame twists
 spline = splinebox.Spline(M=M, basis_function=splinebox.B3(), closed=False)
 spline.control_points = np.array(
     [
         [0.0, 0.0, 0.0],
-        [1.0, 0.0, 0.0],
-        [1.0, 1.0, 0.0],
-        [1.0, 1.0, 1.0],
-        [0.0, 1.0, 1.0],
+        [2.0, 0.0, 0.0],
+        [2.0, 2.0, 0.0],
+        [2.0, 2.0, 2.0],
+        [0.0, 2.0, 2.0],
         [0.0, 0.0, 0.0],
     ]
 )
 
-points, connectivity = spline.mesh(resolution=0.1, angular_resolution=36, radius=elliptical_radius, frame="frenet")
+points, connectivity = spline.mesh(step_t=0.1, step_angle=36, radius=elliptical_radius, frame="frenet")
+
 connectivity = np.hstack((np.full((connectivity.shape[0], 1), 3), connectivity))
+
 mesh = pyvista.PolyData(points, faces=connectivity)
 mesh.plot(show_edges=True)
 
 # %%
 # You can clearly see how the ellipse twists around the spline.
-# The Bishop frame eliminates this twist but requires an initial orientation for the ellipse, given by an initial vector.
+# The Bishop frame eliminates this twist.
 
-initial_vector = np.zeros(3)
-tangent = spline.eval(0, derivative=1)
-initial_vector[1] = tangent[2]
-initial_vector[2] = -tangent[1]
+points, connectivity = spline.mesh(step_t=0.1, step_angle=36, radius=elliptical_radius, frame="bishop")
 
-points, connectivity = spline.mesh(
-    resolution=0.1, angular_resolution=36, radius=elliptical_radius, frame="bishop", initial_vector=initial_vector
-)
 connectivity = np.hstack((np.full((connectivity.shape[0], 1), 3), connectivity))
+
 mesh = pyvista.PolyData(points, faces=connectivity)
 mesh.plot(show_edges=True)
 
 # %%
-# Changing the initial vector rotates the ellipse, because the initial vector is the reference for phi=0.
+# Changing the initial vector rotates the frame and therefore the ellipse.
 
 initial_vector = np.array([0.5, -0.5, 1])
 
 points, connectivity = spline.mesh(
-    resolution=0.1, angular_resolution=36, radius=elliptical_radius, frame="bishop", initial_vector=initial_vector
+    step_t=0.1, step_angle=36, radius=elliptical_radius, frame="bishop", initial_vector=initial_vector
 )
+
 connectivity = np.hstack((np.full((connectivity.shape[0], 1), 3), connectivity))
+
 mesh = pyvista.PolyData(points, faces=connectivity)
 mesh.plot(show_edges=True)
 
 # %%
-# 5. Volume mesh
+# 6. Volume Mesh
 # --------------
-# Besides a surface mesh, we can also turn the spline into a volume mesh.
+# Finally, you can generate a volumetric mesh by setting the :code:`mesh_type` to :code:`"volume"`.
 
 points, connectivity = spline.mesh(
-    radius=radius, resolution=0.5, angular_resolution=72, initial_vector=initial_vector, mesh_type="volume"
+    radius=radius, step_t=0.5, step_angle=72, initial_vector=initial_vector, mesh_type="volume"
 )
+
 connectivity = np.hstack((np.full((connectivity.shape[0], 1), 4), connectivity))
 cell_types = np.full(len(connectivity), fill_value=pyvista.CellType.TETRA, dtype=np.uint8)
 
@@ -158,5 +167,5 @@ mesh.explode(factor=0.5).plot(show_edges=True)
 # %%
 # Tips
 # ----
-# * To save the meshes for visulalisation in ParaView, you can use pyvista: :code:`mesh.save("mesh.vtk")`
-# * By default the surface meshes are open at the end. You can close them using the :code:`cap_ends` keyword argument of :meth:`splinebox.spline_curves.Spline.mesh`.
+# * Save meshes for visualization in ParaView using :code:`mesh.save("mesh.vtk")`.
+# * Surface meshes are open by default. Use the :code:`cap_ends` keyword in :meth:`splinebox.spline_curves.Spline.mesh()` to close them.
