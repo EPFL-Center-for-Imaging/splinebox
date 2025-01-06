@@ -1116,7 +1116,7 @@ class Spline:
 
     @staticmethod
     @numba.jit(nopython=True, nogil=True, cache=True)
-    def _surface_mesh_connectivity(closed, n_angles, n_t, n_points):
+    def _surface_mesh_connectivity(closed, n_angles, n_t, n_points):  # pragma: no cover
         if closed:
             connectivity = np.zeros((2 * n_angles * n_t, 3), dtype=numba.int64)
         else:
@@ -1140,7 +1140,7 @@ class Spline:
 
     @staticmethod
     @numba.jit(nopython=True, nogil=True, cache=True)
-    def _volume_mesh_connectivity(closed, n_angles, n_t, n_points):
+    def _volume_mesh_connectivity(closed, n_angles, n_t, n_points):  # pragma: no cover
         if closed:
             connectivity = np.zeros((3 * n_angles * n_t, 4), dtype=numba.int64)
         else:

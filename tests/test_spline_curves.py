@@ -820,6 +820,27 @@ def test_moving_frame(initialized_spline_curve, not_differentiable_twice):
         assert np.allclose(np.cross(frame[:, 0], spline.eval(t, derivative=1)), 0)
 
 
+def test_moving_frame_raises():
+    M = 6
+    spline = splinebox.spline_curves.Spline(M=M, basis_function=splinebox.basis_functions.B3(), closed=False)
+    t = np.linspace(0, M - 1, 100)
+
+    spline.knots = np.random.rand(6, 3)
+
+    # Wrong method
+    with pytest.raises(ValueError):
+        spline.moving_frame(t, method="madeup method")
+
+    # Vanishing tangent at the end because of padding
+    with pytest.raises(RuntimeError):
+        spline.moving_frame(t, method="frenet")
+
+    # Straight segment
+    spline.control_points = np.stack([np.arange(M + 2), np.zeros(M + 2), np.zeros(M + 2)], axis=-1)
+    with pytest.raises(RuntimeError):
+        spline.moving_frame(t, method="frenet")
+
+
 def test_mesh(
     initialized_spline_curve, radius, step_t, step_angle, mesh_type, cap_ends, frame, not_differentiable_twice
 ):
