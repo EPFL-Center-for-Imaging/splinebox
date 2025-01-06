@@ -773,9 +773,9 @@ def test_moving_frame(initialized_spline_curve, not_differentiable_twice):
     else:
         if not_differentiable_twice(spline):
             with pytest.raises(RuntimeError):
-                frame = spline.moving_frame(t, kind="frenet")
+                frame = spline.moving_frame(t, method="frenet")
         else:
-            frame = spline.moving_frame(t, kind="frenet")
+            frame = spline.moving_frame(t, method="frenet")
 
             # Check that they are unit vectors
             assert np.allclose(np.linalg.norm(frame, axis=-1), 1)
@@ -800,13 +800,13 @@ def test_moving_frame(initialized_spline_curve, not_differentiable_twice):
 
         with pytest.raises(ValueError):
             # Non-orthogonal initial vector
-            frame = spline.moving_frame(t, kind="bishop", initial_vector=np.ones(3))
+            frame = spline.moving_frame(t, method="bishop", initial_vector=np.ones(3))
 
         initial_vector = np.zeros(3)
         tangent = spline.eval(t[0], derivative=1)
         initial_vector[1] = -tangent[2]
         initial_vector[2] = tangent[1]
-        frame = spline.moving_frame(t, kind="bishop", initial_vector=initial_vector)
+        frame = spline.moving_frame(t, method="bishop", initial_vector=initial_vector)
 
         # Check that they are unit vectors
         assert np.allclose(np.linalg.norm(frame, axis=-1), 1)

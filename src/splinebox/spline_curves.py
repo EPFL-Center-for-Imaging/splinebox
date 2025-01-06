@@ -641,7 +641,7 @@ class Spline:
             normals = (np.array([[0, -1], [1, 0]]) @ first_deriv.T).T
             normals /= np.linalg.norm(normals, axis=1)[:, np.newaxis]
         elif self.control_points.shape[1] == 3:
-            frame = self.moving_frame(t, kind=frame, initial_vector=initial_vector)
+            frame = self.moving_frame(t, method=frame, initial_vector=initial_vector)
             normals = frame[:, 1:]
         else:
             raise RuntimeError(
@@ -649,7 +649,7 @@ class Spline:
             )
         return normals
 
-    def moving_frame(self, t, kind="frenet", initial_vector=None):
+    def moving_frame(self, t, method="frenet", initial_vector=None):
         """
         This function defines two of the `moving frames` on the spline curve,
         the Frenet-Serre frame and the Bishop frame. It returns an orthonormal
@@ -661,7 +661,7 @@ class Spline:
         t : np.array
             The parameters values of the spline for which the frame should be
             evaluated.
-        kind : string
+        method : string
             The type of frame. Can be "frenet" or "bishop".
         initial_vector : np.array or None
             The initial vector for the Bishop frame. It has to be orthogonal
@@ -687,7 +687,7 @@ class Spline:
         frame = np.zeros((len(t), 3, 3))
         frame[:, 0] = first_derivative / np.linalg.norm(first_derivative, axis=-1)[:, np.newaxis]
 
-        if kind == "frenet":
+        if method == "frenet":
             second_derivative = self.eval(t, derivative=2)
             frame[:, 2] = np.cross(first_derivative, second_derivative)
             norm_binormal = np.linalg.norm(frame[:, 2], axis=-1)[:, np.newaxis]
@@ -701,7 +701,7 @@ class Spline:
                 )
             frame[:, 2] /= norm_binormal
             frame[:, 1] = np.cross(frame[:, 2], frame[:, 0])
-        elif kind == "bishop":
+        elif method == "bishop":
             if initial_vector is None:
                 tangent = frame[0, 0]
                 # Try to do the same as for the Frenet frame
@@ -737,7 +737,7 @@ class Spline:
                         + n * np.dot(n, frame[i - 1, 2]) * (1 - np.cos(phi))
                     )
         else:
-            raise ValueError(f"Unkown kind of frame {kind}.")
+            raise ValueError(f"Unkown method '{method}' for moving frame.")
         return frame
 
     def eval(self, t, derivative=0):
