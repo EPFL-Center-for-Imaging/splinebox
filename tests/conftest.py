@@ -295,3 +295,41 @@ def multigenerator(request):
 @pytest.fixture(params=[2, 3, 4])
 def support(request):
     return request.param
+
+
+def radius_func(t, phi):
+    a = 0.1 + 0.03 * np.sin(t * 4 * np.pi)
+    b = 0.05
+    phi = np.deg2rad(phi)
+    r = (a * b) / np.sqrt((b * np.cos(phi)) ** 2 + (a * np.sin(phi)) ** 2)
+    return r
+
+
+@pytest.fixture(params=[None, 1, 1.5, radius_func])
+def radius(request):
+    return request.param
+
+
+@pytest.fixture(params=[0.1, 1])
+def step_t(request):
+    return request.param
+
+
+@pytest.fixture(params=[5, 25])
+def step_angle(request):
+    return request.param
+
+
+@pytest.fixture(params=["surface", "volume"])
+def mesh_type(request):
+    return request.param
+
+
+@pytest.fixture(params=[False, True])
+def cap_ends(request):
+    return request.param
+
+
+@pytest.fixture(params=["frenet", "bishop"])
+def frame(request):
+    return request.param
