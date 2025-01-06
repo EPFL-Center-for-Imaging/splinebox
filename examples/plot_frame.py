@@ -7,7 +7,7 @@ Moving Frames
 SplineBox implements two types of moving frames:
 
 1. `Frenet-Serret Frame`_: Defined by the curve's tangent, normal, and binormal vectors. To compute all three vectors, the curve cannot have any straight segments and no inflection points. Additionally, the frame may rotate around the curve.
-2. `**Bishop Frame**`_: A twist-free alternative that eliminates rotations around the curve and is defined on straight segments and at inflections points [Bishop1975]_.
+2. `Bishop Frame`_: A twist-free alternative that eliminates rotations around the curve and is defined on straight segments and at inflections points [Bishop1975]_.
 
 .. _Moving frames: https://en.wikipedia.org/wiki/Moving_frame
 .. _Frenet-Serret Frame: https://en.wikipedia.org/wiki/Frenet-Serret_formulas
@@ -40,13 +40,13 @@ t = np.linspace(0, spline.M - 1, spline.M * 3)
 # 2. Compute the Frenet-Serret Frame
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-frenet_frame = spline.moving_frame(t, kind="frenet")
+frenet_frame = spline.moving_frame(t, method="frenet")
 
 # %%
 # 3. Compute the Bishop Frame
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-bishop_frame = spline.moving_frame(t, kind="bishop")
+bishop_frame = spline.moving_frame(t, method="bishop")
 
 # %%
 # 4. Visualize the Frames
