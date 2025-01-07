@@ -1,4 +1,0 @@
-B1
-==
-
-.. autoclass:: splinebox.basis_functions.B1

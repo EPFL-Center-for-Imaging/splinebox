@@ -53,6 +53,7 @@ extensions = [
     # "pyvista.ext.plot_directive",
     "pyvista.ext.viewer_directive",
     "sphinx_design",
+    "sphinx.ext.autosummary",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -156,3 +157,5 @@ plot_formats = [
     ("png", 500),
 ]
 plot_rcparams = {"axes.prop_cycle": cycler.cycler(color=["#228b18"])}
+
+autosummary_generate = True
