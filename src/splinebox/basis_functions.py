@@ -141,7 +141,7 @@ class B1(BasisFunction):
     Basis function for a linear (:math:`1^{\text{st}}` order) polynomial basis spline.
 
     For a detailed theoretical description, including the equation and
-    a plot of the function, refer to the :ref:`Polynomial basis (B-spline)`
+    a plot of the function, refer to the :ref:`theory/polynomial:Polynomial basis (B-spline)`
     section in the documentation.
 
     The constructor does not require any arguments.
@@ -204,7 +204,7 @@ class B2(BasisFunction):
     Basis function for a quadratic (:math:`2^{\text{nd}}` order) polynomial basis spline.
 
     For a detailed theoretical description, including the equation and
-    a plot of the function, refer to the :ref:`Polynomial basis (B-spline)`
+    a plot of the function, refer to the :ref:`theory/polynomial:Polynomial basis (B-spline)`
     section in the documentation.
 
     The constructor does not require any arguments.
@@ -270,7 +270,7 @@ class B3(BasisFunction):
     Basis function for a cubic (:math:`3^{\text{rd}}` order) polynomial basis spline.
 
     For a detailed theoretical description, including the equation and
-    a plot of the function, refer to the :ref:`Polynomial basis (B-spline)`
+    a plot of the function, refer to the :ref:`theory/polynomial:Polynomial basis (B-spline)`
     section in the documentation.
 
     The constructor does not require any arguments.
@@ -408,7 +408,7 @@ class Exponential(BasisFunction):
     Basis function for an exponential spline.
 
     For a detailed theoretical description, including the equation and
-    a plot of the function, refer to the :ref:`Exponential basis`
+    a plot of the function, refer to the :ref:`theory/exponential:Exponential basis`
     section in the documentation.
 
     The constructor requires `M`, the number of knots in the spline, as an argument.
@@ -604,7 +604,7 @@ class CatmullRom(BasisFunction):
     Basis function for a Catmull Rom spline.
 
     For a detailed theoretical description, including the equation and
-    a plot of the function, refer to the :ref:`Catmull Rom basis`
+    a plot of the function, refer to the :ref:`theory/catmullrom:Catmull Rom basis`
     section in the documentation.
 
     The constructor does not require any arguments.
@@ -674,7 +674,7 @@ class CubicHermite(BasisFunction):
     Basis function for a cubic Hermite spline.
 
     For a detailed theoretical description, including the equation and
-    a plot of the function, refer to the :ref:`Cubic Hermite basis`
+    a plot of the function, refer to the :ref:`theory/cubichermite:Cubic Hermite basis`
     section in the documentation.
 
     The constructor does not require any arguments.
@@ -889,7 +889,7 @@ class ExponentialHermite(BasisFunction):
     Basis function for an exponential Hermite spline.
 
     For a detailed theoretical description, including the equation and
-    a plot of the function, refer to the :ref:`Exponential Hermite basis`
+    a plot of the function, refer to the :ref:`theory/exponentialhermite:Exponential Hermite basis`
     section in the documentation.
 
     The constructor requires `M`, the number of knots in the spline, as an argument.

@@ -44,7 +44,7 @@ To install all dependencies:
 Constructing Your First Spline
 ------------------------------
 
-**Note**: If you are unfamiliar with spline terminology, such as knots and control points, refer to our :ref:`theory introduction <Theory>`.
+**Note**: If you are unfamiliar with spline terminology, such as knots and control points, refer to our :ref:`theory introduction <theory/index:Theory>`.
 
 Constructing a spline with SplineBox is straightforward. You need to decide:
 
@@ -82,7 +82,7 @@ To shape the spline in `ndim` dimensions, you have three options:
 
       spline.fit(np.random.rand(100, ndim))
 
-   Learn more about how ``fit`` works in the theory section on :ref:`Data approximation` or by checking the API :meth:`splinebox.spline_curves.Spline.fit`.
+   Learn more about how ``fit`` works in the theory section on :ref:`theory/data_approximation:Data approximation` or by checking the API :meth:`splinebox.spline_curves.Spline.fit`.
 
 Evaluating/Sampling a Spline
 ----------------------------

@@ -359,7 +359,7 @@ class Spline:
         """
         Fit the provided points with the spline using
         least squares.
-        For details refer to :ref:`Data approximation`.
+        For details refer to :ref:`theory/data_approximation:Data approximation`.
 
         Parameters
         ----------
@@ -651,10 +651,10 @@ class Spline:
 
     def moving_frame(self, t, method="frenet", initial_vector=None):
         """
-        Compute a `moving frame`_ (local orthonormal coordinate system) along the spline.
+        Compute a moving frame (local orthonormal coordinate system) along the spline.
 
-        This method computes either the Frenet-Serret frame or the Bishop frame for
-        the spline. A moving frame consists of three orthonormal basis vectors at
+        This method computes either the Frenet-Serret frame or the Bishop frame [#bishop]_ for
+        the spline. A moving frame [#movingframe]_ consists of three orthonormal basis vectors at
         each point on the curve. The Frenet-Serret frame is derived from the curve's
         derivatives but may twist around the curve. The Bishop frame eliminates
         this twist, providing a zero-torsion alternative.
@@ -707,9 +707,9 @@ class Spline:
 
         References
         ----------
-        .. [1] Bishop, R. L. (1975). "There is More than One Way to Frame a Curve."
+        .. [#movingframe] `Moving frame <https://en.wikipedia.org/wiki/Moving_frame>`_ on Wikipedia.
+        .. [#bishop] Bishop, R. L. (1975). "There is More than One Way to Frame a Curve."
                American Mathematical Monthly, 82(3), 246-251.
-        .. _moving frame: https://en.wikipedia.org/wiki/Moving_frame
         """
         self._check_control_points()
         if self.control_points.ndim != 2 or self.control_points.shape[1] != 3:

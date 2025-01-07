@@ -158,4 +158,9 @@ plot_formats = [
 ]
 plot_rcparams = {"axes.prop_cycle": cycler.cycler(color=["#228b18"])}
 
+# This is useful to prevent duplicate section label warnings
+autosectionlabel_prefix_document = True
+
+# Tell autosummary to generate the rst files
+# for the items in the summary.
 autosummary_generate = True
