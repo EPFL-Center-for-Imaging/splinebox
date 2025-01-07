@@ -641,7 +641,7 @@ class Spline:
             normals = (np.array([[0, -1], [1, 0]]) @ first_deriv.T).T
             normals /= np.linalg.norm(normals, axis=1)[:, np.newaxis]
         elif self.control_points.shape[1] == 3:
-            frame = self.moving_frame(t, kind=frame, initial_vector=initial_vector)
+            frame = self.moving_frame(t, method=frame, initial_vector=initial_vector)
             normals = frame[:, 1:]
         else:
             raise RuntimeError(
@@ -649,35 +649,67 @@ class Spline:
             )
         return normals
 
-    def moving_frame(self, t, kind="frenet", initial_vector=None):
+    def moving_frame(self, t, method="frenet", initial_vector=None):
         """
-        This function defines two of the `moving frames` on the spline curve,
-        the Frenet-Serre frame and the Bishop frame. It returns an orthonormal
-        basis for each t. The Bishop frame [Bishop1975]_ is constructed such that
-        it does not twist around the curve, i.e. it has zero torsion.
+        Compute a `moving frame`_ (local orthonormal coordinate system) along the spline.
+
+        This method computes either the Frenet-Serret frame or the Bishop frame for
+        the spline. A moving frame consists of three orthonormal basis vectors at
+        each point on the curve. The Frenet-Serret frame is derived from the curve's
+        derivatives but may twist around the curve. The Bishop frame eliminates
+        this twist, providing a zero-torsion alternative.
 
         Parameters
         ----------
         t : np.array
-            The parameters values of the spline for which the frame should be
-            evaluated.
-        kind : string
-            The type of frame. Can be "frenet" or "bishop".
-        initial_vector : np.array or None
-            The initial vector for the Bishop frame. It has to be orthogonal
-            to the tangent at :code:`t[0]` and defines the orientation of the basis
-            at :code:`t[0]`. This orientation is then propagated along the spline
-            since the Bishop frame does not allow the basis to twist around
-            the curve.
+            A 1D array of parameter values at which to evaluate the frame. These
+            correspond to positions along the spline.
+        method : str, optional
+            The type of moving frame to compute. Options are:
+
+            - "frenet": The classical Frenet-Serret frame, based on tangent, normal, and binormal vectors.
+            - "bishop": A twist-free frame that requires an initial orientation.
+
+            Default is "frenet".
+        initial_vector : np.array or None, optional
+            For the Bishop frame, an initial vector that is orthogonal to the tangent
+            vector at `t[0]`. This vector determines the initial orientation of the
+            basis, which is propagated along the curve without twisting. If None,
+            the method computes a suitable initial vector automatically. This
+            parameter is ignored when :code:`method="frenet"`.
 
         Returns
         -------
         frame : np.array
-            A numpy array with 3 dimensions. The first dimension corresponds
-            to t, the second to the 3 basis vectors and the last one are the
-            components of each basis vector.
+            A 3D numpy array with shape `(len(t), 3, 3)`. The dimensions are:
 
-        .. _moving frames: https://en.wikipedia.org/wiki/Moving_frame
+            - The first axis corresponds to the parameter values in `t`.
+            - The second axis contains the three basis vectors at each `t`:
+              [tangent, normal, binormal] for "frenet" or equivalent vectors for "bishop".
+            - The third axis contains the components of each basis vector in 3D space.
+
+        Raises
+        ------
+        RuntimeError
+            If the spline is not defined in 3D or if the Frenet frame cannot be
+            computed due to inflection points, straight segments, or undefined
+            tangent/normal vectors.
+        ValueError
+            If the initial vector for the Bishop frame is not orthogonal to the
+            tangent at `t[0]`, or if an invalid `method` is specified.
+
+        Notes
+        -----
+        - The Frenet frame is not defined at points where the curve has zero curvature,
+          such as straight segments or inflection points. In these cases, the Bishop
+          frame is recommended.
+        - For closed curves, check for discontinuities of the Bishop frame.
+
+        References
+        ----------
+        .. [1] Bishop, R. L. (1975). "There is More than One Way to Frame a Curve."
+               American Mathematical Monthly, 82(3), 246-251.
+        .. _moving frame: https://en.wikipedia.org/wiki/Moving_frame
         """
         self._check_control_points()
         if self.control_points.ndim != 2 or self.control_points.shape[1] != 3:
@@ -687,7 +719,7 @@ class Spline:
         frame = np.zeros((len(t), 3, 3))
         frame[:, 0] = first_derivative / np.linalg.norm(first_derivative, axis=-1)[:, np.newaxis]
 
-        if kind == "frenet":
+        if method == "frenet":
             second_derivative = self.eval(t, derivative=2)
             frame[:, 2] = np.cross(first_derivative, second_derivative)
             norm_binormal = np.linalg.norm(frame[:, 2], axis=-1)[:, np.newaxis]
@@ -701,9 +733,17 @@ class Spline:
                 )
             frame[:, 2] /= norm_binormal
             frame[:, 1] = np.cross(frame[:, 2], frame[:, 0])
-        elif kind == "bishop":
+        elif method == "bishop":
             if initial_vector is None:
-                raise ValueError("The bishop frame requires the keyword argument initial_vector.")
+                tangent = frame[0, 0]
+                # Try to do the same as for the Frenet frame
+                initial_vector = np.cross(np.cross(tangent, self.eval(t[0], derivative=2)), tangent)
+                if np.isclose(np.linalg.norm(initial_vector), 0) or np.any(np.isnan(initial_vector)):
+                    initial_vector = np.zeros(3)
+                    max_axis = np.argmax(np.abs(tangent))
+                    other_axis = (max_axis + 1) % 3
+                    initial_vector[max_axis] = tangent[other_axis]
+                    initial_vector[other_axis] = -tangent[max_axis]
             initial_vector /= np.linalg.norm(initial_vector)
             if not np.isclose(np.dot(frame[0, 0], initial_vector), 0):
                 raise ValueError("The initial vector has to be orthogonal to the tangent at t[0].")
@@ -729,7 +769,7 @@ class Spline:
                         + n * np.dot(n, frame[i - 1, 2]) * (1 - np.cos(phi))
                     )
         else:
-            raise ValueError(f"Unkown kind of frame {kind}.")
+            raise ValueError(f"Unkown method '{method}' for moving frame.")
         return frame
 
     def eval(self, t, derivative=0):
@@ -905,6 +945,231 @@ class Spline:
             return (min_distance, result.x)
 
         return min_distance
+
+    def mesh(
+        self,
+        radius=None,
+        step_t=0.1,
+        step_angle=5,
+        mesh_type="surface",
+        cap_ends=False,
+        frame="bishop",
+        initial_vector=None,
+    ):
+        """
+        Create a 3D mesh around the spline curve.
+
+        This method generates a mesh surrounding the spline, with the distance from
+        the spline controlled by the `radius` parameter. The mesh can be either a
+        surface mesh with triangular cells or a volume mesh with tetrahedral cells.
+        The orientation of the mesh is determined using either the Frenet-Serret or
+        Bishop frame.
+
+        Parameters
+        ----------
+        radius : float or callable, optional
+            Defines the distance from the spline to the mesh surface. Can be:
+
+            - A float for a constant radius.
+            - A callable function that takes the spline parameter `t` and the polar
+              angle in the normal plane as arguments and returns a float.
+
+            If None, the mesh will follow the spline without an offset. Default is None.
+        step_t : float, optional
+            Step size for the spline parameter `t`, controlling the resolution along
+            the curve. Smaller values increase mesh resolution. Default is 0.1.
+        step_angle : float, optional
+            Step size for the polar angle (in degrees), controlling the resolution
+            around the spline. Smaller values increase mesh resolution. Default is 5.
+        mesh_type : str, optional
+            Specifies the type of mesh to create:
+
+            - "surface": A surface mesh with triangular cells.
+            - "volume": A volume mesh with tetrahedral cells.
+
+            Default is "surface".
+        cap_ends : bool, optional
+            If True, the ends of an open surface mesh are capped with orthogonal
+            planes. Ignored for closed splines or volume meshes. Default is False.
+        frame : str, optional
+            The frame to use for orientation of the mesh:
+            - "frenet": Uses the Frenet-Serret frame.
+            - "bishop": Uses the Bishop frame, requiring an `initial_vector`.
+            See :meth:`splinebox.spline_curves.moving_frame`. Default is "bishop".
+        initial_vector : numpy array or None, optional
+            For the Bishop frame, an initial vector that defines the orientation of
+            the frame at the start of the spline (`t[0]`). This vector must be
+            orthogonal to the tangent at `t[0]`. Ignored for the Frenet frame. If
+            None, a suitable initial vector is computed automatically. Default is None.
+
+        Returns
+        -------
+        points : numpy array
+            A 2D array of shape `(N, 3)`, where `N` is the number of mesh points.
+            Each row represents the (x, y, z) coordinates of a point in the mesh.
+        connectivity : numpy array
+            A 2D array of shape `(M, K)`, where `M` is the number of elements in the
+            mesh and `K` is the number of vertices per element (3 for surface meshes
+            and 4 for volume meshes). Each row contains the indices of `points` that
+            form an element.
+
+        Raises
+        ------
+        NotImplementedError
+            If the spline is not defined in 3D, as meshes are only supported for 3D splines.
+
+        Notes
+        -----
+        - Surface meshes are useful for visualization, while volume meshes are
+          typically used in simulations and finite element analysis.
+        - For open splines, capping the ends (`cap_ends=True`) creates closed surfaces,
+          which may be useful for some applications.
+        - The Bishop frame is recommended for curves with inflection points or
+          straight segments where the Frenet frame is undefined.
+        - When radius is callable, the Bishop frame is recommend to avoid "drift" of the
+          polar angle around the curve.
+
+        Examples
+        --------
+        Create a surface mesh with constant radius:
+
+        >>> points, connectivity = spline.mesh(radius=0.5, step_t=0.1, step_angle=10, mesh_type="surface")
+
+        Create a volume mesh with variable radius:
+
+        >>> def radius_function(t, angle):
+        >>>     return 0.5 + 0.2 * np.sin(np.radians(angle))
+        >>> points, connectivity = spline.mesh(radius=radius_function, mesh_type="volume")
+        """
+        if self.control_points.ndim != 2 or self.control_points.shape[1] != 3:
+            raise NotImplementedError("Meshes are only implemented for splines in 3D.")
+        t = np.arange(0, self.M if self.closed else self.M - 1 + step_t, step_t)
+        if radius is None or radius == 0:
+            points = self.eval(t)
+            connectivity = np.stack((np.arange(len(points)), np.arange(len(points)) + 1), axis=-1)
+            if self.closed:
+                # Connect end to the beginning
+                connectivity[-1, -1] = 0
+            else:
+                connectivity = connectivity[:-1]
+        else:
+            _radius = (lambda t, phi: np.full(t.shape, radius)) if not callable(radius) else radius
+
+            phi = np.arange(0, 360, step_angle)
+
+            if mesh_type == "surface":
+                phiphi, tt = np.meshgrid(phi, t)
+                tt = tt.flatten()
+                phiphi = phiphi.flatten()
+                centers = self.eval(tt.flatten())
+                rr = _radius(tt, phiphi)
+                normals = self.normal(t, frame=frame, initial_vector=initial_vector)
+
+                n_angles = len(phi)
+                n_t = len(t)
+                normals = (
+                    np.repeat(normals[:, 0], n_angles, axis=0) * np.sin(np.deg2rad(phiphi))[:, np.newaxis]
+                    + np.repeat(normals[:, 1], n_angles, axis=0) * np.cos(np.deg2rad(phiphi))[:, np.newaxis]
+                )
+
+                points = centers + rr[:, np.newaxis] * normals
+                n_points = len(points)
+                connectivity = self._surface_mesh_connectivity(self.closed, n_angles, n_t, n_points)
+                if cap_ends and not self.closed:
+                    points = np.concatenate((centers[0].reshape((1, -1)), points, centers[-1].reshape((1, -1))), axis=0)
+                    start_connectivity = np.zeros((n_angles, 3), dtype=int)
+                    start_connectivity[:, 1] = np.arange(1, n_angles + 1)
+                    start_connectivity[:, 2] = np.roll(start_connectivity[:, 1], -1)
+                    end_connectivity = np.zeros((n_angles, 3), dtype=int)
+                    end_connectivity[:, 0] = n_points + 1
+                    end_connectivity[:, 1] = np.arange(n_points, n_points - n_angles, -1)
+                    end_connectivity[:, 2] = np.roll(end_connectivity[:, 1], -1)
+                    connectivity = np.concatenate((start_connectivity, connectivity + 1, end_connectivity))
+
+            elif mesh_type == "volume":
+                phiphi, tt = np.meshgrid(phi, t)
+                rr = _radius(tt, phiphi)
+                # Add columns for the center points
+                rr = np.hstack((np.zeros((rr.shape[0], 1)), rr))
+                tt = np.hstack((tt[:, 0][:, np.newaxis], tt))
+                phiphi = np.hstack((phiphi[:, 0][:, np.newaxis], phiphi))
+
+                tt = tt.flatten()
+                phiphi = phiphi.flatten()
+                rr = rr.flatten()
+
+                centers = self.eval(tt.flatten())
+                normals = self.normal(t, frame=frame, initial_vector=initial_vector)
+
+                n_angles = len(phi)
+                n_t = len(t)
+                normals = (
+                    np.repeat(normals[:, 0], n_angles + 1, axis=0) * np.sin(np.deg2rad(phiphi))[:, np.newaxis]
+                    + np.repeat(normals[:, 1], n_angles + 1, axis=0) * np.cos(np.deg2rad(phiphi))[:, np.newaxis]
+                )
+                points = centers + rr[:, np.newaxis] * normals
+                n_points = len(points)
+
+                connectivity = self._volume_mesh_connectivity(self.closed, n_angles, n_t, n_points)
+
+        return points, connectivity
+
+    @staticmethod
+    @numba.jit(nopython=True, nogil=True, cache=True)
+    def _surface_mesh_connectivity(closed, n_angles, n_t, n_points):  # pragma: no cover
+        if closed:
+            connectivity = np.zeros((2 * n_angles * n_t, 3), dtype=numba.int64)
+        else:
+            connectivity = np.zeros((2 * n_angles * (n_t - 1), 3), dtype=numba.int64)
+        face = 0
+        for i in range(n_t if closed else n_t - 1):
+            for j in range(n_angles):
+                connectivity[face] = [
+                    i * n_angles + j,
+                    ((i + 1) * n_angles + j) % n_points,
+                    ((i + 1) * n_angles + (j + 1) % n_angles) % n_points,
+                ]
+                face += 1
+                connectivity[face] = [
+                    i * n_angles + j,
+                    ((i + 1) * n_angles + (j + 1) % n_angles) % n_points,
+                    (i * n_angles + (j + 1) % n_angles) % n_points,
+                ]
+                face += 1
+        return connectivity
+
+    @staticmethod
+    @numba.jit(nopython=True, nogil=True, cache=True)
+    def _volume_mesh_connectivity(closed, n_angles, n_t, n_points):  # pragma: no cover
+        if closed:
+            connectivity = np.zeros((3 * n_angles * n_t, 4), dtype=numba.int64)
+        else:
+            connectivity = np.zeros((3 * n_angles * (n_t - 1), 4), dtype=numba.int64)
+        vol = 0
+        for i in range(n_t if closed else n_t - 1):
+            for j in range(1, n_angles + 1):
+                connectivity[vol] = [
+                    i * (n_angles + 1) + j,
+                    ((i + 1) * (n_angles + 1) + j) % n_points,
+                    ((i + 1) * (n_angles + 1) + 1 + j % n_angles) % n_points,
+                    (i + 1) * (n_angles + 1) % n_points,
+                ]
+                vol += 1
+                connectivity[vol] = [
+                    i * (n_angles + 1) + j,
+                    ((i + 1) * (n_angles + 1) + 1 + j % n_angles) % n_points,
+                    (i * (n_angles + 1) + 1 + j % n_angles) % n_points,
+                    i * (n_angles + 1),
+                ]
+                vol += 1
+                connectivity[vol] = [
+                    i * (n_angles + 1) + j,
+                    ((i + 1) * (n_angles + 1) + 1 + j % n_angles) % n_points,
+                    (i + 1) * (n_angles + 1) % n_points,
+                    i * (n_angles + 1),
+                ]
+                vol += 1
+        return connectivity
 
 
 class HermiteSpline(Spline):
