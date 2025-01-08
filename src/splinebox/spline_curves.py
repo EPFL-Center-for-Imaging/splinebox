@@ -1,3 +1,7 @@
+"""
+This module provides the classes necessary for constructing splines, along with all the methods required for spline fitting and inference.
+"""
+
 import collections
 import copy
 import json
@@ -27,6 +31,36 @@ def padding_function(knots, pad_length):
     -------
     padded_knots : numpy array
         Array of padded knots.
+
+    Notes
+    -----
+    - Padding is required if the basis function has support > 1.
+    - Not padding a spline, is equivalent to setting the padded
+      control points to zero.
+    - Edge padding is only used for the knots.
+
+    Examples
+    --------
+    >>> import splinebox
+    >>> import numpy as np
+
+    >>> knots = np.array([[1, 1], [2, 2], [3, 3]])
+
+    >>> splinebox.padding_function(knots, pad_length=1)
+    array([[1, 1],
+           [1, 1],
+           [2, 2],
+           [3, 3],
+           [3, 3]])
+
+    >>> splinebox.padding_function(knots, pad_length=2)
+    array([[1, 1],
+           [1, 1],
+           [1, 1],
+           [2, 2],
+           [3, 3],
+           [3, 3],
+           [3, 3]])
     """
     # Add constant padding to the ends
     if knots.ndim == 1:
@@ -53,13 +87,55 @@ class Spline:
         the padding size as the second argument. It should return a padded array.
         If `None`, a padded array has to be supplied when setting the `knots`.
         The default is constant padding with the edge values (see :func:`splinebox.spline_curves.padding_function`).
+
+    Raises
+    ------
+    RuntimeError
+        If M is too small for the specified basis function.
+        M must be at least as large as the support of the basis function.
+
+    Notes
+    -----
+
+    Examples
+    --------
+    >>> import splinebox
+    >>> import numpy as np
+
+    >>> spline = splinebox.Spline(M=5, basis_function=splinebox.B3(), closed=False)
+    >>> spline.knots = np.array([[1, 1], [2, 2], [3, 3], [4, 4], [5, 5]])
+
+    >>> spline.control_points
+    array([[1.15384615, 1.15384615],
+           [0.69230769, 0.69230769],
+           [2.07692308, 2.07692308],
+           [3.        , 3.        ],
+           [3.92307692, 3.92307692],
+           [5.30769231, 5.30769231],
+           [4.84615385, 4.84615385]])
+
+    >>> spline.knots
+    array([[1., 1.],
+           [2., 2.],
+           [3., 3.],
+           [4., 4.],
+           [5., 5.]])
+
+    >>> spline.basis_function
+    splinebox.basis_functions.B3()
+
+    >>> spline.closed
+    False
+
+    >>> spline.pad
+    1
     """
 
     _wrong_dimension_msg = "It looks like control_points is a 2D array with second dimension different than two. I don't know how to handle this yet."
     _wrong_array_size_msg = (
         "It looks like control_points is neither a 1 nor a 2D array. I don't know how to handle this yet."
     )
-    _no_control_points_msg = "This spline doesn't have any coefficients."
+    _no_control_points_msg = "This spline object doesn't have any control points yet."
     _unimplemented_msg = "This function is not implemented."
 
     def __init__(self, M, basis_function, closed=False, control_points=None, padding_function=padding_function):
@@ -79,8 +155,8 @@ class Spline:
 
     def _check_control_points(self):
         """
-        Most methods require coefficients to be set before they
-        can be used. This helper function checks if the coefficients have been
+        Most methods require control points to be set before they
+        can be used. This helper function checks if the control points have been
         set.
         """
         if self.control_points is None:
@@ -1102,6 +1178,8 @@ class Spline:
         ------
         NotImplementedError
             If the spline is not defined in 3D, as meshes are only supported for 3D splines.
+        RuntimeError
+            If the the control points of the spline are not set.
 
         Notes
         -----
@@ -1116,16 +1194,59 @@ class Spline:
 
         Examples
         --------
+        >>> import splinebox
+        >>> import numpy as np
+
+        Create spline:
+
+        >>> spline = splinebox.Spline(M=4, basis_function=splinebox.B3(), closed=False)
+
+        Set the control points with points in 3D space.
+
+        >>> spline.control_points = np.array([[1.0, 1.0, 1.0],
+        ...                                   [2.0, 2.0, 2.0],
+        ...                                   [3.0, 3.0, 3.0],
+        ...                                   [4.0, 4.0, 4.0],
+        ...                                   [5.0, 5.0, 5.0],
+        ...                                   [6.0, 6.0, 6.0]])
+
         Create a surface mesh with constant radius:
 
         >>> points, connectivity = spline.mesh(radius=0.5, step_t=0.1, step_angle=10, mesh_type="surface")
 
+        The number of 3D point in the mesh depends on the steps in t and angle.
+        >>> points.shape
+        (1116, 3)
+
+        The mesh consist of triangles all defined by three points.
+        >>> connectivity.shape
+        (2160, 3)
+
+        The indices of the first triangle are:
+        >>> connectivity[0]
+        array([ 0, 36, 37])
+
+        The corners of the first triangle are:
+        >>> points[connectivity[0]]
+        array([[2.20412415, 2.20412415, 1.59175171],
+               [2.30412415, 2.30412415, 1.69175171],
+               [2.36241694, 2.23962914, 1.69795392]])
+
         Create a volume mesh with variable radius:
 
         >>> def radius_function(t, angle):
-        >>>     return 0.5 + 0.2 * np.sin(np.radians(angle))
+        ...     return 0.5 + 0.2 * np.sin(np.radians(angle))
         >>> points, connectivity = spline.mesh(radius=radius_function, mesh_type="volume")
+
+        The points are still in 3D.
+        >>> points.shape
+        (2263, 3)
+
+        The connectivity now defines tetrahedra with four points each.
+        >>> connectivity.shape
+        (6480, 4)
         """
+        self._check_control_points()
         if self.control_points.ndim != 2 or self.control_points.shape[1] != 3:
             raise NotImplementedError("Meshes are only implemented for splines in 3D.")
         t = np.arange(0, self.M if self.closed else self.M - 1 + step_t, step_t)
@@ -1278,7 +1399,7 @@ class HermiteSpline(Spline):
     """
 
     _coef_tangent_mismatch_msg = "It looks like control_points and tangents have different shapes."
-    _no_tangents_msg = "This spline doesn't have any tangents."
+    _no_tangents_msg = "This spline object doesn't have any tangents yet."
 
     def __init__(
         self, M, basis_function, closed=False, control_points=None, tangents=None, padding_function=padding_function
@@ -1288,8 +1409,8 @@ class HermiteSpline(Spline):
 
     def _check_control_points_and_tangents(self):
         """
-        Most methods require coefficients to be set before they
-        can be used. This helper function checks if the coefficients have been
+        Most methods require control points and tangents to be set before they
+        can be used. This helper function checks if control pointa and tangents have been
         set.
         """
         self._check_control_points()
