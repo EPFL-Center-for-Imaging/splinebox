@@ -54,6 +54,7 @@ extensions = [
     "pyvista.ext.viewer_directive",
     "sphinx_design",
     "sphinx.ext.autosummary",
+    "numpydoc",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -164,3 +165,5 @@ autosectionlabel_prefix_document = True
 # Tell autosummary to generate the rst files
 # for the items in the summary.
 autosummary_generate = True
+
+numpydoc_use_plots = True
