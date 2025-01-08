@@ -1,5 +1,13 @@
 """
-This module provides spline basis functions.
+This module provides a collection of basis function classes, each designed for a specific type of spline construction.
+The modular design enables users to easily explore different spline types by swapping the basis function object when creating a spline.
+
+All basis function classes inherit from the base class :class:`splinebox.basis_functions.BasisFunction`.
+The base class defines methods such as :code:`eval`, :code:`filter_periodic`, and :code:`filter_symmetric`.
+The latter two methods should be overridden as appropriate in any subclass to ensure they align with the behavior of the specific basis function.
+To enable the eval method, subclasses must implement the following methods: _func(t), _derivative_1(t), and _derivative_2(t), which correspond to the function itself and its first and second derivatives, respectively.
+
+For more information on implementing a new basis function see: :class:`splinebox.basis_functions.BasisFunction`.
 """
 
 import inspect
@@ -14,6 +22,11 @@ import numpy as np
 class BasisFunction:
     """
     Base class for all basis functions.
+    This class should not be used directly, but instead classes for
+    specific basis functions should inherit from this class.
+
+    An example of how to implement your own basis function using
+    inheriting from this class is given below.
 
     Parameters
     ----------
@@ -26,6 +39,45 @@ class BasisFunction:
     support : float
         The support of the function, i.e. the size of the area
         being mapped to non-zero values.
+
+    Examples
+    --------
+    This example shows how to implement a new basis function.
+
+    >>> import splinebox
+    >>> class MyBasis(splinebox.BasisFunction):
+    ...     def __init__(self):
+    ...         super().__init__(multigenerator=False, support=2)
+    ...
+    ...     def __str__(self):
+    ...         return "MyBasis"
+    ...
+    ...     def __repr__(self):
+    ...         # Change this if your new basis function in not in splinebox.basis_functions
+    ...         return "splinebox.basis_functions.MyBasis()"
+    ...
+    ...     def _func(t):
+    ...         # Implement your function here.
+    ...         return val
+    ...
+    ...     def _derivative_1(t):
+    ...         # Implement the first derivative of your function here.
+    ...         return val
+    ...
+    ...     def _derivative_2(t):
+    ...         # Implement the second derivative of your function here
+    ...         # or raise an error.
+    ...         raise RuntimeError("MyBasis isn't twice differentiable.")
+    ...
+    ...     def filter_symmetric(s):
+    ...         # Implement the function that can turn knots into control points
+    ...         # for an open spline
+    ...         return s
+    ...
+    ...     def filter_periodic(s):
+    ...         # Implement the function that can turn knots into control points
+    ...         # for a closed spline
+    ...         return s
     """
 
     _unimplemented_message = "This function is not implemented."
@@ -146,8 +198,43 @@ class B1(BasisFunction):
 
     The constructor does not require any arguments.
 
-    For more information on the methods and attributes available in this class,
-    please see the documentation for :class:`splinebox.basis_functions.BasisFunction`.
+    Examples
+    --------
+    >>> import splinebox
+    >>> import numpy as np
+
+    Creat a basis function object:
+
+    >>> basis_function = splinebox.basis_functions.B1()
+
+    Evaluate the basis function at a single position:
+
+    >>> basis_function.eval(0.5)
+    0.5
+
+    Create a vector of position where the basis function should be evaluated:
+
+    >>> t = np.linspace(-1.4, 1.4, 15)
+    >>> t
+    array([-1.4, -1.2, -1. , -0.8, -0.6, -0.4, -0.2,  0. ,  0.2,  0.4,  0.6,
+            0.8,  1. ,  1.2,  1.4])
+
+    Evaluate the basis function at multiple positions simulatneously:
+
+    >>> basis_function.eval(t)
+    array([0. , 0. , 0. , 0.2, 0.4, 0.6, 0.8, 1. , 0.8, 0.6, 0.4, 0.2, 0. ,
+           0. , 0. ])
+
+    Compute the first derivative of the basis function at multiple positions:
+
+    >>> basis_function.eval(t, derivative=1)
+    array([ 0.,  0., nan,  1.,  1.,  1.,  1., nan, -1., -1., -1., -1., nan,
+            0.,  0.])
+
+    >>> import matplotlib.pyplot as plt
+    >>> t = np.linspace(-1.4, 1.4, 500)
+    >>> plt.plot(t, basis_function.eval(t))
+    >>> plt.show()
     """
 
     def __init__(self):

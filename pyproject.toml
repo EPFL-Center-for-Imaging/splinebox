@@ -31,6 +31,9 @@ ignore = [
     "A003", # shadowing of a Python builtin
 ]
 
+[tool.pytest.ini_options]
+addopts = "--doctest-modules"
+
 exclude = [
     ".bzr",
     ".direnv",
