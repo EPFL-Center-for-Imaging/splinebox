@@ -64,3 +64,4 @@ where :math:`M` is the number of control points and
    q(M) &= \text{j}\,\frac{2\,\pi}{M}+2+\text{e}^{\text{j}\,\frac{2\,\pi}{M}}(\text{j}\,\frac{2\,\pi}{M}-2)
 
 .. plot:: pyplots/plot_exponentialhermite.py
+   :include-source: false

@@ -10,8 +10,7 @@ For instance, you can improve readability of your code by using :code:`splinebox
 
 .. autosummary::
    :toctree: _generated
-   :template: custom-autosummary-module-template.rst
-   :recursive:
+   :template: module.rst
 
    splinebox.basis_functions
    splinebox.spline_curves
