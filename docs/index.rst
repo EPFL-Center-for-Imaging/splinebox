@@ -20,7 +20,7 @@ SplineBox
    :hidden:
 
    getting_started/index.rst
-   auto_examples/index.rst
+   _auto_examples/index.rst
    theory/index.rst
    api/index.rst
 
@@ -60,7 +60,7 @@ SplineBox
 
    <div class="grid-container" style="justify-content: left; max-width: 350px">
       <a href="./getting_started/index.html" class="button button-primary">Get Started</a>
-      <a href="./auto_examples/index.html" class="button button-secondary">See Examples</a>
+      <a href="./_auto_examples/index.html" class="button button-secondary">See Examples</a>
       <a href="./api/index.html">See API Reference →</a>
    </div>
 
@@ -131,7 +131,7 @@ SplineBox
      A common task in image anlysis is to fit a closed spline of a given order with a
      fixed number of knots to a countour. Let's compare how we can achieve this task
      in SplineBox and SciPy.<br>
-     <a href="./auto_examples/plot_splinebox_vs_scipy_coin.html">See full example →</a>
+     <a href="./_auto_examples/plot_splinebox_vs_scipy_coin.html">See full example →</a>
    </p>
 
 .. container:: twocol
@@ -195,7 +195,7 @@ SplineBox
   <p style="margin-top: 3em">
     For additional examples comparing SplineBox to SciPy check out our example gallery.
     <br>
-    <a href="./auto_examples/index.html">See examples →</a>
+    <a href="./_auto_examples/index.html">See examples →</a>
   </p>
 
   <h2>Performance</h2>
@@ -215,9 +215,10 @@ SplineBox
         <li>Data approximation using least-squares fitting</li>
         </ul>
         Splinebox out performs SciPy by approximately two orders of maginitued on the first two tasks and achives comparable performance for least-squares fitting of splines with 10 knots.
-        <a href="./auto_examples/plot_performance_comparison_with_scipy.html">See detailed comparison →</a>
+        <a href="./_auto_examples/plot_performance_comparison_with_scipy.html">See detailed comparison →</a>
       </p>
 
   .. container:: col
 
     .. plot:: pyplots/plot_performance.py
+       :include-source: false

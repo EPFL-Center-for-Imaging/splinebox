@@ -15,3 +15,4 @@ See [Delgado2012]_.
 where :math:`M` is the number of control points.
 
 .. plot:: pyplots/plot_exponential.py
+   :include-source: false
