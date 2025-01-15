@@ -187,7 +187,7 @@ SplineBox
        <p style="margin-left: 3em">
          Scipy requires you to pre-compute the parameter values for all knots and data points
          accounting for padding and periodicity of the data.
-         This can be confusion and difficult to do.
+         This can be confusing and difficult to do.
        </p>
 
 .. raw:: html
