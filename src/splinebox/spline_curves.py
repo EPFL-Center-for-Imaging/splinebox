@@ -575,7 +575,7 @@ class Spline:
 
     def curvature(self, t):
         """
-        Compute the curcature of the spline at position(s) t.
+        Compute the curvature of the spline at position(s) t.
         For splines in 1 and 2 dimensions, the signed curvature
         is returned. Otherwise the unsigned curvature is returned.
 
