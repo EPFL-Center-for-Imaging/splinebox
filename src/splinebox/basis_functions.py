@@ -44,7 +44,6 @@ class BasisFunction:
     --------
     This example shows how to implement a new basis function.
 
-    >>> import splinebox
     >>> class MyBasis(splinebox.BasisFunction):
     ...     def __init__(self):
     ...         super().__init__(multigenerator=False, support=2)
@@ -116,6 +115,16 @@ class BasisFunction:
         y : numpy.array
             Values of the function or its first or second derivative
             at position(s) `t`.
+
+        Examples
+        --------
+        >>> basis_function = splinebox.basis_functions.B1()
+        >>> basis_function.eval(0.5)
+        0.5
+
+        >>> t = np.array([-0.2, 0.5])
+        >>> basis_function.eval(t, derivative=1)
+        array([ 1., -1.])
         """
         if derivative == 0:
             return self._func(t)
@@ -160,6 +169,33 @@ class BasisFunction:
         -------
         control_points : numpy.array
             The control points for the spline passing through the knots provided.
+
+        Examples
+        --------
+        For interpolating basis functions the filter is the identity.
+
+        >>> knots = np.array([[4, 3], [2, 2], [1, 3]])
+        >>> b1 = splinebox.basis_functions.B1()
+        >>> b1.filter_symmetric(knots)
+        array([[4, 3],
+               [2, 2],
+               [1, 3]])
+
+        For non-interpolating spline the returned control points are different.
+
+        >>> b3 = splinebox.basis_functions.B3()
+        >>> b3.filter_symmetric(knots)
+        array([[5.25, 4.  ],
+               [1.5 , 1.  ],
+               [0.75, 4.  ]])
+
+        We can confirm that the returned control points indeed results in the second knot provided.
+
+        >>> control_points = b3.filter_symmetric(knots)
+        >>> b3.eval(-1) * control_points[0] + b3.eval(0) * control_points[1] + b3.eval(1) * control_points[2]
+        array([2., 2.])
+
+        To perform the same test for the first and the last knot, padding is required.
         """
         raise NotImplementedError(BasisFunction._unimplemented_message)
 
@@ -180,6 +216,39 @@ class BasisFunction:
         -------
         control_points : numpy.array
             The control points for the spline passing through the knots provided.
+
+        Examples
+        --------
+        For interpolating basis functions the is the identity.
+
+        >>> knots = np.array([[4, 3], [2, 2], [1, 3]])
+        >>> b1 = splinebox.basis_functions.B1()
+        >>> b1.filter_periodic(knots)
+        array([[4, 3],
+               [2, 2],
+               [1, 3]])
+
+        For non-interpolating spline the returned control points are different.
+
+        >>> b3 = splinebox.basis_functions.B3()
+        >>> b3.filter_periodic(knots)
+        array([[ 5.66666667,  3.33333333],
+               [ 1.66666667,  1.33333333],
+               [-0.33333333,  3.33333333]])
+
+        We can confirm that the returned control points indeed results in the knots provided.
+
+        >>> control_points = b3.filter_periodic(knots)
+        >>> b3.eval(-1) * control_points[0] + b3.eval(0) * control_points[1] + b3.eval(1) * control_points[2]
+        array([2., 2.])
+
+        For the other two knots we need to take the preiodicity into account.
+
+        >>> b3.eval(-1) * control_points[-1] + b3.eval(0) * control_points[0] + b3.eval(1) * control_points[1]
+        array([4., 3.])
+
+        >>> b3.eval(-1) * control_points[1] + b3.eval(0) * control_points[2] + b3.eval(1) * control_points[0]
+        array([1., 3.])
         """
         raise NotImplementedError(BasisFunction._unimplemented_message)
 
@@ -208,8 +277,10 @@ class B1(BasisFunction):
 
     Examples
     --------
+
     >>> import splinebox
     >>> import numpy as np
+    >>> import matplotlib.pyplot as plt
 
     Creat a basis function object:
 
@@ -220,29 +291,20 @@ class B1(BasisFunction):
     >>> basis_function.eval(0.5)
     0.5
 
-    Create a vector of position where the basis function should be evaluated:
-
-    >>> t = np.linspace(-1.4, 1.4, 15)
-    >>> t
-    array([-1.4, -1.2, -1. , -0.8, -0.6, -0.4, -0.2,  0. ,  0.2,  0.4,  0.6,
-            0.8,  1. ,  1.2,  1.4])
-
     Evaluate the basis function at multiple positions simulatneously:
 
+    >>> t = np.array([-0.2, 0, 0.5])
     >>> basis_function.eval(t)
-    array([0. , 0. , 0. , 0.2, 0.4, 0.6, 0.8, 1. , 0.8, 0.6, 0.4, 0.2, 0. ,
-           0. , 0. ])
+    array([0.8, 1. , 0.5])
 
     Compute the first derivative of the basis function at multiple positions:
 
     >>> basis_function.eval(t, derivative=1)
-    array([ 0.,  0., nan,  1.,  1.,  1.,  1., nan, -1., -1., -1., -1., nan,
-            0.,  0.])
+    array([ 1., nan, -1.])
 
-    >>> import matplotlib.pyplot as plt
     >>> t = np.linspace(-1.4, 1.4, 500)
-    >>> plt.plot(t, basis_function.eval(t))
-    >>> plt.show()
+    >>> plt.plot(t, basis_function.eval(t))  # doctest: +SKIP
+    >>> plt.show()  # doctest: +SKIP
     """
 
     def __init__(self):
@@ -304,8 +366,36 @@ class B2(BasisFunction):
 
     The constructor does not require any arguments.
 
-    For more information on the methods and attributes available in this class,
-    please see the documentation for :class:`splinebox.basis_functions.BasisFunction`.
+    Examples
+    --------
+
+    >>> import splinebox
+    >>> import numpy as np
+    >>> import matplotlib.pyplot as plt
+
+    Creat a basis function object:
+
+    >>> basis_function = splinebox.basis_functions.B2()
+
+    Evaluate the basis function at a single position:
+
+    >>> basis_function.eval(0.5)
+    0.5
+
+    Evaluate the basis function at multiple positions simulatneously:
+
+    >>> t = np.array([-0.2, 0, 0.5])
+    >>> basis_function.eval(t)
+    array([0.71, 0.75, 0.5 ])
+
+    Compute the first derivative of the basis function at multiple positions:
+
+    >>> basis_function.eval(t, derivative=1)
+    array([ 0.4, -0. , -1. ])
+
+    >>> t = np.linspace(-2.1, 2.1, 500)
+    >>> plt.plot(t, basis_function.eval(t))  # doctest: +SKIP
+    >>> plt.show()  # doctest: +SKIP
     """
 
     def __init__(self):
@@ -370,8 +460,36 @@ class B3(BasisFunction):
 
     The constructor does not require any arguments.
 
-    For more information on the methods and attributes available in this class,
-    please see the documentation for :class:`splinebox.basis_functions.BasisFunction`.
+    Examples
+    --------
+
+    >>> import splinebox
+    >>> import numpy as np
+    >>> import matplotlib.pyplot as plt
+
+    Creat a basis function object:
+
+    >>> basis_function = splinebox.basis_functions.B3()
+
+    Evaluate the basis function at a single position:
+
+    >>> basis_function.eval(0.5)
+    0.47916666666666663
+
+    Evaluate the basis function at multiple positions simulatneously:
+
+    >>> t = np.array([-0.2, 0, 0.5])
+    >>> basis_function.eval(t)
+    array([0.63066667, 0.66666667, 0.47916667])
+
+    Compute the first derivative of the basis function at multiple positions:
+
+    >>> basis_function.eval(t, derivative=1)
+    array([ 0.34 ,  0.   , -0.625])
+
+    >>> t = np.linspace(-2.1, 2.1, 500)
+    >>> plt.plot(t, basis_function.eval(t))  # doctest: +SKIP
+    >>> plt.show()  # doctest: +SKIP
     """
 
     def __init__(self):
@@ -421,9 +539,13 @@ class B3(BasisFunction):
             val = 2 + t
         return val
 
+    def filter_symmetric(self, s):
+        # This is necessary for the docs to build correctly
+        return self._filter_symmetric(s)
+
     @staticmethod
     @numba.jit(nopython=True, nogil=True, cache=True)
-    def filter_symmetric(s):  # pragma: no cover
+    def _filter_symmetric(s):  # pragma: no cover
         M = len(s)
         pole = -2 + np.sqrt(3)
 
@@ -456,9 +578,13 @@ class B3(BasisFunction):
         c = c.reshape(shape)
         return c
 
+    def filter_periodic(self, s):
+        # This is necessary for the docs to build correctly
+        return self._filter_periodic(s)
+
     @staticmethod
     @numba.jit(nopython=True, nogil=True, cache=True)
-    def filter_periodic(s):  # pragma: no cover
+    def _filter_periodic(s):  # pragma: no cover
         M = len(s)
         pole = -2 + np.sqrt(3)
 
@@ -508,8 +634,36 @@ class Exponential(BasisFunction):
 
     The constructor requires `M`, the number of knots in the spline, as an argument.
 
-    For more information on the methods and attributes available in this class,
-    please see the documentation for :class:`splinebox.basis_functions.BasisFunction`.
+    Examples
+    --------
+
+    >>> import splinebox
+    >>> import numpy as np
+    >>> import matplotlib.pyplot as plt
+
+    Creat a basis function object:
+
+    >>> basis_function = splinebox.basis_functions.Exponential(M=5)
+
+    Evaluate the basis function at a single position:
+
+    >>> basis_function.eval(0.5)
+    0.5
+
+    Evaluate the basis function at multiple positions simulatneously:
+
+    >>> t = np.array([-0.2, 0, 0.5])
+    >>> basis_function.eval(t)
+    array([0.68682332, 0.7236068 , 0.5       ])
+
+    Compute the first derivative of the basis function at multiple positions:
+
+    >>> basis_function.eval(t, derivative=1)
+    array([ 0.36589651,  0.        , -0.86480627])
+
+    >>> t = np.linspace(-2.1, 2.1, 500)
+    >>> plt.plot(t, basis_function.eval(t))  # doctest: +SKIP
+    >>> plt.show()  # doctest: +SKIP
     """
 
     def __init__(self, M):
@@ -704,8 +858,36 @@ class CatmullRom(BasisFunction):
 
     The constructor does not require any arguments.
 
-    For more information on the methods and attributes available in this class,
-    please see the documentation for :class:`splinebox.basis_functions.BasisFunction`.
+    Examples
+    --------
+
+    >>> import splinebox
+    >>> import numpy as np
+    >>> import matplotlib.pyplot as plt
+
+    Creat a basis function object:
+
+    >>> basis_function = splinebox.basis_functions.CatmullRom()
+
+    Evaluate the basis function at a single position:
+
+    >>> basis_function.eval(0.5)
+    0.5625
+
+    Evaluate the basis function at multiple positions simulatneously:
+
+    >>> t = np.array([-0.2, 0, 0.5])
+    >>> basis_function.eval(t)
+    array([0.912 , 1.    , 0.5625])
+
+    Compute the first derivative of the basis function at multiple positions:
+
+    >>> basis_function.eval(t, derivative=1)
+    array([ 0.82 , -0.   , -1.375])
+
+    >>> t = np.linspace(-2.1, 2.1, 500)
+    >>> plt.plot(t, basis_function.eval(t))  # doctest: +SKIP
+    >>> plt.show()  # doctest: +SKIP
     """
 
     def __init__(self):
@@ -774,11 +956,42 @@ class CubicHermite(BasisFunction):
 
     The constructor does not require any arguments.
 
-    For more information on the methods and attributes available in this class,
-    please see the documentation for :class:`splinebox.basis_functions.BasisFunction`.
-
     **Note**: This is basis function is a :class:`multigenerator <splinebox.basis_functions.BasisFunction>` and
     :func:`__call__ <splinebox.basis_functions.BasisFunction.__call__>` returns two values.
+
+    Examples
+    --------
+
+    >>> import splinebox
+    >>> import numpy as np
+    >>> import matplotlib.pyplot as plt
+
+    Creat a basis function object:
+
+    >>> basis_function = splinebox.basis_functions.CubicHermite()
+
+    Evaluate the basis function at a single position:
+
+    >>> basis_function(0.5)
+    array([0.5  , 0.125])
+
+    Evaluate the basis function at multiple positions simulatneously:
+
+    >>> t = np.array([-0.2, 0, 0.5])
+    >>> basis_function(t)
+    array([[ 0.896,  1.   ,  0.5  ],
+           [-0.128,  0.   ,  0.125]])
+
+    Compute the first derivative of the basis function at multiple positions:
+
+    >>> basis_function(t, derivative=1)
+    array([[ 0.96, -0.  , -1.5 ],
+           [ 0.32,  1.  , -0.25]])
+
+    >>> t = np.linspace(-2.1, 2.1, 500)
+    >>> plt.plot(t, basis_function.eval(t)[0])  # doctest: +SKIP
+    >>> plt.plot(t, basis_function.eval(t)[1], linestyle="-.")  # doctest: +SKIP
+    >>> plt.show()  # doctest: +SKIP
     """
 
     def __init__(self):
@@ -981,19 +1194,50 @@ class CubicHermite(BasisFunction):
 
 class ExponentialHermite(BasisFunction):
     r"""
-    Basis function for an exponential Hermite spline.
+        Basis function for an exponential Hermite spline.
 
-    For a detailed theoretical description, including the equation and
-    a plot of the function, refer to the :ref:`theory/exponentialhermite:Exponential Hermite basis`
-    section in the documentation.
+        For a detailed theoretical description, including the equation and
+        a plot of the function, refer to the :ref:`theory/exponentialhermite:Exponential Hermite basis`
+        section in the documentation.
 
-    The constructor requires `M`, the number of knots in the spline, as an argument.
+        The constructor requires `M`, the number of knots in the spline, as an argument.
 
-    For more information on the methods and attributes available in this class,
-    please see the documentation for :class:`splinebox.basis_functions.BasisFunction`.
+        **Note**: This is basis function is a :class:`multigenerator <splinebox.basis_functions.BasisFunction>` and
+        :func:`__call__ <splinebox.basis_functions.BasisFunction.__call__>` returns two values.
 
-    **Note**: This is basis function is a :class:`multigenerator <splinebox.basis_functions.BasisFunction>` and
-    :func:`__call__ <splinebox.basis_functions.BasisFunction.__call__>` returns two values.
+        Examples
+        --------
+
+        >>> import splinebox
+        >>> import numpy as np
+        >>> import matplotlib.pyplot as plt
+
+        Creat a basis function object:
+
+        >>> basis_function = splinebox.basis_functions.ExponentialHermite(M=5)
+
+        Evaluate the basis function at a single position:
+
+        >>> basis_function(0.5)
+        array([0.5       , 0.12928144])
+
+        Evaluate the basis function at multiple positions simulatneously:
+
+        >>> t = np.array([-0.2, 0, 0.5])
+        >>> basis_function(t)
+        array([[ 8.97234154e-01,  1.00000000e+00,  5.00000000e-01],
+               [-1.30362365e-01,  2.36437547e-16,  1.29281439e-01]])
+
+        Compute the first derivative of the basis function at multiple positions:
+
+        >>> basis_function(t, derivative=1)
+        array([[ 0.95482965, -0.        , -1.51007787],
+               [ 0.33573062,  1.        , -0.25503894]])
+
+        >>> t = np.linspace(-2.1, 2.1, 500)
+        >>> plt.plot(t, basis_function.eval(t)[0])  # doctest: +SKIP
+        >>> plt.plot(t, basis_function.eval(t)[1], linestyle="-.")  # doctest: +SKIP
+        >>> plt.show()  # doctest: +SKIP
     """
 
     def __init__(self, M):
@@ -1180,6 +1424,12 @@ def inventory():
     implemented basis function.
     The keys are the names of the basis function and the
     values are the classes.
+
+    Examples
+    --------
+
+    >>> splinebox.basis_functions.inventory()
+    {'B1': <class 'splinebox.basis_functions.B1'>, 'B2': <class 'splinebox.basis_functions.B2'>, 'B3': <class 'splinebox.basis_functions.B3'>, 'CatmullRom': <class 'splinebox.basis_functions.CatmullRom'>, 'CubicHermite': <class 'splinebox.basis_functions.CubicHermite'>, 'Exponential': <class 'splinebox.basis_functions.Exponential'>, 'ExponentialHermite': <class 'splinebox.basis_functions.ExponentialHermite'>}
     """
     _inventory = inspect.getmembers(sys.modules[__name__])
     # Filter out everything that is not a class
@@ -1205,6 +1455,12 @@ def basis_function_from_name(name, **kwargs):
     -------
     basis_function : Object of one of the subcases of :class:`splinebox.basis_functions.BasisFunction`.
         The basis function object required for the construction of a spline.
+
+    Examples
+    --------
+
+    >>> splinebox.basis_functions.basis_function_from_name("B3")
+    splinebox.basis_functions.B3()
     """
     basis_function_inventory = inventory()
     if name not in basis_function_inventory:
