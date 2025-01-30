@@ -75,7 +75,7 @@ readme = "README.md"
 license = {file = "LICENSE"}
 keywords = ["splines", ]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 4 - Stable",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: BSD License",
     "Operating System :: OS Independent",
