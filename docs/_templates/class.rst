@@ -17,6 +17,7 @@
    .. HACK -- the point here is that we don't want this to appear in the output, but the autosummary should still generate the pages. It doesn't appear because of the indentation.
       .. autosummary::
          :toctree:
+         :template: method.rst
       {% for item in all_methods %}
          {%- if not item.startswith('_') or item in ['__call__', '__mul__', '__getitem__', '__len__', '__pow__'] %}
          {{ name }}.{{ item }}
@@ -34,6 +35,7 @@
    .. HACK -- the point here is that we don't want this to appear in the output, but the autosummary should still generate the pages. It doesn't appear because of the indentation.
       .. autosummary::
          :toctree:
+         :template: attribute.rst
       {% for item in all_attributes %}
          {%- if not item.startswith('_') %}
          {{ name }}.{{ item }}
