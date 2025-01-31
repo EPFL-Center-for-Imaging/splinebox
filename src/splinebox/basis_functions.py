@@ -1217,8 +1217,8 @@ class ExponentialHermite(BasisFunction):
 
     >>> t = np.array([-0.2, 0, 0.5])
     >>> basis_function.eval(t)
-    array([[ 8.972e-01,  1.000e+00,  5.000e-01],
-           [-1.304e-01,  2.364e-16,  1.293e-01]])
+    array([[ 0.897,  1.   ,  0.5  ],
+           [-0.13 ,  0.   ,  0.129]])
 
     Compute the first derivative of the basis function at multiple positions:
 
