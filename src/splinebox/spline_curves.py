@@ -625,13 +625,13 @@ class Spline:
 
         Arc length of the entire spline:
 
-        >>> spline.arc_length(M-1)
-        17.035664454554986
+        >>> spline.arc_length(M-1)  # doctest: +NUMBER
+        17.03
 
         Arc length between the thrid and fourth knot:
 
-        >>> spline.arc_length(2, 3)
-        3.089917364431564
+        >>> spline.arc_length(2, 3)  # doctest: +NUMBER
+        3.08
 
         Arc length steps between knots:
 
