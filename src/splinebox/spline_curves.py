@@ -121,17 +121,17 @@ class Spline:
     Evaluate the spline.
 
     >>> spline.eval(t)
-    array([[1.        , 1.        ],
-           [1.41346154, 1.41346154],
-           [2.        , 2.        ],
-           [2.52884615, 2.52884615],
-           [3.        , 3.        ],
-           [3.47115385, 3.47115385],
-           [4.        , 4.        ],
-           [4.58653846, 4.58653846],
-           [5.        , 5.        ],
-           [4.94711538, 4.94711538],
-           [4.11538462, 4.11538462]])
+    array([[1.   , 1.   ],
+           [1.413, 1.413],
+           [2.   , 2.   ],
+           [2.529, 2.529],
+           [3.   , 3.   ],
+           [3.471, 3.471],
+           [4.   , 4.   ],
+           [4.587, 4.587],
+           [5.   , 5.   ],
+           [4.947, 4.947],
+           [4.115, 4.115]])
     """
 
     _wrong_dimension_msg = "It looks like control_points is a 2D array with second dimension different than two. I don't know how to handle this yet."
@@ -617,13 +617,13 @@ class Spline:
         >>> data = np.stack([x, y], axis=-1)
         >>> spline.fit(data)
         >>> spline.control_points
-        array([[-2.00000000e+00, -2.49935157e+00],
-               [ 3.55271368e-15,  1.98565980e-01],
-               [ 2.00000000e+00,  1.70392697e+00],
-               [ 4.00000000e+00, -1.41999822e+00],
-               [ 6.00000000e+00, -6.70003334e-01],
-               [ 8.00000000e+00,  2.23550552e+00],
-               [ 1.00000000e+01, -2.63679136e+00]])
+        array([[-2.000e+00, -2.499e+00],
+               [ 3.553e-15,  1.986e-01],
+               [ 2.000e+00,  1.704e+00],
+               [ 4.000e+00, -1.420e+00],
+               [ 6.000e+00, -6.700e-01],
+               [ 8.000e+00,  2.236e+00],
+               [ 1.000e+01, -2.637e+00]])
         """
         if len(points) < self.M + 2 * self.pad:
             raise RuntimeError(
@@ -683,7 +683,7 @@ class Spline:
         Arc length steps between knots:
 
         >>> spline.arc_length(np.arange(M - 1), np.arange(1, M))
-        array([4.98228381, 5.28847199, 3.08991736, 3.67499128])
+        array([4.982, 5.288, 3.09 , 3.675])
         """
         self._check_control_points()
 
@@ -1398,9 +1398,9 @@ class Spline:
         The corners of the first triangle are:
 
         >>> points[connectivity[0]]
-        array([[2.20412415, 2.20412415, 1.59175171],
-               [2.30412415, 2.30412415, 1.69175171],
-               [2.36241694, 2.23962914, 1.69795392]])
+        array([[2.204, 2.204, 1.592],
+               [2.304, 2.304, 1.692],
+               [2.362, 2.24 , 1.698]])
 
         Create a volume mesh with variable radius:
 
