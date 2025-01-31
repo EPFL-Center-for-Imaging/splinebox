@@ -11,6 +11,7 @@ import splinebox
 @pytest.fixture(autouse=True)
 def add_np(doctest_namespace):
     doctest_namespace["np"] = np
+    np.set_printoptions(precision=3)
     if np.__version__ >= "2.0.0":
         np.set_printoptions(legacy="1.25")
 

@@ -232,9 +232,9 @@ class BasisFunction:
 
         >>> b3 = splinebox.basis_functions.B3()
         >>> b3.filter_periodic(knots)
-        array([[ 5.66666667,  3.33333333],
-               [ 1.66666667,  1.33333333],
-               [-0.33333333,  3.33333333]])
+        array([[ 5.667,  3.333],
+               [ 1.667,  1.333],
+               [-0.333,  3.333]])
 
         We can confirm that the returned control points indeed results in the knots provided.
 
@@ -480,7 +480,7 @@ class B3(BasisFunction):
 
     >>> t = np.array([-0.2, 0, 0.5])
     >>> basis_function.eval(t)
-    array([0.63066667, 0.66666667, 0.47916667])
+    array([0.631, 0.667, 0.479])
 
     Compute the first derivative of the basis function at multiple positions:
 
@@ -654,12 +654,12 @@ class Exponential(BasisFunction):
 
     >>> t = np.array([-0.2, 0, 0.5])
     >>> basis_function.eval(t)
-    array([0.68682332, 0.7236068 , 0.5       ])
+    array([0.687, 0.724, 0.5  ])
 
     Compute the first derivative of the basis function at multiple positions:
 
     >>> basis_function.eval(t, derivative=1)
-    array([ 0.36589651,  0.        , -0.86480627])
+    array([ 0.366,  0.   , -0.865])
 
     >>> t = np.linspace(-2.1, 2.1, 500)
     >>> plt.plot(t, basis_function.eval(t))  # doctest: +SKIP
@@ -878,7 +878,7 @@ class CatmullRom(BasisFunction):
 
     >>> t = np.array([-0.2, 0, 0.5])
     >>> basis_function.eval(t)
-    array([0.912 , 1.    , 0.5625])
+    array([0.912, 1.   , 0.562])
 
     Compute the first derivative of the basis function at multiple positions:
 
@@ -1194,50 +1194,50 @@ class CubicHermite(BasisFunction):
 
 class ExponentialHermite(BasisFunction):
     r"""
-        Basis function for an exponential Hermite spline.
+    Basis function for an exponential Hermite spline.
 
-        For a detailed theoretical description, including the equation and
-        a plot of the function, refer to the :ref:`theory/exponentialhermite:Exponential Hermite basis`
-        section in the documentation.
+    For a detailed theoretical description, including the equation and
+    a plot of the function, refer to the :ref:`theory/exponentialhermite:Exponential Hermite basis`
+    section in the documentation.
 
-        The constructor requires `M`, the number of knots in the spline, as an argument.
+    The constructor requires `M`, the number of knots in the spline, as an argument.
 
-        **Note**: This is basis function is a :class:`multigenerator <splinebox.basis_functions.BasisFunction>` and
-        :func:`__call__ <splinebox.basis_functions.BasisFunction.__call__>` returns two values.
+    **Note**: This is basis function is a :class:`multigenerator <splinebox.basis_functions.BasisFunction>` and
+    :func:`__call__ <splinebox.basis_functions.BasisFunction.__call__>` returns two values.
 
-        Examples
-        --------
+    Examples
+    --------
 
-        >>> import splinebox
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
+    >>> import splinebox
+    >>> import numpy as np
+    >>> import matplotlib.pyplot as plt
 
-        Creat a basis function object:
+    Creat a basis function object:
 
-        >>> basis_function = splinebox.basis_functions.ExponentialHermite(M=5)
+    >>> basis_function = splinebox.basis_functions.ExponentialHermite(M=5)
 
-        Evaluate the basis function at a single position:
+    Evaluate the basis function at a single position:
 
-        >>> basis_function(0.5)
-        array([0.5       , 0.12928144])
+    >>> basis_function(0.5)
+    array([0.5  , 0.129])
 
-        Evaluate the basis function at multiple positions simulatneously:
+    Evaluate the basis function at multiple positions simulatneously:
 
-        >>> t = np.array([-0.2, 0, 0.5])
-        >>> basis_function(t)
-        array([[ 8.97234154e-01,  1.00000000e+00,  5.00000000e-01],
-               [-1.30362365e-01,  2.36437547e-16,  1.29281439e-01]])
+    >>> t = np.array([-0.2, 0, 0.5])
+    >>> basis_function(t)
+    array([[ 8.972e-01,  1.000e+00,  5.000e-01],
+           [-1.304e-01,  2.364e-16,  1.293e-01]])
 
-        Compute the first derivative of the basis function at multiple positions:
+    Compute the first derivative of the basis function at multiple positions:
 
-        >>> basis_function(t, derivative=1)
-        array([[ 0.95482965, -0.        , -1.51007787],
-               [ 0.33573062,  1.        , -0.25503894]])
+    >>> basis_function(t, derivative=1)
+    array([[ 0.955, -0.   , -1.51 ],
+           [ 0.336,  1.   , -0.255]])
 
-        >>> t = np.linspace(-2.1, 2.1, 500)
-        >>> plt.plot(t, basis_function.eval(t)[0])  # doctest: +SKIP
-        >>> plt.plot(t, basis_function.eval(t)[1], linestyle="-.")  # doctest: +SKIP
-        >>> plt.show()  # doctest: +SKIP
+    >>> t = np.linspace(-2.1, 2.1, 500)
+    >>> plt.plot(t, basis_function.eval(t)[0])  # doctest: +SKIP
+    >>> plt.plot(t, basis_function.eval(t)[1], linestyle="-.")  # doctest: +SKIP
+    >>> plt.show()  # doctest: +SKIP
     """
 
     def __init__(self, M):
