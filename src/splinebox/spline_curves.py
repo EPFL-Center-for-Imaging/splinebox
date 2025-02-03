@@ -605,25 +605,24 @@ class Spline:
         Examples
         --------
 
-        >>> spline = splinebox.Spline(M=5, basis_function=splinebox.B3(), closed=False)
+        >>> spline = splinebox.Spline(M=4, basis_function=splinebox.B3(), closed=False)
         >>> print(spline.control_points)
         None
 
         The spline is not initialized yet, i.e. the control points haven't been set yet.
         We fit the spline to some data to set them.
 
-        >>> x = np.linspace(0, 8, 100)
+        >>> x = np.linspace(1, 8, 70)
         >>> y = np.sin(x)
         >>> data = np.stack([x, y], axis=-1)
         >>> spline.fit(data)
         >>> spline.control_points
-        array([[-2.   , -2.499],
-               [ 0.   ,  0.199],
-               [ 2.   ,  1.704],
-               [ 4.   , -1.42 ],
-               [ 6.   , -0.67 ],
-               [ 8.   ,  2.236],
-               [10.   , -2.637]])
+        array([[-1.333, -5.712],
+               [ 1.   ,  2.726],
+               [ 3.333, -0.666],
+               [ 5.667, -1.477],
+               [ 8.   ,  2.811],
+               [10.333, -4.283]])
         """
         if len(points) < self.M + 2 * self.pad:
             raise RuntimeError(
