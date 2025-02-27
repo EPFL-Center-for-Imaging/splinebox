@@ -370,10 +370,11 @@ class Spline:
             between the provided points. This is usefull when the
             points are not equally spaced. Default is `False`.
         """
-        if len(points) < self.M:
+        if len(points) < self.M + 2 * self.pad:
             raise RuntimeError(
-                "You provided fewer data points than you spline has knots. For the fit to have a unique solution you need to provide at least as many data points as your spline has knots. Consider adding more data or reducing the number of knots M."
+                f"You provided too few points. For the fit to have a unique solution you need to provide at least as many points as your spline has control points (including padding). This spline has {self.M}+{2 * self.pad}(padding) control points but you provided {len(points)} points. Consider providing more points or reducing the number of knots M. If the number of points is equal to M, consider using `spline.knots = points` instead of fitting."
             )
+
         if arc_length_parameterization:
             raise NotImplementedError
         else:
@@ -1252,6 +1253,10 @@ class HermiteSpline(Spline):
         self._basis_function = value
 
     def fit(self, points, arc_length_parameterization=False):
+        if len(points) < 2 * (self.M + 2 * self.pad):
+            raise RuntimeError(
+                f"You provided too few points. For a unique solution you need to provide at least 2*({self.M}+{2 * self.pad}) points to match the number of control points and tangents (including padding). You provided {len(points)} points. Consider providing more points or reducing the number of knots M."
+            )
         if len(points) < self.M:
             raise RuntimeError(
                 "You provided fewer data points than you spline has knots. For the fit to have a unique solution you need to provide at least as many data points as your spline has knots. Consider adding more data or reducing the number of knots M."
@@ -1263,8 +1268,8 @@ class HermiteSpline(Spline):
         tval = self._get_tval(t)
         basis_function_values = self.basis_function.eval(tval, derivative=0)
         basis_function_values = np.concatenate([basis_function_values[0], basis_function_values[1]], axis=1)
-        half = self.M if self.closed else self.M + 2 * self.pad
         solution = np.linalg.lstsq(basis_function_values, points, rcond=None)[0]
+        half = self.M if self.closed else self.M + 2 * self.pad
         self.control_points = solution[:half]
         self.tangents = solution[half:]
 
