@@ -326,7 +326,8 @@ def test_fit(spline_curve, arc_length_parametrization, points, is_hermite_spline
     # Bool indicating whether spline_curve is a hermite spline or not
     hermite = is_hermite_spline(spline_curve)
 
-    if len(points) < spline_curve.M + 2 * spline_curve.pad:
+    n_control_points = spline_curve.M + 2 * spline_curve.pad
+    if hermite and len(points) < 2 * n_control_points or len(points) < n_control_points:
         # The problem is underdetermined
         with pytest.raises(RuntimeError):
             spline_curve.fit(points)
