@@ -94,9 +94,6 @@ class Spline:
         If M is too small for the specified basis function.
         M must be at least as large as the support of the basis function.
 
-    Notes
-    -----
-
     Examples
     --------
     Create a new spline object...
@@ -189,6 +186,11 @@ class Spline:
         """
         The control points :math:`c[k]` as defined
         in equation :ref:`(1) <theory:eq:1>`.
+
+        Raises
+        ------
+        ValueError
+            If the number of control points doesn't match :attr:`~splinebox.spline_curves.Spline.M` + 2 * :attr:`~splinebox.spline_curves.Spline.pad`.
         """
         return self._control_points
 
@@ -212,6 +214,11 @@ class Spline:
         """
         The knots :math:`n[k]` of this spline as defined
         in equation :ref:`(3) <basis:eq:3>`.
+
+        Raises
+        ------
+        ValueError
+            If the number of knots doesn't match :attr:`~splinebox.spline_curves.Spline.M`.
         """
         if self.padding_function is None and not self.closed:
             t = np.arange(-self.pad, self.M + self.pad)
@@ -255,6 +262,11 @@ class Spline:
         The basis function :math:`\Phi` of the spline :ref:`(1) <theory:eq:1>`.
         Should be an object of a specific implementation of the
         abstract base class :class:`splinebox.basis_functions.BasisFunction`.
+
+        Raises
+        ------
+        ValueError
+            If the basis_function is meant for a Hermite spline.
         """
         return self._basis_function
 
@@ -328,6 +340,11 @@ class Spline:
         ---------
         version : int
             The version of the convertion for future compatibility.
+
+        Returns
+        -------
+        dictionary_representation : dictionary
+            A dictionary representation of the spline.
         """
         dictionary_representation = {
             "version": version,
@@ -753,6 +770,11 @@ class Spline:
             This can be used to initialize subsequent conversions more efficiently.
         atol : float
             Absolute precision to which the length is matched.
+
+        Returns
+        -------
+        t : float
+            The paramters value for the given length `s`.
         """
         self._check_control_points()
         midpoint = lower_bound + (upper_bound - lower_bound) / 2
@@ -787,6 +809,17 @@ class Spline:
         parameter : float or numpy array of floats
             The parameter value whos arc length distance is :code:`s` from the
             start of the spline.
+
+        Examples
+        --------
+        >>> spline = splinebox.Spline(M=4, basis_function=splinebox.B3(), closed=False)
+        >>> spline.control_points=np.array([2, 3, 2, 6, 1, 2])
+
+        >>> spline.arc_length_to_parameter(2.2)
+        array(2.12)
+
+        >>> spline.arc_length(0, 2.12)  # doctest: +NUMBER
+        2.2
         """
         self._check_control_points()
         s = self._convert_to_array(s)
@@ -876,6 +909,9 @@ class Spline:
         -------
         k : float or numpy array
             The curvature value.
+
+        Examples
+        --------
         """
         self._check_control_points()
         t = self._convert_to_array(t)
