@@ -173,7 +173,7 @@ cython_debug/
 venv_splinebox
 
 # example gallery files
-docs/auto_examples
+docs/_auto_examples
 docs/sg_execution_times.rst
 
 # Generated API docs

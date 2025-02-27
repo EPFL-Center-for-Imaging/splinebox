@@ -19,10 +19,12 @@ For example, consider a cubic B-spline without padding, where control points are
 The spline curves inward toward the origin, despite the last control point.
 
 .. plot:: pyplots/plot_no_padding.py
+   :include-source: false
 
 By padding with two additional points on the circle, this behavior is corrected.
 
 .. plot:: pyplots/plot_padding.py
+   :include-source: false
 
 When you directly set control points for a spline, you must handle the padding yourself.
 This design choice allows full control over the spline's behavior at the ends.
