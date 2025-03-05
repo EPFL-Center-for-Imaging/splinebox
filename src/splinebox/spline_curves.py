@@ -802,6 +802,9 @@ class Spline:
         """
         if not isinstance(t, collections.abc.Iterable):
             t = np.array([t])
+        elif isinstance(t, np.ndarray) and t.shape == ():
+            # Array with only one element, e.g. np.array(0.)
+            t = np.array([t.item()])
         if self.closed:
             # all knot indices
             k = np.arange(self.M)

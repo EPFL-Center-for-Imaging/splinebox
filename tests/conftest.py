@@ -151,7 +151,7 @@ def derivative(request):
     return request.param
 
 
-@pytest.fixture(params=[1.5, np.linspace(0, 10, 1000)])
+@pytest.fixture(params=[1.5, np.array(0.0), np.linspace(0, 10, 1000)])
 def eval_positions(request):
     return request.param
 
