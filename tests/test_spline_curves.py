@@ -129,8 +129,8 @@ def test_draw(closed):
     spline._check_control_points = unittest.mock.MagicMock()
     spline.knots = np.array([[1, 1], [1, 2], [2, 2], [2, 1]])
 
-    x = np.linspace(0, 3, 31)
-    y = np.linspace(0, 3, 31)
+    x = np.linspace(0, 3, 16)
+    y = np.linspace(0, 3, 16)
 
     # You can only draw closed splines
     if not closed:
@@ -138,11 +138,11 @@ def test_draw(closed):
             spline.draw(x, y)
     else:
         expected = np.zeros((len(x), len(y)))
-        expected[11:20, 11:20] = 1
-        expected[10, 10:21] = 0.5
-        expected[20, 10:21] = 0.5
-        expected[10:21, 10] = 0.5
-        expected[10:21, 20] = 0.5
+        expected[6:10, 6:10] = 1
+        expected[5, 5:11] = 0.5
+        expected[10, 5:11] = 0.5
+        expected[5:11, 5] = 0.5
+        expected[5:11, 10] = 0.5
 
         output = spline.draw(x, y)
         assert np.allclose(output, expected)
