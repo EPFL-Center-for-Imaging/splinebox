@@ -5,7 +5,7 @@ import unittest.mock
 import numpy as np
 import pytest
 import scipy
-import splinebox.basis_functions
+import splinebox
 
 
 def test_check_control_points(non_hermite_spline_curve, coeff_gen):
@@ -891,3 +891,30 @@ def test_mesh(
             elif cap_ends:
                 # spherical polyhedra have Euler characteristic 2
                 assert V + F - E == 2
+
+
+def test_protected_spline_attributes(spline_curve, coeff_gen, basis_function):
+    # spline = splinebox.spline_curves.Spline(M=4, basis_function=splinebox.basis_functions.B1(), closed=True)
+    spline = spline_curve
+
+    # Test that all attributes can be changed before the control points are set
+    spline.M = spline.M + 1
+    spline.basis_function = basis_function
+    spline.closed = not spline.closed
+
+    spline.control_points = coeff_gen(M=spline.M, support=spline.basis_function.support, closed=spline.closed)
+
+    # Check that we cannot change M anymore
+    with pytest.raises(RuntimeError):
+        spline.M = spline.M + 2
+
+    # Check that basis_function can only be changed to basis functions with the same support
+    if basis_function.support != spline.basis_function.support:
+        with pytest.raises(RuntimeError):
+            spline.basis_function = basis_function
+    else:
+        spline.basis_function = basis_function
+
+    # Check that closed cannot be changed anymore
+    with pytest.raises(RuntimeError):
+        spline.closed = not spline.closed
