@@ -124,37 +124,37 @@ def test_closed_splines(closed_spline_curve, derivative, coeff_gen, is_hermite_s
     )
 
 
-def test_draw():
-    spline = splinebox.spline_curves.Spline(M=4, basis_function=splinebox.basis_functions.B1(), closed=True)
+def test_draw(closed):
+    spline = splinebox.spline_curves.Spline(M=4, basis_function=splinebox.basis_functions.B1(), closed=closed)
     spline._check_control_points = unittest.mock.MagicMock()
     spline.knots = np.array([[1, 1], [1, 2], [2, 2], [2, 1]])
 
     x = np.linspace(0, 3, 31)
     y = np.linspace(0, 3, 31)
 
-    expected = np.zeros((len(x), len(y)))
-    expected[11:20, 11:20] = 1
-    expected[10, 10:21] = 0.5
-    expected[20, 10:21] = 0.5
-    expected[10:21, 10] = 0.5
-    expected[10:21, 20] = 0.5
-
-    output = spline.draw(x, y)
-    assert np.allclose(output, expected)
-
-    # Check that the presence of the coefficients was verified
-    spline._check_control_points.assert_called()
-
     # You can only draw closed splines
-    spline.closed = False
-    with pytest.raises(RuntimeError):
-        spline.draw(x, y)
+    if not closed:
+        with pytest.raises(RuntimeError):
+            spline.draw(x, y)
+    else:
+        expected = np.zeros((len(x), len(y)))
+        expected[11:20, 11:20] = 1
+        expected[10, 10:21] = 0.5
+        expected[20, 10:21] = 0.5
+        expected[10:21, 10] = 0.5
+        expected[10:21, 20] = 0.5
 
-    # You can only draw splines in 2D
-    spline = splinebox.spline_curves.Spline(M=4, basis_function=splinebox.basis_functions.B1(), closed=True)
-    spline.knots = np.array([[1, 1, 0.5], [1, 2, 2], [2, 2, 1], [2, 1, 0]])
-    with pytest.raises(RuntimeError):
-        spline.draw(x, y)
+        output = spline.draw(x, y)
+        assert np.allclose(output, expected)
+
+        # Check that the presence of the coefficients was verified
+        spline._check_control_points.assert_called()
+
+        # You can only draw splines in 2D
+        spline = splinebox.spline_curves.Spline(M=4, basis_function=splinebox.basis_functions.B1(), closed=closed)
+        spline.knots = np.array([[1, 1, 0.5], [1, 2, 2], [2, 2, 1], [2, 1, 0]])
+        with pytest.raises(RuntimeError):
+            spline.draw(x, y)
 
 
 def test_is_inside():
@@ -902,6 +902,12 @@ def test_protected_spline_attributes(spline_curve, coeff_gen, basis_function):
     spline.basis_function = basis_function
     spline.closed = not spline.closed
 
+    # half_support and pad can never be changed
+    with pytest.raises(RuntimeError):
+        spline.half_support = spline.half_support + 1
+    with pytest.raises(RuntimeError):
+        spline.pad = spline.pad + 1
+
     spline.control_points = coeff_gen(M=spline.M, support=spline.basis_function.support, closed=spline.closed)
 
     # Check that we cannot change M anymore
@@ -918,3 +924,9 @@ def test_protected_spline_attributes(spline_curve, coeff_gen, basis_function):
     # Check that closed cannot be changed anymore
     with pytest.raises(RuntimeError):
         spline.closed = not spline.closed
+
+    # half_support and pad can be changed after setting the control points either
+    with pytest.raises(RuntimeError):
+        spline.half_support = spline.half_support + 1
+    with pytest.raises(RuntimeError):
+        spline.pad = spline.pad + 1

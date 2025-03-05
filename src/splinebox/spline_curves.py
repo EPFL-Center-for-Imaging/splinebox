@@ -68,10 +68,10 @@ class Spline:
             raise RuntimeError("M must be greater or equal than the spline generator support size.")
 
         self.basis_function = basis_function
-        self.halfSupport = self.basis_function.support / 2
+        self._half_support = self.basis_function.support / 2
         # Number of additional knots used for padding the ends
         # of an open spline
-        self.pad = math.ceil(self.halfSupport) - 1
+        self._pad = math.ceil(self._half_support) - 1
         self.closed = closed
         self.control_points = control_points
         self.padding_function = padding_function
@@ -185,6 +185,50 @@ class Spline:
                 "You are trying to construct a Hermite spline using the ordinary `Spline` class. Use the `HermiteSpline` class instead."
             )
         self._basis_function = value
+
+    @property
+    def M(self):
+        return self._M
+
+    @M.setter
+    def M(self, M):
+        if hasattr(self, "control_points") and self.control_points is not None and M != self.M:
+            # The has attribute is necessary because M is assigned before control_points in the constructor
+            raise RuntimeError(
+                "M cannot be changed after the control points were set. Create a new spline or set the control_points to None first."
+            )
+        self._M = M
+
+    @property
+    def closed(self):
+        return self._closed
+
+    @closed.setter
+    def closed(self, closed):
+        if hasattr(self, "control_points") and self.control_points is not None and closed != self.closed:
+            # The has attribute is necessary because closed is assigned before control_points in the constructor
+            raise RuntimeError(
+                "closed cannot be changed after the control points were set. Create a new spline or set the control_points to None first."
+            )
+        self._closed = closed
+
+    @property
+    def half_support(self):
+        return self._half_support
+
+    @half_support.setter
+    def half_support(self, _):
+        raise RuntimeError("The half support is determined by the basis function and cannot be set by the user.")
+
+    @property
+    def pad(self):
+        return self._pad
+
+    @pad.setter
+    def pad(self, _):
+        raise RuntimeError(
+            "The amount of necessary padding is automatically calculated based on the support of the basis function and cannot be changed."
+        )
 
     def copy(self):
         """
@@ -812,7 +856,7 @@ class Spline:
             tval = np.full((len(t), len(k)), np.nan)
             # compute the positions at which the basis functions have to be evaluated
             # and save them in tval
-            self._wrap_index(t, k, self.halfSupport, self.M, tval)
+            self._wrap_index(t, k, self.half_support, self.M, tval)
         else:
             # take into account the padding with additional basis functions
             # for non-closed splines
@@ -827,25 +871,25 @@ class Spline:
     @numba.guvectorize(
         [(numba.float64[:], numba.float64[:], numba.float64, numba.int64, numba.float64[:, :])], "(n),(m),(),()->(n,m)"
     )
-    def _wrap_index(ts, ks, halfSupport, M, wrapped_tval):  # pragma: no cover
+    def _wrap_index(ts, ks, half_support, M, wrapped_tval):  # pragma: no cover
         """
         Fill the wrapped_tval array whenever a value t
         is affected by the basis function at knot k, taking
         into account that basis functions at the begging/end
         affect positions on the opposite end for closed splines.
         """
-        outside_tvalue = halfSupport + 1
+        outside_tvalue = half_support + 1
         for i, k in enumerate(ks):
             for j, t in enumerate(ts):
-                if t >= M + k - halfSupport:
+                if t >= M + k - half_support:
                     # t is close enough to the end to be affected by
                     # the k-th basis function from the beginning
                     wrapped_tval[j, i] = t - M - k
-                elif t <= halfSupport - (M - k):
+                elif t <= half_support - (M - k):
                     # t is close enough to the beginning to be affected
                     # by the k-th basis function, which is close to the end
                     wrapped_tval[j, i] = t + M - k
-                elif t > k + halfSupport or t < k - halfSupport:
+                elif t > k + half_support or t < k - half_support:
                     # t is outside the support of the k-th basis function
                     # this can be any value outside the support
                     wrapped_tval[j, i] = outside_tvalue
