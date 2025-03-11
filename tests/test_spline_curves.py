@@ -221,7 +221,12 @@ def test_arc_length_to_parameter():
     M = 100
     basis_function = splinebox.basis_functions.Exponential(M)
     spline = splinebox.spline_curves.Spline(M=M, basis_function=basis_function, closed=True)
-    spline._check_control_points = unittest.mock.MagicMock()
+
+    class PickableMock(unittest.mock.Mock):
+        def __reduce__(self):
+            return (unittest.mock.Mock, ())
+
+    spline._check_control_points = PickableMock()
     knots = []
     for t in np.linspace(0, 2 * np.pi, M + 1)[:-1]:
         knots.append([np.cos(t), np.sin(t)])
@@ -246,7 +251,7 @@ def test_arc_length_to_parameter():
     M = 7
     basis_function = splinebox.basis_functions.B1()
     spline = splinebox.spline_curves.Spline(M=M, basis_function=basis_function, closed=False)
-    spline._check_control_points = unittest.mock.MagicMock()
+    spline._check_control_points = PickableMock()
     spline.knots = np.array([[0, 0], [1, 1], [1, 0], [2, 1], [2, 0], [3, 1], [3, 0]])
 
     rising_length = np.sqrt(2)
