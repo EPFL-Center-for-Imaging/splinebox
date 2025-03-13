@@ -58,7 +58,7 @@ class Spline:
     _wrong_array_size_msg = (
         "It looks like control_points is neither a 1 nor a 2D array. I don't know how to handle this yet."
     )
-    _no_control_points_msg = "This model doesn't have any coefficients."
+    _no_control_points_msg = "This spline doesn't have any coefficients."
     _unimplemented_msg = "This function is not implemented."
 
     def __init__(self, M, basis_function, closed=False, control_points=None, padding_function=padding_function):
