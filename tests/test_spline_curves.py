@@ -211,24 +211,41 @@ def test_arc_length():
     expected = np.linspace(0, 2 * np.pi, 100)
     assert np.allclose(arc_lengths, expected)
 
-    # Check that it is working with a vector for stop
+    # Check that it works with a vector for stop
     permutation = np.random.permutation(len(ts))
     arc_lengths = spline.arc_length(ts[permutation])
     assert np.allclose(arc_lengths, expected[permutation])
 
     # Check that is works with vectors for start and stop
-    arc_lengths = spline.arc_length(stop=ts[permutation], start=np.zeros(len(ts)))
+    arc_lengths = spline.arc_length(stop=ts[permutation], start=np.zeros(len(ts)), processes=1)
     assert np.allclose(arc_lengths, expected[permutation])
 
-    # Check that it is working with a vector for start
-    arc_lengths = spline.arc_length(stop=M, start=ts[permutation])
+    # Check that it works with a vector for start
+    arc_lengths = spline.arc_length(stop=np.array([M]), start=ts[permutation])
     assert np.allclose(arc_lengths, 2 * np.pi - expected[permutation])
+
+    # start and stop must have the same length
+    with pytest.raises(ValueError):
+        spline.arc_length(np.linspace(0, M / 2, 100), np.linspace(M / 2, M, 50))
+
+    # Check that it works with two arrays
+    start = np.linspace(0, M / 2, 100)
+    stop = np.linspace(M / 2, M, 100)
+    arc_lengths = spline.arc_length(start, stop)
+    assert np.allclose(arc_lengths, np.pi)
+
+    # stop must be greater or equal to all start values
+    with pytest.raises(ValueError):
+        spline.arc_length(np.linspace(0, M, 100), M / 2)
+    # start must be less or equal to all start values
+    with pytest.raises(ValueError):
+        spline.arc_length(M / 2, np.linspace(0, M, 100))
 
 
 def test_arc_length_epsabs_and_epsrel():
     # Check epsabs and epsrel
     # In most cases quad returns very accurate results independent of epsabs and epsrel.
-    # I found the following combination of values by chance when measuring the speed
+    # Found the following combination of values by chance when measuring the speed
     # of arc length. In the case below, the error of the individual integrals are actually
     # close to epsabs so we can test the error management of the cumsum in arc_length.
     spline = splinebox.Spline(M=5, basis_function=splinebox.B1(), closed=True)
@@ -286,6 +303,10 @@ def test_arc_length_epsabs_and_epsrel():
     # Test with start vector
     arc_lengths = spline.arc_length(start=ts, epsabs=0, epsrel=epsrel)
     assert np.allclose(arc_lengths, expected_total_length - expected, rtol=epsrel)
+
+    # warning is raised when the accuracy constrained cannot be met
+    with pytest.warns(UserWarning):
+        spline.arc_length(ts, epsabs=1e-6, limit=1)
 
 
 def test_arc_length_to_parameter():

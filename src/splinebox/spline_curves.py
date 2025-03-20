@@ -906,14 +906,13 @@ class Spline:
                 sort_indices = np.argsort(-start)
                 sorted_start = start[sort_indices]
                 sorted_stop = np.append([stop], sorted_start[:-1])
-            elif isinstance(stop, collections.abc.Iterable):
+            else:
+                # stop is an array
                 if np.any(start > stop):
                     raise ValueError("All stop values must be greater than or equal to start.")
                 sort_indices = np.argsort(stop)
                 sorted_stop = stop[sort_indices]
                 sorted_start = np.append([start], sorted_stop[:-1])
-            else:
-                raise RuntimeError
 
             partial_integrals, partial_errors = self._compute_arc_lengths(
                 sorted_start, sorted_stop, epsabs, epsrel, limit, processes
