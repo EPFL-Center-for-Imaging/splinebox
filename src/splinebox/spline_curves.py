@@ -867,6 +867,10 @@ class Spline:
         >>> spline.arc_length(np.arange(M - 1), np.arange(1, M))
         array([4.982, 5.288, 3.09 , 3.675])
         """
+        if epsabs == 1e-6:
+            warnings.warn("The default value for epsabs will change to 0 in v1.0", UserWarning, stacklevel=1)
+        if epsrel == 1e-6:
+            warnings.warn("The default value for epsrel will change to 0.01 in v1.0", UserWarning, stacklevel=1)
         self._check_control_points()
 
         # Replace None values with proper defaults
