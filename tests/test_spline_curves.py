@@ -8,6 +8,11 @@ import scipy
 import splinebox
 
 
+class PicklableMock(unittest.mock.Mock):
+    def __reduce__(self):
+        return (unittest.mock.Mock, ())
+
+
 def test_check_control_points(non_hermite_spline_curve, coeff_gen):
     spline = non_hermite_spline_curve
     with pytest.raises(RuntimeError):
@@ -187,7 +192,7 @@ def test_arc_length():
     M = 10
     basis_function = splinebox.basis_functions.Exponential(M)
     spline = splinebox.spline_curves.Spline(M=M, basis_function=basis_function, closed=True)
-    spline._check_control_points = unittest.mock.MagicMock()
+    spline._check_control_points = PicklableMock()
     phi = np.linspace(0, 2 * np.pi, M + 1)[:-1]
     knots = np.stack([np.cos(phi), np.sin(phi)], axis=-1)
     spline.knots = knots
@@ -212,8 +217,75 @@ def test_arc_length():
     assert np.allclose(arc_lengths, expected[permutation])
 
     # Check that is works with vectors for start and stop
-    arc_lengths = spline.arc_length(ts[permutation], np.zeros(len(ts)))
+    arc_lengths = spline.arc_length(stop=ts[permutation], start=np.zeros(len(ts)))
     assert np.allclose(arc_lengths, expected[permutation])
+
+    # Check that it is working with a vector for start
+    arc_lengths = spline.arc_length(stop=M, start=ts[permutation])
+    assert np.allclose(arc_lengths, 2 * np.pi - expected[permutation])
+
+
+def test_arc_length_epsabs_and_epsrel():
+    # Check epsabs and epsrel
+    # In most cases quad returns very accurate results independent of epsabs and epsrel.
+    # I found the following combination of values by chance when measuring the speed
+    # of arc length. In the case below, the error of the individual integrals are actually
+    # close to epsabs so we can test the error management of the cumsum in arc_length.
+    spline = splinebox.Spline(M=5, basis_function=splinebox.B1(), closed=True)
+    spline.control_points = np.array(
+        [
+            [0.21550768, 0.94737059],
+            [0.73085581, 0.25394164],
+            [0.21331198, 0.51820071],
+            [0.02566272, 0.20747008],
+            [0.42468547, 0.37416998],
+        ]
+    )
+    ts = np.array(
+        [
+            2.4402814,
+            1.77806369,
+            4.70215973,
+            3.82662627,
+            3.7433181,
+            4.5185987,
+            0.41711218,
+            2.76096235,
+            2.92238034,
+            4.80968189,
+        ]
+    )
+    ts = np.sort(ts)
+    # We can use the fact that a B1 spline is just connecting
+    # the knots with straight lines to calculate the expected arc lengths.
+    distances_between_knots = np.zeros(spline.M)
+    distances_between_knots[:-1] = np.linalg.norm(np.diff(spline.knots, axis=0), axis=1)
+    distances_between_knots[-1] = np.linalg.norm(spline.knots[0] - spline.knots[-1])
+    distance_to_knot_n = np.zeros(spline.M)
+    distance_to_knot_n[1:] = np.cumsum(distances_between_knots)[:-1]
+    previous_knot_index = np.floor(ts).astype(int)
+    expected = distance_to_knot_n[previous_knot_index] + distances_between_knots[previous_knot_index] * (ts % 1)
+
+    # Test absolute error
+    epsabs = 0.001
+
+    arc_lengths = spline.arc_length(stop=ts, epsabs=epsabs, epsrel=0)
+    assert np.allclose(arc_lengths, expected, atol=epsabs)
+
+    # Test with start vector
+    expected_total_length = distance_to_knot_n[-1] + distances_between_knots[-1]
+    arc_lengths = spline.arc_length(start=ts, epsabs=epsabs, epsrel=0)
+    assert np.allclose(arc_lengths, expected_total_length - expected, atol=epsabs)
+
+    # Test relative error
+    epsrel = 0.01
+    arc_lengths = spline.arc_length(ts, epsabs=0, epsrel=epsrel)
+
+    assert np.allclose(arc_lengths, expected, rtol=epsrel)
+
+    # Test with start vector
+    arc_lengths = spline.arc_length(start=ts, epsabs=0, epsrel=epsrel)
+    assert np.allclose(arc_lengths, expected_total_length - expected, rtol=epsrel)
 
 
 def test_arc_length_to_parameter():
