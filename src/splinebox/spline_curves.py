@@ -598,6 +598,10 @@ class Spline:
           small numbers of start/stop values depending on your spline.
           Try setting processes to 1.
         """
+        if epsabs == 1e-6:
+            warnings.warn("The default value for epsabs will change to 0 in v1.0", UserWarning, stacklevel=1)
+        if epsrel == 1e-6:
+            warnings.warn("The default value for epsrel will change to 0.01 in v1.0", UserWarning, stacklevel=1)
         self._check_control_points()
 
         # Replace None values with proper defaults
