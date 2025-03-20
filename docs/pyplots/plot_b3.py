@@ -8,9 +8,9 @@ b3 = splinebox.basis_functions.B3()
 
 t = np.linspace(-3, 3, 1000)
 
-b3_0th = b3.eval(t)
-b3_1st = b3.eval(t, derivative=1)
-b3_2nd = b3.eval(t, derivative=2)
+b3_0th = b3(t)
+b3_1st = b3(t, derivative=1)
+b3_2nd = b3(t, derivative=2)
 
 fig.suptitle("B3 basis function and its derivatives")
 axes[0].plot(t, b3_0th, label=r"$\Phi(t)$")

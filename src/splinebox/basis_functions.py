@@ -47,7 +47,7 @@ class BasisFunction:
             and other.support == self.support
         )
 
-    def eval(self, t, derivative=0):
+    def __call__(self, t, derivative=0):
         """
         Evaluate the function at position(s) `t`.
 
@@ -73,6 +73,14 @@ class BasisFunction:
             return self._derivative_2(t)
         else:
             raise ValueError(f"derivative has to be 0, 1, or 2 not {derivative}")
+
+    def eval(self, t, derivative=0):
+        warnings.warn(
+            "`basis_function.eval(t)` is deprecated and will be removed in v1. Use `basis_function(t)` instead.",
+            DeprecationWarning,
+            stacklevel=1,
+        )
+        return self(t, derivative=derivative)
 
     def _func(self, t):
         raise NotImplementedError(BasisFunction._unimplemented_message)
@@ -683,7 +691,7 @@ class CubicHermite(BasisFunction):
     please see the documentation for :class:`splinebox.basis_functions.BasisFunction`.
 
     **Note**: This is basis function is a :class:`multigenerator <splinebox.basis_functions.BasisFunction>` and
-    :func:`eval <splinebox.basis_functions.BasisFunction.eval>` returns two values.
+    :func:`__call__ <splinebox.basis_functions.BasisFunction.__call__>` returns two values.
     """
 
     def __init__(self):
@@ -898,7 +906,7 @@ class ExponentialHermite(BasisFunction):
     please see the documentation for :class:`splinebox.basis_functions.BasisFunction`.
 
     **Note**: This is basis function is a :class:`multigenerator <splinebox.basis_functions.BasisFunction>` and
-    :func:`eval <splinebox.basis_functions.BasisFunction.eval>` returns two values.
+    :func:`__call__ <splinebox.basis_functions.BasisFunction.__call__>` returns two values.
     """
 
     def __init__(self, M):

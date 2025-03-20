@@ -33,7 +33,7 @@ spline.fit(values)
 # To plot the spline we evaluate it at finely spaced parameter values.
 
 ts = np.linspace(0, M - 1, 1000)
-spline_y = spline.eval(ts)
+spline_y = spline(ts)
 spline_x = np.linspace(x.min(), x.max(), len(ts))
 
 plt.scatter(x, values, label="data")

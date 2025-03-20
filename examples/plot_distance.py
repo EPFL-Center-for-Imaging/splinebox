@@ -16,8 +16,8 @@ import splinebox
 
 
 def plot_splines(spline1, spline2, t_min=None, s_min=None):
-    vals1 = spline1.eval(np.linspace(0, spline1.M, 1000))
-    vals2 = spline2.eval(np.linspace(0, spline2.M, 1000))
+    vals1 = spline1(np.linspace(0, spline1.M, 1000))
+    vals2 = spline2(np.linspace(0, spline2.M, 1000))
     knots1 = spline1.knots
     knots2 = spline2.knots
 
@@ -27,8 +27,8 @@ def plot_splines(spline1, spline2, t_min=None, s_min=None):
     plt.scatter(knots2[:, 1], knots2[:, 0])
 
     if t_min is not None and s_min is not None:
-        point1 = spline1.eval(t_min)
-        point2 = spline2.eval(s_min)
+        point1 = spline1(t_min)
+        point2 = spline2(s_min)
         plt.plot([point1[1], point2[1]], [point1[0], point2[0]], color="k", linestyle="--")
 
     plt.gca().set_aspect("equal", "box")
@@ -76,8 +76,8 @@ plot_splines(spline1, spline2)
 
 t = np.linspace(0, spline1.M, 5)
 s = np.linspace(0, spline2.M, 5)
-vals1 = spline1.eval(t)
-vals2 = spline2.eval(s)
+vals1 = spline1(t)
+vals2 = spline2(s)
 distance_vectors = vals1[:, np.newaxis] - vals2[np.newaxis, :]
 distances = np.linalg.norm(distance_vectors, axis=-1)
 indices = np.unravel_index(np.argmin(distances), distances.shape)
@@ -92,8 +92,8 @@ plot_splines(spline1, spline2, t_min, s_min)
 
 
 def distance(parameters):
-    val1 = spline1.eval(parameters[0])
-    val2 = spline2.eval(parameters[1])
+    val1 = spline1(parameters[0])
+    val2 = spline2(parameters[1])
     return np.linalg.norm(val1 - val2)
 
 

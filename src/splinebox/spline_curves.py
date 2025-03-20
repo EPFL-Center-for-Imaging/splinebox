@@ -2,6 +2,7 @@ import collections
 import copy
 import json
 import math
+import warnings
 
 import numba
 import numpy as np
@@ -137,7 +138,7 @@ class Spline:
             t = np.arange(-self.pad, self.M + self.pad)
         else:
             t = np.arange(self.M)
-        return self.eval(t)
+        return self(t)
 
     @knots.setter
     def knots(self, values):
@@ -327,8 +328,8 @@ class Spline:
             \frac{d \theta}{dt} = \frac{1}{r^2} \left( x\frac{dy}{dt} - y\frac{dx}{dt} \right) \text{, where } r^2 = x^2 + y^2
         """
         self._check_control_points()
-        r = self.eval(t)
-        dr = self.eval(t, derivative=1)
+        r = self(t)
+        dr = self(t, derivative=1)
         if r.ndim == 1:
             r = r[np.newaxis, :]
             dr = dr[np.newaxis, :]
@@ -424,7 +425,7 @@ class Spline:
         else:
             t = np.linspace(0, self.M, len(points) + 1)[:-1] if self.closed else np.linspace(0, self.M - 1, len(points))
         tval = self._get_tval(t)
-        basis_function_values = self.basis_function.eval(tval, derivative=0)
+        basis_function_values = self.basis_function(tval, derivative=0)
         self.control_points = np.linalg.lstsq(basis_function_values, points, rcond=None)[0]
 
     def arc_length(self, stop=None, start=0, epsabs=1e-6, epsrel=1e-6):
@@ -482,7 +483,7 @@ class Spline:
             start, stop = stop, start
 
         integral = scipy.integrate.quad(
-            lambda t: np.linalg.norm(np.nan_to_num(self.eval(t, derivative=1))),
+            lambda t: np.linalg.norm(np.nan_to_num(self(t, derivative=1))),
             start,
             stop,
             epsabs=epsabs,
@@ -608,7 +609,7 @@ class Spline:
         c = (arc_length / self.M) ** 2
         upper_limit = self.M if self.closed else self.M - 1
         integral = scipy.integrate.quad(
-            lambda t: (np.linalg.norm(np.nan_to_num(self.eval(t, derivative=1))) ** 2 - c) ** 2,
+            lambda t: (np.linalg.norm(np.nan_to_num(self(t, derivative=1))) ** 2 - c) ** 2,
             0,
             upper_limit,
             epsabs=epsabs,
@@ -635,8 +636,8 @@ class Spline:
         k : float or numpy array
             The curvature value.
         """
-        first_deriv = self.eval(t, derivative=1)
-        second_deriv = self.eval(t, derivative=2)
+        first_deriv = self(t, derivative=1)
+        second_deriv = self(t, derivative=2)
         if first_deriv.ndim == 1:
             # This assumes a uniform spline, i.e. the derivative of t is constant.
             first_deriv = np.stack([first_deriv, np.ones(len(t))], axis=-1)
@@ -682,7 +683,7 @@ class Spline:
                 "The normal vector is only implemented for curves in 2D and 3D. Your spline's codomain is 1 dimensional."
             )
         if self.control_points.shape[1] == 2:
-            first_deriv = self.eval(t, derivative=1)
+            first_deriv = self(t, derivative=1)
             normals = (np.array([[0, -1], [1, 0]]) @ first_deriv.T).T
             normals /= np.linalg.norm(normals, axis=1)[:, np.newaxis]
         elif self.control_points.shape[1] == 3:
@@ -759,13 +760,13 @@ class Spline:
         self._check_control_points()
         if self.control_points.ndim != 2 or self.control_points.shape[1] != 3:
             raise RuntimeError("A frame can only be computed for splines in 3D.")
-        first_derivative = self.eval(t, derivative=1)
+        first_derivative = self(t, derivative=1)
 
         frame = np.zeros((len(t), 3, 3))
         frame[:, 0] = first_derivative / np.linalg.norm(first_derivative, axis=-1)[:, np.newaxis]
 
         if method == "frenet":
-            second_derivative = self.eval(t, derivative=2)
+            second_derivative = self(t, derivative=2)
             frame[:, 2] = np.cross(first_derivative, second_derivative)
             norm_binormal = np.linalg.norm(frame[:, 2], axis=-1)[:, np.newaxis]
             if np.any(np.isclose(norm_binormal, 0)):
@@ -782,7 +783,7 @@ class Spline:
             if initial_vector is None:
                 tangent = frame[0, 0]
                 # Try to do the same as for the Frenet frame
-                initial_vector = np.cross(np.cross(tangent, self.eval(t[0], derivative=2)), tangent)
+                initial_vector = np.cross(np.cross(tangent, self(t[0], derivative=2)), tangent)
                 if np.isclose(np.linalg.norm(initial_vector), 0) or np.any(np.isnan(initial_vector)):
                     initial_vector = np.zeros(3)
                     max_axis = np.argmax(np.abs(tangent))
@@ -817,7 +818,7 @@ class Spline:
             raise ValueError(f"Unkown method '{method}' for moving frame.")
         return frame
 
-    def eval(self, t, derivative=0):
+    def __call__(self, t, derivative=0):
         """
         Evalute the spline or one of its derivatives at
         parameter value(s) `t`.
@@ -833,15 +834,26 @@ class Spline:
         self._check_control_points()
         # Get values at which the basis functions have to be evaluated
         tval = self._get_tval(t)
-        basis_function_values = self.basis_function.eval(tval, derivative=derivative)
+        basis_function_values = self.basis_function(tval, derivative=derivative)
         value = np.matmul(basis_function_values, self.control_points)
         return np.squeeze(value)
 
+    def eval(self, t, derivative=0):
+        """
+        eval is deprecated use :meth:`splinebox.spline_curves.Spline.__call_` instead.
+        """
+        warnings.warn(
+            "`spline.eval(t)` is deprecated and will be removed in v1 use `spline(t)` instead.",
+            DeprecationWarning,
+            stacklevel=1,
+        )
+        return self(t, derivative=derivative)
+
     def _get_tval(self, t):
         """
-        This is a helper method for `eval`. It is its own method
-        to allow :class:`splinebox.spline_curves.HermiteSpline` to
-        overwrite the `eval` method using `_get_tval`.
+        This is a helper method for `__call__`. It is its own method
+        to allow :class:`splinebox.spline_curves. HermiteSpline` to
+        overwrite the `__call__` method using `_get_tval`.
         It is also used in :meth:`splinebox.spline_curves.Spline.fit`
         """
         if not isinstance(t, collections.abc.Iterable):
@@ -960,7 +972,7 @@ class Spline:
             Array with the coordinates of the point.
         return_t : bool
             Whether to return the paramter t of the spline.
-            `spline.eval(t)` gives the location on the spline
+            `spline(t)` gives the location on the spline
             closest to the point.
 
         Returns
@@ -978,16 +990,16 @@ class Spline:
 
         max_t = self.M if self.closed else self.M - 1
         t = np.linspace(0, max_t, self.M * 10)
-        points_on_spline = self.eval(t)
+        points_on_spline = self(t)
         distances = np.linalg.norm(points_on_spline - point[np.newaxis], axis=-1)
         t_initial = t[np.argmin(distances)]
 
         def _distance(t):
-            return np.linalg.norm(self.eval(t) - point)
+            return np.linalg.norm(self(t) - point)
 
         result = scipy.optimize.minimize(_distance, np.array((t_initial,)), bounds=((0, max_t),))
 
-        min_distance = np.linalg.norm(self.eval(result.x) - point)
+        min_distance = np.linalg.norm(self(result.x) - point)
 
         if return_t:
             return (min_distance, result.x)
@@ -1093,7 +1105,7 @@ class Spline:
             raise NotImplementedError("Meshes are only implemented for splines in 3D.")
         t = np.arange(0, self.M if self.closed else self.M - 1 + step_t, step_t)
         if radius is None or radius == 0:
-            points = self.eval(t)
+            points = self(t)
             connectivity = np.stack((np.arange(len(points)), np.arange(len(points)) + 1), axis=-1)
             if self.closed:
                 # Connect end to the beginning
@@ -1109,7 +1121,7 @@ class Spline:
                 phiphi, tt = np.meshgrid(phi, t)
                 tt = tt.flatten()
                 phiphi = phiphi.flatten()
-                centers = self.eval(tt.flatten())
+                centers = self(tt.flatten())
                 rr = _radius(tt, phiphi)
                 normals = self.normal(t, frame=frame, initial_vector=initial_vector)
 
@@ -1146,7 +1158,7 @@ class Spline:
                 phiphi = phiphi.flatten()
                 rr = rr.flatten()
 
-                centers = self.eval(tt.flatten())
+                centers = self(tt.flatten())
                 normals = self.normal(t, frame=frame, initial_vector=initial_vector)
 
                 n_angles = len(phi)
@@ -1234,7 +1246,7 @@ class HermiteSpline(Spline):
         Number of control points.
     basis_function : :class:`splinebox.basis_functions.BasisFunction`
         The basis function used to construct the spline. The :class:`multigenerator <splinebox.basis_functions.BasisFunction>`
-        attribute has to be true and the :func:`eval <splinebox.basis_functions.BasisFunction.eval>` method has to return two values
+        attribute has to be true and the :func:`__call__ <splinebox.basis_functions.BasisFunction.__call__>` method has to return two values
         instead of one.
     closed : boolean
         Whether or not the spline is closed, i.e. the two ends are connected.
@@ -1313,18 +1325,18 @@ class HermiteSpline(Spline):
         else:
             t = np.linspace(0, self.M, len(points) + 1)[:-1] if self.closed else np.linspace(0, self.M - 1, len(points))
         tval = self._get_tval(t)
-        basis_function_values = self.basis_function.eval(tval, derivative=0)
+        basis_function_values = self.basis_function(tval, derivative=0)
         basis_function_values = np.concatenate([basis_function_values[0], basis_function_values[1]], axis=1)
         solution = np.linalg.lstsq(basis_function_values, points, rcond=None)[0]
         half = self.M if self.closed else self.M + 2 * self.pad
         self.control_points = solution[:half]
         self.tangents = solution[half:]
 
-    def eval(self, t, derivative=0):
+    def __call__(self, t, derivative=0):
         self._check_control_points_and_tangents()
 
         tval = self._get_tval(t)
-        basis_function_values = self.basis_function.eval(tval, derivative=derivative)
+        basis_function_values = self.basis_function(tval, derivative=derivative)
         value = np.matmul(basis_function_values[0], self.control_points) + np.matmul(
             basis_function_values[1], self.tangents
         )

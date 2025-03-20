@@ -28,7 +28,7 @@ t = np.linspace(0, M - 1, 1000)
 # To plot the curvature comb, we need to compute the spline's values, curvature, and normal vectors at each t.
 # Normal vectors are unit vectors perpendicular to the spline at each point.
 
-vals = spline.eval(t)
+vals = spline(t)
 
 curvature = spline.curvature(t)
 normals = spline.normal(t)

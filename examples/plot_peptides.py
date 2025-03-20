@@ -64,7 +64,7 @@ initial_spline = splinebox.spline_curves.Spline(M=M, basis_function=basis_functi
 initial_spline.fit(skeleton_points)
 
 t = np.linspace(0, M - 1, M * 100)
-initial_vals = initial_spline.eval(t)
+initial_vals = initial_spline(t)
 initial_knots = initial_spline.knots
 
 plt.imshow(img, cmap="afmhot")
@@ -79,10 +79,10 @@ plt.show()
 
 def loss_function(control_points, alpha):
     spline.control_points = control_points.reshape((-1, 2))
-    coords = spline.eval(t)
+    coords = spline(t)
     pixel_values = scipy.ndimage.map_coordinates(img, coords.T)
     image_energy = np.mean(pixel_values)
-    internal_energy = np.mean(spline.eval(t, derivative=2) ** 2)
+    internal_energy = np.mean(spline(t, derivative=2) ** 2)
     energy = -1 * image_energy + alpha * internal_energy
     return energy
 
@@ -97,7 +97,7 @@ scipy.optimize.minimize(
     tol=0.01,
 )
 
-vals = spline.eval(t)
+vals = spline(t)
 knots = spline.knots
 
 plt.figure()
@@ -117,7 +117,7 @@ total_length = spline.arc_length()
 lengths = np.linspace(0, total_length, 200)
 t = spline.arc_length_to_parameter(lengths)
 
-vals = spline.eval(t)
+vals = spline(t)
 curvature = spline.curvature(t)
 normals = spline.normal(t)
 

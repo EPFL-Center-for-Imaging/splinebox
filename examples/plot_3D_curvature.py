@@ -24,7 +24,7 @@ spline.control_points = np.random.rand(M + 2, 3)
 
 t = np.linspace(0, M - 1, M * 15)
 
-vals = spline.eval(t)
+vals = spline(t)
 
 # %%
 # 2. Curvature comb with pyvista

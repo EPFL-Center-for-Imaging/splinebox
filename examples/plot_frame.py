@@ -56,7 +56,7 @@ bishop_frame = spline.moving_frame(t, method="bishop")
 # The Frenet-Serret frame (left) visibly twists along the curve, while the Bishop frame (right) avoids this twist.
 
 # Create a PyVista mesh for the curve
-spline_mesh = pyvista.MultipleLines(points=spline.eval(t))
+spline_mesh = pyvista.MultipleLines(points=spline(t))
 
 # Add vectors to the mesh for visualization
 spline_mesh["frenet0"] = frenet_frame[:, 0] * 0.2

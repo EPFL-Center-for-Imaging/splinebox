@@ -93,11 +93,11 @@ To sample an open spline with `M` knots:
 .. code-block:: python
 
     t = np.linspace(0, M-1, 100)
-    vals = spline.eval(t)
+    vals = spline(t)
 
 For a closed spline, continue past the last knot to sample all the way around:
 
 .. code-block:: python
 
     t = np.linspace(0, M, 100)
-    vals = spline.eval(t)
+    vals = spline(t)

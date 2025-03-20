@@ -37,6 +37,6 @@ ax.plot(
     markersize=1,
     alpha=alpha,
 )
-vals = spline.eval(ts)
+vals = spline(ts)
 ax.plot(vals[:, 0], vals[:, 1], "-", color="forestgreen", linewidth=1, alpha=alpha)
 plt.show()
