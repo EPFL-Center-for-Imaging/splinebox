@@ -2,6 +2,7 @@ import collections
 import copy
 import json
 import math
+import multiprocessing
 
 import numba
 import numpy as np
@@ -494,7 +495,15 @@ class Spline:
         return integral[0]
 
     def _length_to_parameter_recursion(
-        self, s, current_value, lower_bound, upper_bound, intermediate_results=None, atol=1e-4
+        self,
+        s,
+        lower_bound_t,
+        lower_bound_s,
+        upper_bound_t,
+        upper_bound_s,
+        intermediate_results=None,
+        atol=1e-4,
+        intermediate_results_lock=None,
     ):
         """
         Convert the given arc length s on the curve to a value in parameters space.
@@ -505,36 +514,103 @@ class Spline:
         ----------
         s : float
             Arc length on the spline.
-        current_value : float
+        lower_bound_t : float
+            The parameter value for the lower bound.
+        lower_bound_s : float
             The arc length to the lower bound.
-        lower_bound : float
-            Lower limit in parameter space.
-        upper_bound : float
-            Upper limit in parameters space.
+        upper_bound_t : float
+            The parameter value for the upper bound.
+        upper_bound_s : float
+            The arc length to the upper bound.
         intermediate_results : list
             A list where all computed length parameter pairs are stored.
             This can be used to initialize subsequent conversions more efficiently.
         atol : float
             Absolute precision to which the length is matched.
+        intermediate_results_lock : multiprocessing.Lock
+            The lock to synchronize access to `intermediate_results`.
         """
-        self._check_control_points()
-        midpoint = lower_bound + (upper_bound - lower_bound) / 2
-        midpoint_length = current_value + self.arc_length(lower_bound, midpoint, epsabs=atol)
+        # midpoint_t = lower_bound_t + (upper_bound_t - lower_bound_t) / 2
+        midpoint_t = lower_bound_t + (upper_bound_t - lower_bound_t) * (s - lower_bound_s) / (
+            upper_bound_s - lower_bound_s
+        )
+        midpoint_s = lower_bound_s + self.arc_length(lower_bound_t, midpoint_t, epsabs=atol)
         if intermediate_results is not None:
-            intermediate_results.append((midpoint, midpoint_length))
+            if intermediate_results_lock is not None:
+                intermediate_results_lock.acquire()
+                try:
+                    intermediate_results.append((midpoint_t, midpoint_s))
+                finally:
+                    intermediate_results_lock.release()
+            else:
+                intermediate_results.append((midpoint_t, midpoint_s))
 
-        if np.isclose(s, midpoint_length, atol=atol, rtol=0):
-            return midpoint
-        elif s < midpoint_length:
+        if np.isclose(s, midpoint_s, atol=atol, rtol=0):
+            return midpoint_t
+        elif s < midpoint_s:
             return self._length_to_parameter_recursion(
-                s, current_value, lower_bound, midpoint, intermediate_results, atol
+                s, lower_bound_t, lower_bound_s, midpoint_t, midpoint_s, intermediate_results, atol
             )
         else:
             return self._length_to_parameter_recursion(
-                s, midpoint_length, midpoint, upper_bound, intermediate_results, atol
+                s, midpoint_t, midpoint_s, upper_bound_t, upper_bound_s, intermediate_results, atol
             )
 
-    def arc_length_to_parameter(self, s, atol=1e-4):
+    def _pool_init(self, results_, intermediate_results_, atol_):
+        """
+        The initalization function for the multiprocessing pool in
+        arc_length_to_parameter.
+
+        Paramters
+        ---------
+        results_ : multiprocessing.Array
+            A shared memory array for the results.
+        Intermediate_results_ : list
+            The intermediate results.
+        atol_ : float
+            The absolute tolerance.
+        """
+        global results
+        results = results_
+        global atol
+        atol = atol_
+        global intermediate_results
+        intermediate_results = intermediate_results_
+        global intermediate_results_lock
+        intermediate_results_lock = multiprocessing.Lock()
+
+    def _pool_task(self, i, s):
+        """
+        The target function / task for the multiprocessing pool in
+        arc_length_to_parameter.
+
+        Paramters
+        ---------
+        i : integer
+            The position in the array passed to arc_length_to_parameter.
+        s : float
+            The desired arc length.
+        """
+        array_intermediate_results = np.array(intermediate_results)
+
+        diff = s - array_intermediate_results[:, 1]
+        diff[diff < 0] = np.inf
+        lower_bound_t, lower_bound_s = intermediate_results[np.argmin(diff)]
+
+        diff = array_intermediate_results[:, 1] - s
+        diff[diff < 0] = np.inf
+        upper_bound_t, upper_bound_s = intermediate_results[np.argmin(diff)]
+
+        if np.isclose(s, lower_bound_s, atol=atol, rtol=0):
+            results[i] = lower_bound_t
+        elif np.isclose(s, upper_bound_s, atol=atol, rtol=0):
+            results[i] = upper_bound_t
+        else:
+            results[i] = self._length_to_parameter_recursion(
+                s, lower_bound_t, lower_bound_s, upper_bound_t, upper_bound_s, intermediate_results, atol=atol
+            )
+
+    def arc_length_to_parameter(self, s, atol=1e-4, processes=None):
         """
         Convert the arc length `s` to the coresponding value in parameter space.
 
@@ -544,37 +620,34 @@ class Spline:
             Length on curve.
         atol : float
             The ablsolute error tolerance.
+        processes : int
+            The number of processes for multiprocessing.
+            If None, the number of CPUs is used.
+
+        Returns
+        -------
+        results : float or np.array
+            The parameter values corresponding to the arc length(s).
         """
         self._check_control_points()
         if not isinstance(s, np.ndarray):
             s = np.array([s])
         sort_indices = np.argsort(s)
-        results = np.zeros_like(s)
 
-        current_value = 0
-        lower_bound = 0
-        upper_bound = self.M if self.closed else self.M - 1
-        intermediate_results = []
+        lower_bound_t = 0
+        lower_bound_s = 0
+        upper_bound_t = self.M if self.closed else self.M - 1
+        upper_bound_s = self.arc_length(upper_bound_t)
 
-        def upper_bound_key_func(x):
-            diff = x[1] - s[i]
-            if diff >= 0:
-                return diff
-            else:
-                return np.inf
+        results = multiprocessing.Array("d", len(s), lock=False)
+        intermediate_results = [(lower_bound_t, lower_bound_s), (upper_bound_t, upper_bound_s)]
 
-        for i in sort_indices:
-            if len(intermediate_results) > 0:
-                upper_bound, upper_bound_len = min(intermediate_results, key=upper_bound_key_func)
-                if s[i] > upper_bound_len:
-                    upper_bound = self.M if self.closed else self.M - 1
+        with multiprocessing.Pool(
+            processes=processes, initializer=self._pool_init, initargs=(results, intermediate_results, atol)
+        ) as pool:
+            pool.starmap(self._pool_task, zip(sort_indices, s[sort_indices]))
 
-            results[i] = self._length_to_parameter_recursion(
-                s[i], current_value, lower_bound, upper_bound, intermediate_results, atol=atol
-            )
-
-            lower_bound = results[i]
-            _, current_value = min(intermediate_results, key=lambda x: abs(x[0] - lower_bound))
+        results = np.frombuffer(results)
 
         return np.squeeze(results)
 
