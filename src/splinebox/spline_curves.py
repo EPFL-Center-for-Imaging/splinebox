@@ -876,21 +876,28 @@ class Spline:
         # Replace None values with proper defaults
         if stop is None:
             stop = self.M if self.closed else self.M - 1
+
+        if not isinstance(start, collections.abc.Iterable):
+            start = np.array([start])
+        if not isinstance(stop, collections.abc.Iterable):
+            stop = np.array([stop])
+
+        if len(np.unique(start)) == 1:
+            start = start[:1]
+        if len(np.unique(stop)) == 1:
+            stop = stop[:1]
+
         if processes is None:
-            processes = os.cpu_count()
+            # Empirically the multiprocessing overhead is only worth it
+            # if there are at least 800 parameter pairs.
+            processes = os.cpu_count() if max(len(start), len(stop)) > 800 else 1
 
-        # Convert arrays of length one or with only one value to float
-        if isinstance(stop, collections.abc.Iterable) and (len(stop) == 1 or len(np.unique(stop)) == 1):
-            stop = stop[0]
-        if isinstance(start, collections.abc.Iterable) and (len(start) == 1 or len(np.unique(start)) == 1):
-            start = start[0]
-
-        if not isinstance(stop, collections.abc.Iterable) and not isinstance(start, collections.abc.Iterable):
+        if len(start) == 1 and len(stop) == 1:
             # Both start and stop are just single values
-            integral, error = self._arc_length_segment(None, start, stop, epsabs, epsrel, limit)
+            integral, error = self._arc_length_segment(None, start[0], stop[0], epsabs, epsrel, limit)
             return integral
 
-        elif isinstance(stop, collections.abc.Iterable) and isinstance(start, collections.abc.Iterable):
+        elif len(start) > 1 and len(stop) > 1:
             # Both start and stop are arrays
             if len(stop) != len(start):
                 raise ValueError(
@@ -904,19 +911,19 @@ class Spline:
             # many times by sorting the array. We can then compute the length between
             # consecutive parameters in the array, instead of starting/stopping at the
             # same value every time. To get the final results we just sum the segments.
-            if isinstance(start, collections.abc.Iterable):
+            if len(start) > 1 and len(stop) == 1:
                 if np.any(start > stop):
                     raise ValueError("All start values must be less than or equal to stop.")
                 sort_indices = np.argsort(-start)
                 sorted_start = start[sort_indices]
-                sorted_stop = np.append([stop], sorted_start[:-1])
+                sorted_stop = np.append(stop, sorted_start[:-1])
             else:
                 # stop is an array
-                if np.any(start > stop):
+                if np.any(stop < start):
                     raise ValueError("All stop values must be greater than or equal to start.")
                 sort_indices = np.argsort(stop)
                 sorted_stop = stop[sort_indices]
-                sorted_start = np.append([start], sorted_stop[:-1])
+                sorted_start = np.append(start, sorted_stop[:-1])
 
             partial_integrals, partial_errors = self._compute_arc_lengths(
                 sorted_start, sorted_stop, epsabs, epsrel, limit, processes
@@ -937,8 +944,8 @@ class Spline:
                 # Calculate the full integral for given index to avoid accumulation of the error
                 integral, error = self._arc_length_segment(
                     None,
-                    sorted_start[0] if isinstance(stop, collections.abc.Iterable) else sorted_start[index],
-                    sorted_stop[index] if isinstance(stop, collections.abc.Iterable) else sorted_stop[0],
+                    sorted_start[0] if len(stop) > 1 else sorted_start[index],
+                    sorted_stop[index] if len(stop) > 1 else sorted_stop[0],
                     epsabs=epsabs,
                     epsrel=epsrel,
                     limit=limit,
