@@ -33,8 +33,8 @@ def test_minimum_number_of_knots(basis_function):
         splinebox.spline_curves.Spline(M, basis_function)
 
 
-def test_eval(
-    spline_curve, coeff_gen, derivative, eval_positions, is_hermite_spline, not_differentiable_twice, is_interpolating
+def test_call(
+    spline_curve, coeff_gen, derivative, call_positions, is_hermite_spline, not_differentiable_twice, is_interpolating
 ):
     support = spline_curve.basis_function.support
     half_support = support / 2
@@ -46,7 +46,7 @@ def test_eval(
         spline_curve.tangents = coeff_gen(spline_curve.M, support, closed)
 
     if is_interpolating(spline_curve) and derivative == 0:
-        values = spline_curve.eval(np.arange(spline_curve.M), derivative=derivative)
+        values = spline_curve(np.arange(spline_curve.M), derivative=derivative)
         expected = spline_curve.control_points
         if not closed:
             pad = math.ceil(half_support) - 1
@@ -56,10 +56,10 @@ def test_eval(
 
     elif derivative == 2 and not_differentiable_twice(spline_curve):
         with pytest.raises(RuntimeError):
-            spline_curve.eval(eval_positions, derivative=derivative)
+            spline_curve(call_positions, derivative=derivative)
 
     else:
-        spline_curve.eval(eval_positions, derivative=derivative)
+        spline_curve(call_positions, derivative=derivative)
 
     # Check that the presence of the coefficients and tangents was verified
     if is_hermite_spline(spline_curve):
@@ -118,8 +118,8 @@ def test_closed_splines(closed_spline_curve, derivative, coeff_gen, is_hermite_s
     if not_differentiable_twice(closed_spline_curve) and derivative == 2:
         return
     assert np.allclose(
-        closed_spline_curve.eval(0, derivative=derivative),
-        closed_spline_curve.eval(M, derivative=derivative),
+        closed_spline_curve(0, derivative=derivative),
+        closed_spline_curve(M, derivative=derivative),
         equal_nan=True,
     )
 
@@ -288,8 +288,8 @@ def test_translate(initialized_spline_curve, translation_vector):
     # Check that the presence of the coefficients was verified
     spline_copy._check_control_points.assert_called()
     t = np.linspace(0, spline.M, 100) if spline.closed else np.linspace(0, spline.M - 1, 100)
-    expected = spline.eval(t) + translation_vector
-    assert np.allclose(spline_copy.eval(t), expected)
+    expected = spline(t) + translation_vector
+    assert np.allclose(spline_copy(t), expected)
 
 
 def test_rotate(initialized_spline_curve, rotation_matrix, is_hermite_spline):
@@ -304,9 +304,9 @@ def test_rotate(initialized_spline_curve, rotation_matrix, is_hermite_spline):
         # Check that the presence of the coefficients was verified
         spline_copy._check_control_points.assert_called()
         t = np.linspace(0, spline.M, 100) if spline.closed else np.linspace(0, spline.M - 1, 100)
-        vals = spline.eval(t)
+        vals = spline(t)
         expected = (rotation_matrix @ vals.T).T
-        assert np.allclose(spline_copy.eval(t), expected)
+        assert np.allclose(spline_copy(t), expected)
 
         spline_copy = spline.copy()
         spline_copy._check_control_points = unittest.mock.MagicMock()
@@ -314,12 +314,12 @@ def test_rotate(initialized_spline_curve, rotation_matrix, is_hermite_spline):
         # Check that the presence of the coefficients was verified
         spline_copy._check_control_points.assert_called()
         t = np.linspace(0, spline.M, 100) if spline.closed else np.linspace(0, spline.M - 1, 100)
-        vals = spline.eval(t)
+        vals = spline(t)
         centring_vector = np.mean(spline.control_points, axis=0)
         vals = vals - centring_vector
         expected = (rotation_matrix @ vals.T).T
         expected = expected + centring_vector
-        assert np.allclose(spline_copy.eval(t), expected)
+        assert np.allclose(spline_copy(t), expected)
 
 
 def test_fit(spline_curve, arc_length_parametrization, points, is_hermite_spline):
@@ -357,7 +357,7 @@ def test_fit(spline_curve, arc_length_parametrization, points, is_hermite_spline
                 spline_curve.tangents = x[half:]
             else:
                 spline_curve.control_points = x
-            spline_vals = spline_curve.eval(t)
+            spline_vals = spline_curve(t)
             loss = np.linalg.norm(points[:, i] - spline_vals)
             return loss
 
@@ -492,7 +492,7 @@ def test_scale(initialized_spline_curve, is_hermite_spline):
     else:
         spline._check_control_points.assert_called()
 
-    assert np.allclose(spline.eval(t), spline_copy.eval(t))
+    assert np.allclose(spline(t), spline_copy(t))
 
 
 def test_curvilinear_reparametrization_energy():
@@ -502,7 +502,7 @@ def test_curvilinear_reparametrization_energy():
     spline.knots = np.array([[1, 0], [2, 0], [3, 0], [4, 0]])
 
     # Because of the spacing of the knots the derivative should be constant so we can just compute one value in the middle of the spline.
-    derivative_val = spline.eval((spline.M - 1) / 2, derivative=1)
+    derivative_val = spline((spline.M - 1) / 2, derivative=1)
 
     # To compute the expected value we exploit the constant derivative.
     # We can replace the integration in the definition of the curvilinear reparametrization energy with a multiplication because the derivative is constant.
@@ -562,7 +562,7 @@ def test_curvature():
     # 1D
     spline = splinebox.spline_curves.Spline(M=M, basis_function=splinebox.basis_functions.B3(), closed=False)
     spline.knots = np.array([1, 5, 4, 2])
-    expected = spline.eval(t, derivative=2) / (1 + spline.eval(t, derivative=1) ** 2) ** (3 / 2)
+    expected = spline(t, derivative=2) / (1 + spline(t, derivative=1) ** 2) ** (3 / 2)
     result = spline.curvature(t)
     assert np.allclose(result, expected)
 
@@ -603,7 +603,7 @@ def test_normal_3D():
     spline.knots = np.array([[1, 0, 0], [0, 1, 1], [-1, 0, 2], [0, -1, 3]])
     t = t[1:-1]
     normals = spline.normal(t, frame="frenet")
-    tangents = spline.eval(t, derivative=1)
+    tangents = spline(t, derivative=1)
     # Check that both normals are orthogonal t the tangents (dot product)
     dot = np.sum(normals * tangents[:, np.newaxis], axis=-1)
     assert np.allclose(dot, 0)
@@ -749,13 +749,13 @@ def test_distance(initialized_spline_curve):
 
     # Check that a set of equality spaced points on the spline are at as far away as the distance
     t = np.linspace(0, spline.M if spline.closed else spline.M - 1, spline.M * 10)
-    points_on_spline = spline.eval(t)
+    points_on_spline = spline(t)
     distances = np.linalg.norm(points_on_spline - point[np.newaxis], axis=-1)
     assert np.all(distances >= distance)
 
     # Check that the returned t corresponds to the correct distance
     distance, t = spline.distance(point, return_t=True)
-    point_on_spline = spline.eval(t)
+    point_on_spline = spline(t)
     assert np.isclose(distance, np.linalg.norm(point - point_on_spline))
 
 
@@ -787,14 +787,14 @@ def test_moving_frame(initialized_spline_curve, not_differentiable_twice):
             assert np.allclose(np.sum(frame[:, 1] * frame[:, 2], axis=-1), 0)
 
             # Check that T is parallel to the first derivative
-            assert np.allclose(np.cross(frame[:, 0], spline.eval(t, derivative=1)), 0)
+            assert np.allclose(np.cross(frame[:, 0], spline(t, derivative=1)), 0)
 
             # N = dT/ds and T = dr/ds so N should be parallel to d^2r/ds^2 - proj_T(d^2/ds^2)
             # Removing the projection on T is equivalent to removing the part of the
             # derivative that changes the length of the first derivative.
             # This part should not be present in N since it is the derivative of the
             # unit vector T, which has constant length.
-            deriv2 = spline.eval(t, derivative=2)
+            deriv2 = spline(t, derivative=2)
             # use Gram Schmidt to remove the scaling component
             deriv2 -= np.sum(deriv2 * frame[:, 0], axis=-1)[:, np.newaxis] * frame[:, 0]
             assert np.allclose(np.cross(frame[:, 1], deriv2), 0)
@@ -804,7 +804,7 @@ def test_moving_frame(initialized_spline_curve, not_differentiable_twice):
             frame = spline.moving_frame(t, method="bishop", initial_vector=np.ones(3))
 
         initial_vector = np.zeros(3)
-        tangent = spline.eval(t[0], derivative=1)
+        tangent = spline(t[0], derivative=1)
         initial_vector[1] = -tangent[2]
         initial_vector[2] = tangent[1]
         frame = spline.moving_frame(t, method="bishop", initial_vector=initial_vector)
@@ -818,7 +818,7 @@ def test_moving_frame(initialized_spline_curve, not_differentiable_twice):
         assert np.allclose(np.sum(frame[:, 1] * frame[:, 2], axis=-1), 0)
 
         # Check that T is parallel to the first derivative
-        assert np.allclose(np.cross(frame[:, 0], spline.eval(t, derivative=1)), 0)
+        assert np.allclose(np.cross(frame[:, 0], spline(t, derivative=1)), 0)
 
 
 def test_moving_frame_raises():

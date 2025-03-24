@@ -133,7 +133,7 @@ spline.fit(skeleton_points)
 
 # Creat meshes for the spline and the knots of the spline
 t = np.linspace(0, M - 1, M * 15)
-spline_mesh = pv.MultipleLines(points=spline.eval(t))
+spline_mesh = pv.MultipleLines(points=spline(t))
 knots_point_cloud = pv.PolyData(spline.knots)
 
 # Prepare segmentation mesh
@@ -159,7 +159,7 @@ plotter.show()
 # of the spline (i.e. the vector pointing in the local direction of the spline).
 
 # Compute derivative vectors along the spline
-deriv = spline.eval(t, derivative=1)
+deriv = spline(t, derivative=1)
 
 # %%
 # **Compute the first normal vector**
@@ -206,7 +206,7 @@ plotter.show()
 # Finally, we interpolate pixel values from the original image along the computed normal planes.
 
 # Centers of the normal planes
-spline_coordinates = spline.eval(t)
+spline_coordinates = spline(t)
 
 # Coefficients for scaling the normal vectors
 half_window_size = 25

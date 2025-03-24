@@ -12,7 +12,7 @@ control_points = np.concatenate([np.zeros((1, 2)), control_points, np.zeros((1, 
 spline.control_points = control_points
 
 t = np.linspace(0, spline.M - 1, 1000)
-vals = spline.eval(t)
+vals = spline(t)
 
 plt.figure(figsize=(6, 3))
 plt.scatter(spline.control_points[1:-1, 0], spline.control_points[1:-1, 1], label="control points")

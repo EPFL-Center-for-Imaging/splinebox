@@ -91,14 +91,14 @@ t = np.linspace(0, M - 1, 500)
 
 def _update2(i):
     mpl_img.set_array(stack[i])
-    vals = splines[i].eval(t)
+    vals = splines[i](t)
     mpl_line.set_data(vals[:, 1], vals[:, 0])
     return (mpl_img, mpl_line)
 
 
 fig, ax = plt.subplots(figsize=(7, 3))
 mpl_img = ax.imshow(stack[0], cmap="Greys_r")
-vals = splines[0].eval(t)
+vals = splines[0](t)
 (mpl_line,) = ax.plot(vals[:, 1], vals[:, 0])
 ax.set(xlim=(0, stack.shape[2]), ylim=(0, stack.shape[1]))
 animation = matplotlib.animation.FuncAnimation(fig, _update2, len(stack), interval=100, blit=True)
@@ -110,14 +110,14 @@ plt.show()
 # To focus on the undulating motion, we translate the splines to their center of mass and rotate them to align horizontally.
 
 for spline in splines:
-    start_point = np.squeeze(spline.eval(0))
-    stop_point = np.squeeze(spline.eval(spline.M - 1))
+    start_point = np.squeeze(spline(0))
+    stop_point = np.squeeze(spline(spline.M - 1))
     angle = np.arctan2(*(stop_point - start_point))
     c = np.cos(angle)
     s = np.sin(angle)
     rot_matrix = np.array([[c, -s], [s, c]])
     spline.rotate(rot_matrix)
-    com = np.mean(spline.eval(t), axis=0)
+    com = np.mean(spline(t), axis=0)
     spline.translate(-com)
 
 # %%
@@ -125,7 +125,7 @@ for spline in splines:
 
 
 def _update3(i):
-    vals = splines[i].eval(t)
+    vals = splines[i](t)
     curvature = splines[i].curvature(t)
     normals = splines[i].normal(t)
     comb = vals + d * curvature[:, np.newaxis] * normals
@@ -137,7 +137,7 @@ def _update3(i):
 
 
 fig, ax = plt.subplots(figsize=(7, 3))
-vals = splines[0].eval(t)
+vals = splines[0](t)
 curvature = splines[0].curvature(t)
 normals = splines[0].normal(t)
 d = 50

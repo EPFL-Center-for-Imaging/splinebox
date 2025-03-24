@@ -38,7 +38,7 @@ for i, (name, basis_function) in enumerate(
     M = len(knots)
     curve = splinebox.spline_curves.Spline(M, basis_function, True)
     curve.knots = knots
-    discreteContour = curve.eval(t)
+    discreteContour = curve(t)
 
     axes[i // n, i % n].scatter(knots[:, 0], knots[:, 1])
     axes[i // n, i % n].plot(discreteContour[:, 0], discreteContour[:, 1])

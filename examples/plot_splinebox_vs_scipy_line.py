@@ -68,7 +68,7 @@ t = np.linspace(0, M - 1, M * 50)
 # %%
 # In order to compar the fitted spline to the intial one,
 # we save it's positions and knots for plotting later on.
-initial_vals = spline.eval(t)
+initial_vals = spline(t)
 initial_knots = spline.knots
 
 
@@ -86,7 +86,7 @@ initial_knots = spline.knots
 
 def loss_function_splinebox(control_points, alpha):
     spline.control_points = control_points.reshape((-1, 2))
-    coordinates = spline.eval(t)
+    coordinates = spline(t)
     image_energy = np.mean(interpolator(coordinates[:, 0], coordinates[:, 1], grid=False))
     internal_energy = spline.curvilinear_reparametrization_energy()
     return image_energy + alpha * internal_energy
@@ -104,7 +104,7 @@ scipy.optimize.minimize(loss_function_splinebox, initial_control_points.flatten(
 # Plot the Results (splinebox)
 # ----------------------------
 # Finally, we plot the initial and fitted splines for comparison.
-fitted_vals = spline.eval(t)
+fitted_vals = spline(t)
 fitted_knots = spline.knots
 
 fix, axes = plt.subplots(2, 1, sharex=True, sharey=True)
@@ -132,11 +132,11 @@ plt.show()
 k = 3
 # The parameter value for the knots
 t_knots = np.arange(M)
-spline = scipy.interpolate.make_interp_spline(t_knots, initial_knots, k=3, bc_type="natural")
+scipy_spline = scipy.interpolate.make_interp_spline(t_knots, initial_knots, k=3, bc_type="natural")
 
 # Save initial values for comparison
-initial_vals = spline(t)
-initial_knots = spline(spline.t)[k:-k]
+initial_vals = scipy_spline(t)
+initial_knots = scipy_spline(scipy_spline.t)[k:-k]
 
 
 # %%
@@ -144,12 +144,12 @@ initial_knots = spline(spline.t)[k:-k]
 # ----------------------------------
 # Since scipy does not have a built-in curvilinear reparametrization energy, we calculate it manually.
 def loss_function_scipy(control_points, alpha):
-    spline.c = control_points.reshape((-1, 2))
-    coordinates = spline(t)
+    scipy_spline.c = control_points.reshape((-1, 2))
+    coordinates = scipy_spline(t)
     image_energy = np.mean(interpolator(coordinates[:, 0], coordinates[:, 1], grid=False))
 
     # Compute internal energy (curvilinear reparametrization)
-    derivative = spline.derivative()
+    derivative = scipy_spline.derivative()
     integral = scipy.integrate.quad(lambda t: np.linalg.norm(derivative(t)), 0, M - 1)
     length = integral[0]
     c = (length / M) ** 2
@@ -162,15 +162,15 @@ def loss_function_scipy(control_points, alpha):
 # %%
 # Fit the Spline (scipy)
 # ----------------------
-initial_control_points = spline.c
+initial_control_points = scipy_spline.c
 scipy.optimize.minimize(loss_function_scipy, initial_control_points.flatten(), args=(500,))
 
 # %%
 # Plot the Results (scipy)
 # ------------------------
 # Finally, we plot the initial and fitted splines for the scipy result.
-fitted_vals = spline(t)
-fitted_knots = spline(spline.t[k:-k])
+fitted_vals = scipy_spline(t)
+fitted_knots = scipy_spline(scipy_spline.t[k:-k])
 
 fix, axes = plt.subplots(2, 1, sharex=True, sharey=True)
 axes[0].imshow(img, cmap="gray")

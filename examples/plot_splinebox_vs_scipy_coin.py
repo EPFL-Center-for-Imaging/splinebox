@@ -55,7 +55,7 @@ spline = splinebox.Spline(M=M, basis_function=splinebox.B3(), closed=True)
 spline.fit(contour)
 
 ts = np.linspace(0, M, 100)
-splinebox_vals = spline.eval(ts)
+splinebox_vals = spline(ts)
 splinebox_control_points = spline.control_points
 
 plt.imshow(img, cmap="gray", alpha=0.5)

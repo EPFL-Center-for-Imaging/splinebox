@@ -9,9 +9,9 @@ basis = splinebox.basis_functions.Exponential(M=M)
 
 t = np.linspace(-3, 3, 1000)
 
-basis_0th = basis.eval(t)
-basis_1st = basis.eval(t, derivative=1)
-basis_2nd = basis.eval(t, derivative=2)
+basis_0th = basis(t)
+basis_1st = basis(t, derivative=1)
+basis_2nd = basis(t, derivative=2)
 
 fig.suptitle(f"Exponential basis function and its derivatives for $M={M}$")
 axes[0].plot(t, basis_0th, label=r"$\Phi(t)$")

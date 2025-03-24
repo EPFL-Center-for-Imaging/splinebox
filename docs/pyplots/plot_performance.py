@@ -37,7 +37,7 @@ for repetition in range(n_repetitions + 1):
 
     t = np.linspace(0, M if closed else M - 1, nt)
     start_eval = time.perf_counter_ns()
-    spline.eval(t)
+    spline(t)
     stop_eval = time.perf_counter_ns()
     if repetition != 0:
         results.append(

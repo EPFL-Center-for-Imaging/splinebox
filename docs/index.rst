@@ -54,7 +54,7 @@ SplineBox
        spline.fit(data)
 
        t = np.linspace(0, M - 1, 1000)
-       vals = spline.eval(t)
+       vals = spline(t)
 
 .. raw:: html
 

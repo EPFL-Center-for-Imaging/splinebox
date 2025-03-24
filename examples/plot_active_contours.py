@@ -45,7 +45,7 @@ edge_energy = scipy.interpolate.RectBivariateSpline(
 # We define an internal energy function to regularize the curvature of the spline.
 # The internal energy depends on the first and second derivatives of the spline.
 def internal_energy(spline, t, alpha, beta):
-    return 0.5 * (alpha * spline.eval(t, derivative=1) ** 2 + beta * spline.eval(t, derivative=2) ** 2)
+    return 0.5 * (alpha * spline(t, derivative=1) ** 2 + beta * spline(t, derivative=2) ** 2)
 
 
 # %%
@@ -67,7 +67,7 @@ spline = splinebox.spline_curves.Spline(M=M, basis_function=splinebox.basis_func
 spline.knots = knots
 
 t = np.linspace(0, M, 400)
-contour = spline.eval(t)
+contour = spline(t)
 plt.imshow(img)
 plt.scatter(knots[:, 1], knots[:, 0])
 plt.plot(contour[:, 1], contour[:, 0])
@@ -96,7 +96,7 @@ external_energies = []
 def energy_function(control_points, spline, t, alpha, beta):
     control_points = control_points.reshape((spline.M, -1))
     spline.control_points = control_points
-    contour = spline.eval(t)
+    contour = spline(t)
     contours.append(contour.copy())
 
     # Compute external energy from the edge map
@@ -121,9 +121,9 @@ result = scipy.optimize.minimize(
 # %%
 # Inorder to plot the spline as a smooth line, we have to evaluate it
 # more densly than just at the knots.
-samples = spline.eval(t)
+samples = spline(t)
 
-final_knots = spline.eval(np.arange(M))
+final_knots = spline(np.arange(M))
 
 # %%
 # Finaly, we can plot the result.

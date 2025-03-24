@@ -152,7 +152,7 @@ def derivative(request):
 
 
 @pytest.fixture(params=[1.5, np.array(0.0), np.linspace(0, 10, 1000)])
-def eval_positions(request):
+def call_positions(request):
     return request.param
 
 
@@ -204,7 +204,7 @@ def is_spline():
 def is_interpolating(is_spline):
     def _is_interpolating(obj):
         basis_function = obj.basis_function if is_spline(obj) else obj
-        return np.allclose(basis_function.eval(0), 1)
+        return np.allclose(basis_function(0), 1)
 
     return _is_interpolating
 
