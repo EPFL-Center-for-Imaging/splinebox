@@ -1318,7 +1318,7 @@ class HermiteSpline(Spline):
             )
         if len(points) < self.M:
             raise RuntimeError(
-                "You provided fewer data points than you spline has knots. For the fit to have a unique solution you need to provide at least as many data points as your spline has knots. Consider adding more data or reducing the number of knots M."
+                "You provided fewer data points than your spline has knots. For the fit to have a unique solution you need to provide at least as many data points as your spline has knots. Consider adding more data or reducing the number of knots M."
             )
         if arc_length_parameterization:
             raise NotImplementedError
