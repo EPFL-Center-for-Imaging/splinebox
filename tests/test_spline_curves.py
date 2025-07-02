@@ -242,6 +242,13 @@ def test_arc_length_to_parameter():
 
     assert np.allclose(results, expected, atol=1e-3, rtol=0)
 
+    # Check that it works with an array of integer inputs
+    ls = np.arange(0, int(2 * np.pi), dtype=int)
+    expected = ls / 2 / np.pi * M
+    results = spline.arc_length_to_parameter(ls, atol=atol)
+    assert np.allclose(results, expected, atol=1e-3, rtol=0)
+    results = spline.arc_length_to_parameter(ls, atol=atol)
+
     # Create a sawtooth spline
     M = 7
     basis_function = splinebox.basis_functions.B1()
