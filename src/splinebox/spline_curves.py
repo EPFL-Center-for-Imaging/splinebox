@@ -707,9 +707,8 @@ class Spline:
 
         Parameters
         ----------
-        t : np.array
-            A 1D array of parameter values at which to evaluate the frame. These
-            correspond to positions along the spline.
+        t : np.array or float
+            A 1D array of parameter values or a single parameter value at which to evaluate the frame.
         method : str, optional
             The type of moving frame to compute. Options are:
 
@@ -758,9 +757,15 @@ class Spline:
                American Mathematical Monthly, 82(3), 246-251.
         """
         self._check_control_points()
+
         if self.control_points.ndim != 2 or self.control_points.shape[1] != 3:
             raise RuntimeError("A frame can only be computed for splines in 3D.")
+
+        t = self._convert_parameter_to_array(t)
+
         first_derivative = self(t, derivative=1)
+        if first_derivative.ndim == 1:
+            first_derivative = first_derivative[np.newaxis]
 
         frame = np.zeros((len(t), 3, 3))
         frame[:, 0] = first_derivative / np.linalg.norm(first_derivative, axis=-1)[:, np.newaxis]
@@ -849,6 +854,20 @@ class Spline:
         )
         return self(t, derivative=derivative)
 
+    def _convert_parameter_to_array(self, t):
+        """
+        Helper function that converts prepares parameter
+        arguments by converting them into arrays.
+        """
+        if not isinstance(t, collections.abc.Iterable):
+            t = np.array([t])
+        elif isinstance(t, np.ndarray) and t.shape == ():
+            # Array with only one element, e.g. np.array(0.)
+            t = np.array([t.item()])
+        elif not isinstance(t, np.ndarray):
+            t = np.array(t)
+        return t
+
     def _get_tval(self, t):
         """
         This is a helper method for `__call__`. It is its own method
@@ -856,11 +875,7 @@ class Spline:
         overwrite the `__call__` method using `_get_tval`.
         It is also used in :meth:`splinebox.spline_curves.Spline.fit`
         """
-        if not isinstance(t, collections.abc.Iterable):
-            t = np.array([t])
-        elif isinstance(t, np.ndarray) and t.shape == ():
-            # Array with only one element, e.g. np.array(0.)
-            t = np.array([t.item()])
+        t = self._convert_parameter_to_array(t)
         if self.closed:
             # all knot indices
             k = np.arange(self.M)
