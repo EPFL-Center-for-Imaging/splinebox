@@ -779,7 +779,7 @@ def test_moving_frame(initialized_spline_curve, not_differentiable_twice):
             frame = spline.moving_frame(t, method="frenet")
 
             # Check that you can pass a float value
-            assert frame[5] == spline.moving_frame(t[5], method="frenet")
+            assert np.allclose(frame[5], spline.moving_frame(t[5], method="frenet"))
 
             # Check that they are unit vectors
             assert np.allclose(np.linalg.norm(frame, axis=-1), 1)
@@ -807,7 +807,7 @@ def test_moving_frame(initialized_spline_curve, not_differentiable_twice):
             frame = spline.moving_frame(t, method="bishop", initial_vector=np.ones(3))
 
             # Check that you can pass a float value
-            assert frame[5] == spline.moving_frame(t[5], method="bishop", initial_vector=np.ones(3))
+            assert np.allclose(frame[5], spline.moving_frame(t[5], method="bishop", initial_vector=np.ones(3)))
 
         initial_vector = np.zeros(3)
         tangent = spline(t[0], derivative=1)
