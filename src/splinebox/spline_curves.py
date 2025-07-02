@@ -550,7 +550,7 @@ class Spline:
         if not isinstance(s, np.ndarray):
             s = np.array([s])
         sort_indices = np.argsort(s)
-        results = np.zeros_like(s)
+        results = np.zeros_like(s, dtype=float)
 
         current_value = 0
         lower_bound = 0
