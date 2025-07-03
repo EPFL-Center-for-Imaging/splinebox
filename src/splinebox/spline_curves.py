@@ -328,6 +328,7 @@ class Spline:
             \frac{d \theta}{dt} = \frac{1}{r^2} \left( x\frac{dy}{dt} - y\frac{dx}{dt} \right) \text{, where } r^2 = x^2 + y^2
         """
         self._check_control_points()
+        t = self._convert_to_array(t)
         r = self(t)
         dr = self(t, derivative=1)
         if r.ndim == 1:
@@ -547,8 +548,7 @@ class Spline:
             The ablsolute error tolerance.
         """
         self._check_control_points()
-        if not isinstance(s, np.ndarray):
-            s = np.array([s])
+        s = self._convert_to_array(s)
         sort_indices = np.argsort(s)
         results = np.zeros_like(s, dtype=float)
 
@@ -636,6 +636,8 @@ class Spline:
         k : float or numpy array
             The curvature value.
         """
+        self._check_control_points()
+        t = self._convert_to_array(t)
         first_deriv = self(t, derivative=1)
         second_deriv = self(t, derivative=2)
         if first_deriv.ndim == 1:
@@ -678,6 +680,7 @@ class Spline:
             The normal vectors.
         """
         self._check_control_points()
+        t = self._convert_to_array(t)
         if self.control_points.ndim != 2:
             raise NotImplementedError(
                 "The normal vector is only implemented for curves in 2D and 3D. Your spline's codomain is 1 dimensional."
@@ -761,7 +764,7 @@ class Spline:
         if self.control_points.ndim != 2 or self.control_points.shape[1] != 3:
             raise RuntimeError("A frame can only be computed for splines in 3D.")
 
-        t = self._convert_parameter_to_array(t)
+        t = self._convert_to_array(t)
 
         first_derivative = self(t, derivative=1)
         if first_derivative.ndim == 1:
@@ -837,6 +840,7 @@ class Spline:
             first and second derivative respectively.
         """
         self._check_control_points()
+        t = self._convert_to_array(t)
         # Get values at which the basis functions have to be evaluated
         tval = self._get_tval(t)
         basis_function_values = self.basis_function(tval, derivative=derivative)
@@ -845,7 +849,7 @@ class Spline:
 
     def eval(self, t, derivative=0):
         """
-        eval is deprecated use :meth:`splinebox.spline_curves.Spline.__call_` instead.
+        eval is deprecated use :meth:`splinebox.spline_curves.Spline.__call__` instead.
         """
         warnings.warn(
             "`spline.eval(t)` is deprecated and will be removed in v1 use `spline(t)` instead.",
@@ -854,11 +858,18 @@ class Spline:
         )
         return self(t, derivative=derivative)
 
-    def _convert_parameter_to_array(self, t):
+    def _convert_to_array(self, t):
         """
-        Helper function that converts prepares parameter
-        arguments by converting them into arrays.
+        Helper function that converts the a function input
+        to an array. This allows functions to accept int and float
+        values in addition to arrays.
         """
+        if (isinstance(t, np.ndarray) and t.shape == ()) or (isinstance(t, collections.abc.Iterable) and len(t) == 1):
+            warnings.warn(
+                "Starting from version 1.0 splinebox will return an array of length 1 if the input is length 1 instead of returning a single value. For details see https://github.com/EPFL-Center-for-Imaging/splinebox/issues/53.",
+                FutureWarning,
+                stacklevel=2,
+            )
         if not isinstance(t, collections.abc.Iterable):
             t = np.array([t])
         elif isinstance(t, np.ndarray) and t.shape == ():
@@ -875,7 +886,6 @@ class Spline:
         overwrite the `__call__` method using `_get_tval`.
         It is also used in :meth:`splinebox.spline_curves.Spline.fit`
         """
-        t = self._convert_parameter_to_array(t)
         if self.closed:
             # all knot indices
             k = np.arange(self.M)
@@ -1349,6 +1359,7 @@ class HermiteSpline(Spline):
 
     def __call__(self, t, derivative=0):
         self._check_control_points_and_tangents()
+        t = self._convert_to_array(t)
 
         tval = self._get_tval(t)
         basis_function_values = self.basis_function(tval, derivative=derivative)
