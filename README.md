@@ -39,7 +39,7 @@ spline = splinebox.spline_curves.Spline(M=n_knots, basis_function=splinebox.basi
 spline.knots = np.array([[1, 2], [3, 2], [4, 3], [1, 1]])
 
 t = np.linspace(0, n_knots, 100)
-vals = spline.eval(t, derivative=0)
+vals = spline(t, derivative=0)
 
 plt.scatter(spline.knots[:, 0], spline.knots[:, 1])
 plt.plot(vals[:, 0], vals[:, 1])
