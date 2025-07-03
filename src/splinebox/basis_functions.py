@@ -3,9 +3,9 @@ This module provides a collection of basis function classes, each designed for a
 The modular design enables users to easily explore different spline types by swapping the basis function object when creating a spline.
 
 All basis function classes inherit from the base class :class:`splinebox.basis_functions.BasisFunction`.
-The base class defines methods such as :code:`eval`, :code:`filter_periodic`, and :code:`filter_symmetric`.
+The base class defines methods such as :code:`__call__`, :code:`filter_periodic`, and :code:`filter_symmetric`.
 The latter two methods should be overridden as appropriate in any subclass to ensure they align with the behavior of the specific basis function.
-To enable the eval method, subclasses must implement the following methods: _func(t), _derivative_1(t), and _derivative_2(t), which correspond to the function itself and its first and second derivatives, respectively.
+To enable the :code:`__call__` method, subclasses must implement the following methods: :code:`_func(t)`, :code:`_derivative_1(t)`, and :code:`_derivative_2(t)`, which correspond to the function itself and its first and second derivatives, respectively.
 
 For more information on implementing a new basis function see: :class:`splinebox.basis_functions.BasisFunction`.
 """
@@ -119,11 +119,11 @@ class BasisFunction:
         Examples
         --------
         >>> basis_function = splinebox.basis_functions.B1()
-        >>> basis_function.eval(0.5)
+        >>> basis_function(0.5)
         0.5
 
         >>> t = np.array([-0.2, 0.5])
-        >>> basis_function.eval(t, derivative=1)
+        >>> basis_function(t, derivative=1)
         array([ 1., -1.])
         """
         if derivative == 0:
@@ -137,7 +137,7 @@ class BasisFunction:
 
     def eval(self, t, derivative=0):
         warnings.warn(
-            "`basis_function.eval(t)` is deprecated and will be removed in v1. Use `basis_function(t)` instead.",
+            "`basis_function(t)` is deprecated and will be removed in v1. Use `basis_function(t)` instead.",
             DeprecationWarning,
             stacklevel=1,
         )
@@ -192,7 +192,7 @@ class BasisFunction:
         We can confirm that the returned control points indeed results in the second knot provided.
 
         >>> control_points = b3.filter_symmetric(knots)
-        >>> b3.eval(-1) * control_points[0] + b3.eval(0) * control_points[1] + b3.eval(1) * control_points[2]
+        >>> b3(-1) * control_points[0] + b3(0) * control_points[1] + b3(1) * control_points[2]
         array([2., 2.])
 
         To perform the same test for the first and the last knot, padding is required.
@@ -239,15 +239,15 @@ class BasisFunction:
         We can confirm that the returned control points indeed results in the knots provided.
 
         >>> control_points = b3.filter_periodic(knots)
-        >>> b3.eval(-1) * control_points[0] + b3.eval(0) * control_points[1] + b3.eval(1) * control_points[2]
+        >>> b3(-1) * control_points[0] + b3(0) * control_points[1] + b3(1) * control_points[2]
         array([2., 2.])
 
         For the other two knots we need to take the preiodicity into account.
 
-        >>> b3.eval(-1) * control_points[-1] + b3.eval(0) * control_points[0] + b3.eval(1) * control_points[1]
+        >>> b3(-1) * control_points[-1] + b3(0) * control_points[0] + b3(1) * control_points[1]
         array([4., 3.])
 
-        >>> b3.eval(-1) * control_points[1] + b3.eval(0) * control_points[2] + b3.eval(1) * control_points[0]
+        >>> b3(-1) * control_points[1] + b3(0) * control_points[2] + b3(1) * control_points[0]
         array([1., 3.])
         """
         raise NotImplementedError(BasisFunction._unimplemented_message)
@@ -288,22 +288,22 @@ class B1(BasisFunction):
 
     Evaluate the basis function at a single position:
 
-    >>> basis_function.eval(0.5)
+    >>> basis_function(0.5)
     0.5
 
     Evaluate the basis function at multiple positions simulatneously:
 
     >>> t = np.array([-0.2, 0, 0.5])
-    >>> basis_function.eval(t)
+    >>> basis_function(t)
     array([0.8, 1. , 0.5])
 
     Compute the first derivative of the basis function at multiple positions:
 
-    >>> basis_function.eval(t, derivative=1)
+    >>> basis_function(t, derivative=1)
     array([ 1., nan, -1.])
 
     >>> t = np.linspace(-1.4, 1.4, 500)
-    >>> plt.plot(t, basis_function.eval(t))  # doctest: +SKIP
+    >>> plt.plot(t, basis_function(t))  # doctest: +SKIP
     >>> plt.show()  # doctest: +SKIP
     """
 
@@ -379,22 +379,22 @@ class B2(BasisFunction):
 
     Evaluate the basis function at a single position:
 
-    >>> basis_function.eval(0.5)
+    >>> basis_function(0.5)
     0.5
 
     Evaluate the basis function at multiple positions simulatneously:
 
     >>> t = np.array([-0.2, 0, 0.5])
-    >>> basis_function.eval(t)
+    >>> basis_function(t)
     array([0.71, 0.75, 0.5 ])
 
     Compute the first derivative of the basis function at multiple positions:
 
-    >>> basis_function.eval(t, derivative=1)
+    >>> basis_function(t, derivative=1)
     array([ 0.4, -0. , -1. ])
 
     >>> t = np.linspace(-2.1, 2.1, 500)
-    >>> plt.plot(t, basis_function.eval(t))  # doctest: +SKIP
+    >>> plt.plot(t, basis_function(t))  # doctest: +SKIP
     >>> plt.show()  # doctest: +SKIP
     """
 
@@ -473,22 +473,22 @@ class B3(BasisFunction):
 
     Evaluate the basis function at a single position:
 
-    >>> basis_function.eval(0.5)
+    >>> basis_function(0.5)
     0.47916666666666663
 
     Evaluate the basis function at multiple positions simulatneously:
 
     >>> t = np.array([-0.2, 0, 0.5])
-    >>> basis_function.eval(t)
+    >>> basis_function(t)
     array([0.631, 0.667, 0.479])
 
     Compute the first derivative of the basis function at multiple positions:
 
-    >>> basis_function.eval(t, derivative=1)
+    >>> basis_function(t, derivative=1)
     array([ 0.34 ,  0.   , -0.625])
 
     >>> t = np.linspace(-2.1, 2.1, 500)
-    >>> plt.plot(t, basis_function.eval(t))  # doctest: +SKIP
+    >>> plt.plot(t, basis_function(t))  # doctest: +SKIP
     >>> plt.show()  # doctest: +SKIP
     """
 
@@ -647,22 +647,22 @@ class Exponential(BasisFunction):
 
     Evaluate the basis function at a single position:
 
-    >>> basis_function.eval(0.5)
+    >>> basis_function(0.5)
     0.5
 
     Evaluate the basis function at multiple positions simulatneously:
 
     >>> t = np.array([-0.2, 0, 0.5])
-    >>> basis_function.eval(t)
+    >>> basis_function(t)
     array([0.687, 0.724, 0.5  ])
 
     Compute the first derivative of the basis function at multiple positions:
 
-    >>> basis_function.eval(t, derivative=1)
+    >>> basis_function(t, derivative=1)
     array([ 0.366,  0.   , -0.865])
 
     >>> t = np.linspace(-2.1, 2.1, 500)
-    >>> plt.plot(t, basis_function.eval(t))  # doctest: +SKIP
+    >>> plt.plot(t, basis_function(t))  # doctest: +SKIP
     >>> plt.show()  # doctest: +SKIP
     """
 
@@ -871,22 +871,22 @@ class CatmullRom(BasisFunction):
 
     Evaluate the basis function at a single position:
 
-    >>> basis_function.eval(0.5)
+    >>> basis_function(0.5)
     0.5625
 
     Evaluate the basis function at multiple positions simulatneously:
 
     >>> t = np.array([-0.2, 0, 0.5])
-    >>> basis_function.eval(t)
+    >>> basis_function(t)
     array([0.912, 1.   , 0.562])
 
     Compute the first derivative of the basis function at multiple positions:
 
-    >>> basis_function.eval(t, derivative=1)
+    >>> basis_function(t, derivative=1)
     array([ 0.82 , -0.   , -1.375])
 
     >>> t = np.linspace(-2.1, 2.1, 500)
-    >>> plt.plot(t, basis_function.eval(t))  # doctest: +SKIP
+    >>> plt.plot(t, basis_function(t))  # doctest: +SKIP
     >>> plt.show()  # doctest: +SKIP
     """
 
@@ -989,8 +989,8 @@ class CubicHermite(BasisFunction):
            [ 0.32,  1.  , -0.25]])
 
     >>> t = np.linspace(-2.1, 2.1, 500)
-    >>> plt.plot(t, basis_function.eval(t)[0])  # doctest: +SKIP
-    >>> plt.plot(t, basis_function.eval(t)[1], linestyle="-.")  # doctest: +SKIP
+    >>> plt.plot(t, basis_function(t)[0])  # doctest: +SKIP
+    >>> plt.plot(t, basis_function(t)[1], linestyle="-.")  # doctest: +SKIP
     >>> plt.show()  # doctest: +SKIP
     """
 
@@ -1235,8 +1235,8 @@ class ExponentialHermite(BasisFunction):
            [ 0.336,  1.   , -0.255]])
 
     >>> t = np.linspace(-2.1, 2.1, 500)
-    >>> plt.plot(t, basis_function.eval(t)[0])  # doctest: +SKIP
-    >>> plt.plot(t, basis_function.eval(t)[1], linestyle="-.")  # doctest: +SKIP
+    >>> plt.plot(t, basis_function(t)[0])  # doctest: +SKIP
+    >>> plt.plot(t, basis_function(t)[1], linestyle="-.")  # doctest: +SKIP
     >>> plt.show()  # doctest: +SKIP
     """
 

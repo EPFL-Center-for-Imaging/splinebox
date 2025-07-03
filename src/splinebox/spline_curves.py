@@ -117,7 +117,7 @@ class Spline:
 
     Evaluate the spline.
 
-    >>> spline.eval(t)
+    >>> spline(t)
     array([[1.   , 1.   ],
            [1.413, 1.413],
            [2.   , 2.   ],
@@ -465,7 +465,7 @@ class Spline:
         Compute the points along the spline to plot it as a line.
 
         >>> t = np.linspace(0, 3, 200)
-        >>> vals = spline.eval(t)
+        >>> vals = spline(t)
 
         Draw the spline as an image.
 
@@ -571,7 +571,7 @@ class Spline:
         array([0. , 0.5, 1. ])
 
         >>> t = np.linspace(0, 3, 200)
-        >>> vals = spline.eval(t)
+        >>> vals = spline(t)
         >>> plt.plot(vals[:, 0], vals[:, 1])  # doctest: +SKIP
         >>> plt.scatter(points[:, 0], points[:, 1], marker="x")  # doctest: +SKIP
         >>> plt.show()  # doctest: +SKIP
