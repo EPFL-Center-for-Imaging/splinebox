@@ -23,4 +23,5 @@ clean:
 	rm -rf _build/* || true
 	rm -rf _auto_examples/* || true
 	rm api/_generated/* || true
+	rm api/_backreferences/* || true
 	rm sg_execution_times.rst || true

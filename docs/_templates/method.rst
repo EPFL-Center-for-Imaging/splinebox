@@ -11,3 +11,7 @@
 .. currentmodule:: {{ module }}
 
 .. automethod:: {{ objname }}
+
+.. _sphx_glr_backref_splinebox.{{class}}.{{name}}:
+
+.. minigallery:: splinebox.{{class}}.{{name}}
