@@ -13,3 +13,4 @@ See [Keys1981]_.
    \end{cases}
 
 .. plot:: pyplots/plot_catmullrom.py
+   :include-source: false
