@@ -133,13 +133,12 @@ sphinx_gallery_conf = {
     "reset_modules": (reset_mpl,),
     # Remove sphinx configuration comments from code blocks
     "remove_config_comments": True,
-    # directory where function granular galleries are stored
-    # "backreferences_dir": None,
-    # Modules for which function level galleries are created.
-    "doc_module": "pyvista",
     "image_scrapers": (DynamicScraper(), "matplotlib"),
     "first_notebook_cell": ("%matplotlib inline\nfrom pyvista import set_plot_theme\nset_plot_theme('document')\n"),
     "reset_modules_order": "both",
+    # Config for mini-galleries for API docs
+    "backreferences_dir": "api/_backreferences",
+    "doc_module": ("splinebox",),
 }
 
 # -- Options for matplotlib -------------------------------------------------------------

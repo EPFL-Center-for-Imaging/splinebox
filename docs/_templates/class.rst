@@ -43,3 +43,7 @@
       {%- endfor %}
   {% endif %}
   {% endblock %}
+
+.. _sphx_glr_backref_splinebox.{{name}}:
+
+.. minigallery:: splinebox.{{name}}
