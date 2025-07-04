@@ -105,6 +105,7 @@ examples = [
 docs = [
     "splinebox[examples]",
     "sphinx-gallery",
+    "sphinx-copybutton",
     "pydata-sphinx-theme",
     "sphinx-design",
     "pyvista[jupyter]",
