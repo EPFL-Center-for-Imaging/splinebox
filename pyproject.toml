@@ -100,6 +100,7 @@ examples = [
     "scikit-image",
     "pandas",
     "seaborn",
+    "skan",
 ]
 docs = [
     "splinebox[examples]",
@@ -107,7 +108,7 @@ docs = [
     "pydata-sphinx-theme",
     "sphinx-design",
     "pyvista[jupyter]",
-    "skan",
+    "numpydoc",
 ]
 all = [
     "splinebox[test,examples,docs]",
