@@ -912,6 +912,11 @@ class Spline:
 
         Examples
         --------
+        >>> M = 5
+        >>> spline = splinebox.Spline(M=M, basis_function=splinebox.Exponential(M), closed=False)
+        >>> spline.knots = np.array([[0, 0], [1, 1], [2, 0], [2.5, -0.5], [3, 0]])
+        >>> spline.curvature([1, 3])
+        array([ 2.234, -4.104])
         """
         self._check_control_points()
         t = self._convert_to_array(t)
@@ -936,9 +941,8 @@ class Spline:
 
     def normal(self, t, frame="bishop", initial_vector=None):
         """
-        Returns the normal vector for 1D and 2D splines.
-        The normal vector points to the right of the spline
-        when facing in the direction of increasing t.
+        Returns the normal vector(s) for 2D and 3D splines.
+        For 3D splines this is equivalent to :meth:`splinebox.spline_curves.Spline.moving_frame`.
 
         Parameters
         ----------
@@ -955,6 +959,31 @@ class Spline:
         -------
         normals : numpy array
             The normal vectors.
+
+        Examples
+        --------
+
+        >>> import splinebox
+        >>> import numpy as np
+        >>> import matplotlib.pyplot as plt
+
+        We start by creating a spline.
+
+        >>> spline = splinebox.Spline(M=4, basis_function=splinebox.B3(), closed=False)
+        >>> spline.knots = np.array([[0, 0], [1, 1], [2, 0], [3, -1]])
+
+        Next, we compute one of the normals
+
+        >>> normal = spline.normal(0.5)
+
+        Let's, plot the spline and our normal.
+
+        >>> t = np.linspace(0, spline.M - 1, 1000)
+        >>> vals = spline(t)
+        >>> plt.plot(vals[:, 0], vals[:, 1])  # doctest: +SKIP
+        >>> point = spline(0.5)
+        >>> plt.arrow(point[0], point[1], normal[0], normal[1])  # doctest: +SKIP
+        >>> plt.show()  # doctest: +SKIP
         """
         self._check_control_points()
         t = self._convert_to_array(t)
@@ -1035,6 +1064,32 @@ class Spline:
         .. [#movingframe] `Moving frame <https://en.wikipedia.org/wiki/Moving_frame>`_ on Wikipedia.
         .. [#bishop] Bishop, R. L. (1975). "There is More than One Way to Frame a Curve."
                American Mathematical Monthly, 82(3), 246-251.
+
+        Examples
+        --------
+
+        We start by creating a 3D spline.
+
+        >>> spline = splinebox.Spline(4, basis_function=splinebox.B3(), closed=True)
+        >>> spline.knots = np.array([[1, 0, 0], [0, 1, 0], [-1, 0, 0], [0, -1, 0]])
+
+        >>> spline.moving_frame(0)
+        array([[[ 0.,  1.,  0.],
+                [-1.,  0.,  0.],
+                [ 0., -0.,  1.]]])
+
+        >>> spline.moving_frame([0, 2, spline.M])
+        array([[[ 0.,  1.,  0.],
+                [-1.,  0.,  0.],
+                [ 0., -0.,  1.]],
+        <BLANKLINE>
+               [[ 0., -1.,  0.],
+                [ 1.,  0.,  0.],
+                [-0.,  0.,  1.]],
+        <BLANKLINE>
+               [[ 0.,  1.,  0.],
+                [-1.,  0.,  0.],
+                [ 0., -0.,  1.]]])
         """
         self._check_control_points()
 
@@ -1126,6 +1181,25 @@ class Spline:
         derivative : int
             Can be 0, 1, 2 for the spline, and its
             first and second derivative respectively.
+
+        Examples
+        --------
+        We start by creating a spline.
+
+        >>> spline = splinebox.Spline(M=4, basis_function=splinebox.B3(), closed=False)
+        >>> spline.knots = np.array([[0, 0], [1, 1], [2, 0], [3, 1]])
+
+        We can use __call__ to evaluate the spline at a parameter position
+
+        >>> spline(2.3)
+        array([2.349, 0.143])
+
+        Or we can evaluate it a multiple positions at once:
+        >>> t = np.linspace(0, spline.M - 1, 3)
+        >>> spline(t)
+        array([[-0. , -0. ],
+               [ 1.5,  0.5],
+               [ 3. ,  1. ]])
         """
         self._check_control_points()
         t = self._convert_to_array(t)
@@ -1238,6 +1312,32 @@ class Spline:
         ----------
         vector : numpy.ndarray
             Displacement vector added to the coefficients.
+
+        Examples
+        --------
+
+        >>> import splinebox
+        >>> import numpy as np
+        >>> import matplotlib.pyplot as plt
+
+        We start by creating a spline
+
+        >>> spline = splinebox.Spline(M=4, basis_function=splinebox.B3(), closed=True)
+        >>> spline.control_points = np.array([[3, 0], [1, 1], [-1, 0], [-1, -1]])
+
+        Let's plot the spline:
+
+        >>> t = np.linspace(0, spline.M, 1000)
+        >>> vals = spline(t)
+        >>> plt.plot(vals[:, 0], vals[:, 1], label="orig")  # doctest: +SKIP
+
+        Next, we translate the spline and plot it again:
+
+        >>> spline.translate(np.array([1, 1]))
+        >>> vals = spline(t)
+        >>> plt.plot(vals[:, 0], vals[:, 1], linestyle="--", label="transl")  # doctest: +SKIP
+        >>> plt.legend()  # doctest: +SKIP
+        >>> plt.show()  # doctest: +SKIP
         """
         self._check_control_points()
         self.control_points = self.control_points + vector
@@ -1245,6 +1345,37 @@ class Spline:
     def scale(self, scaling_factor):
         """
         Enlarge or shrink the spline by the provided factor.
+
+        Parameters
+        ----------
+        scaling_factor : float
+            The factor by which the spline should be scaled.
+
+        Examples
+        --------
+
+        >>> import splinebox
+        >>> import numpy as np
+        >>> import matplotlib.pyplot as plt
+
+        We start by creating a spline
+
+        >>> spline = splinebox.Spline(M=4, basis_function=splinebox.B3(), closed=True)
+        >>> spline.control_points = np.array([[3, 0], [1, 1], [-1, 0], [-1, -1]])
+
+        Let's plot the spline:
+
+        >>> t = np.linspace(0, spline.M, 1000)
+        >>> vals = spline(t)
+        >>> plt.plot(vals[:, 0], vals[:, 1], label="orig")  # doctest: +SKIP
+
+        Next, we scale the spline and plot it again:
+
+        >>> spline.scale(0.5)
+        >>> vals = spline(t)
+        >>> plt.plot(vals[:, 0], vals[:, 1], linestyle="--", label="scaled")  # doctest: +SKIP
+        >>> plt.legend()  # doctest: +SKIP
+        >>> plt.show()  # doctest: +SKIP
         """
         self._check_control_points()
         centroid = self._control_points_centroid()
@@ -1260,6 +1391,34 @@ class Spline:
         ----------
         rotation_matrix : numpy.ndarray
             The rotation matrix applied to the spline.
+
+        Examples
+        --------
+
+        >>> import splinebox
+        >>> import numpy as np
+        >>> import matplotlib.pyplot as plt
+
+        We start by creating a spline
+
+        >>> spline = splinebox.Spline(M=4, basis_function=splinebox.B3(), closed=True)
+        >>> spline.control_points = np.array([[3, 0], [1, 1], [-1, 0], [-1, -1]])
+
+        Let's plot the spline:
+
+        >>> t = np.linspace(0, spline.M, 1000)
+        >>> vals = spline(t)
+        >>> plt.plot(vals[:, 0], vals[:, 1], label="orig")  # doctest: +SKIP
+
+        Next, we rotate the spline and plot it again:
+
+        >>> theta = np.deg2rad(45)
+        >>> rotation_matrix = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta),  np.cos(theta)]])
+        >>> spline.rotate(rotation_matrix)
+        >>> vals = spline(t)
+        >>> plt.plot(vals[:, 0], vals[:, 1], linestyle="--", label="rotated")  # doctest: +SKIP
+        >>> plt.legend()  # doctest: +SKIP
+        >>> plt.show()  # doctest: +SKIP
         """
         self._check_control_points()
         if self.control_points.ndim == 1:
@@ -1296,6 +1455,36 @@ class Spline:
             Only returned if `return_t=True`. This is the parameter
             corresponding to the location on the spline closest
             to the point.
+
+        Examples
+        --------
+
+        >>> import splinebox
+        >>> import numpy as np
+        >>> import matplotlib.pyplot as plt
+
+        We start by creating a spline
+
+        >>> spline = splinebox.Spline(M=4, basis_function=splinebox.B3(), closed=False)
+        >>> spline.control_points = np.array([[0, 0], [1, 1], [2, 0], [3, 1], [4, 0], [5, 1]])
+
+        We can compute the distance to a point as follows:
+
+        >>> point = np.array([2.1, 0.8])
+        >>> distance, closest_t = spline.distance(point, return_t=True)
+
+        To find the closest point on the spline we simply evaluate the spline
+        at the closest_t
+
+        >>> closest_point = spline(closest_t)
+
+        The result can be checked in a plot:
+
+        >>> plt.plot(vals[:, 0], vals[:, 1])  # doctest: +SKIP
+        >>> plt.scatter(point[0], point[1])  # doctest: +SKIP
+        >>> plt.plot([closest_point[0], point[0]], [closest_point[1], point[1]], linestyle="--")  # doctest: +SKIP
+        >>> plt.gca().set_aspect("equal")  # doctest: +SKIP
+        >>> plt.show()  # doctest: +SKIP
         """
         self._check_control_points()
         if self.control_points.ndim == 1:
@@ -1776,6 +1965,27 @@ def splines_to_json(path, splines, version=1):
         and :class:`splinebox.spline_curves.HermiteSpline` objects.
     version : int
         The version used to produce the json file.
+
+    Examples
+    --------
+    Create two random splines...
+
+    >>> spline1 = splinebox.Spline(M=5, basis_function=splinebox.B3(), closed=False)
+    >>> spline1.control_points = np.random.rand(7, 3)
+    >>> spline2 = splinebox.Spline(M=6, basis_function=splinebox.CatmullRom(), closed=True)
+    >>> spline2.control_points = np.random.rand(6, 2)
+
+    Next, we save them as a json file.
+
+    >>> splinebox.splines_to_json("splines.json", [spline1, spline2])
+
+    Then we can load them back into python.
+
+    >>> loaded_splines = splinebox.splines_from_json("splines.json")
+    >>> loaded_splines[0] == spline1
+    True
+    >>> loaded_splines[1] == spline2
+    True
     """
     dicts = []
 
@@ -1801,6 +2011,27 @@ def splines_from_json(path):
     splines : list
         A list of :class:`splinebox.spline_curves.Spline` and
         :class:`splinebox.spline_curves.HermiteSpline` objects.
+
+    Examples
+    --------
+    Create two random splines...
+
+    >>> spline1 = splinebox.Spline(M=5, basis_function=splinebox.B3(), closed=False)
+    >>> spline1.control_points = np.random.rand(7, 3)
+    >>> spline2 = splinebox.Spline(M=6, basis_function=splinebox.CatmullRom(), closed=True)
+    >>> spline2.control_points = np.random.rand(6, 2)
+
+    Next, we save them as a json file.
+
+    >>> splinebox.splines_to_json("splines.json", [spline1, spline2])
+
+    Then we can load them back into python.
+
+    >>> loaded_splines = splinebox.splines_from_json("splines.json")
+    >>> loaded_splines[0] == spline1
+    True
+    >>> loaded_splines[1] == spline2
+    True
     """
     splines = []
     with open(path) as f:
