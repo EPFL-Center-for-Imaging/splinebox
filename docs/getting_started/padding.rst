@@ -11,12 +11,12 @@ Padding means extending the sum as follows:
 
 where :math:`p` is the amount of padding.
 
-Not padding, is equivalent to setting :math:`c[k]=0` for all :math:`k<0` and :math:`k>M-1`.
-If the basis function :math:`\Phi(t)` is non-zero at :math:`t>=-1` and :math:`t>=1` (i.e., support larger than two), these control points influence the spline and must be set.
+Not padding is equivalent to setting :math:`c[k]=0` for all :math:`k<0` and :math:`k>M-1`.
+If the basis function :math:`\Phi(t)` is non-zero at :math:`t \leq -1` and :math:`t \geq 1` (i.e., support larger than two), these control points influence the spline and must be set.
 In practice, not padding (setting them to zero) causes the spline's ends to curve toward the origin.
 
 For example, consider a cubic B-spline without padding, where control points are equidistantly placed on a semicircle.
-The spline curves inward toward the origin, despite the last control point.
+Despite the first and last control point, the spline curves inward toward the origin.
 
 .. plot:: pyplots/plot_no_padding.py
    :include-source: false
@@ -26,7 +26,7 @@ By padding with two additional points on the circle, this behavior is corrected.
 .. plot:: pyplots/plot_padding.py
    :include-source: false
 
-When you directly set control points for a spline, you must handle the padding yourself.
+If you set the control points manually, you are responsible for handling the padding.
 This design choice allows full control over the spline's behavior at the ends.
 
 .. code-block:: python

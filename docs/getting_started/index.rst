@@ -23,7 +23,7 @@ To install SplineBox with the dependencies required for running examples, use:
 
    pip install "splinebox[examples]"
 
-Similarly, you can install dependencies for building the docs or running the test suites:
+Similarly, you can install dependencies for building the documentation or running the test suite:
 
 .. code-block::
 
@@ -46,7 +46,7 @@ Constructing Your First Spline
 
 **Note**: If you are unfamiliar with spline terminology, such as knots and control points, refer to our :ref:`theory introduction <theory/index:Theory>`.
 
-Constructing a spline with SplineBox is straightforward. You need to decide:
+Constructing a spline with SplineBox is straightforward. Decide on the following:
 
 - The number of knots/control points your spline should have.
 - The type of spline you want to construct, i.e., choose a basis function.
@@ -74,7 +74,7 @@ To shape the spline in `ndim` dimensions, you have three options:
 
       spline.control_points = np.random.rand(7, ndim)
 
-   Note that 7 control points are needed instead of 5 because splines are padded at the end.
+   Note that 7 control points are needed (instead of 5) because splines are padded at the end.
 
 3. **Approximate data with a least squares fit**:
 
