@@ -1209,17 +1209,6 @@ class Spline:
         value = np.matmul(basis_function_values, self.control_points)
         return np.squeeze(value)
 
-    def eval(self, t, derivative=0):
-        """
-        eval is deprecated use :meth:`splinebox.spline_curves.Spline.__call__` instead.
-        """
-        warnings.warn(
-            "`spline.eval(t)` is deprecated and will be removed in v1 use `spline(t)` instead.",
-            DeprecationWarning,
-            stacklevel=1,
-        )
-        return self(t, derivative=derivative)
-
     def _convert_to_array(self, t):
         """
         Helper function that converts the a function input
