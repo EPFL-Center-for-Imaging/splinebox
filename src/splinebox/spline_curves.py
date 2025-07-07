@@ -1857,7 +1857,7 @@ class HermiteSpline(Spline):
             t = np.linspace(0, self.M, len(points) + 1)[:-1] if self.closed else np.linspace(0, self.M - 1, len(points))
         tval = self._get_tval(t)
         basis_function_values = self.basis_function(tval, derivative=0)
-        basis_function_values = np.concatenate([basis_function_values[0], basis_function_values[1]], axis=1)
+        basis_function_values = np.concatenate([basis_function_values[..., 0], basis_function_values[..., 1]], axis=1)
         solution = np.linalg.lstsq(basis_function_values, points, rcond=None)[0]
         half = self.M if self.closed else self.M + 2 * self.pad
         self.control_points = solution[:half]
@@ -1869,8 +1869,8 @@ class HermiteSpline(Spline):
 
         tval = self._get_tval(t)
         basis_function_values = self.basis_function(tval, derivative=derivative)
-        value = np.matmul(basis_function_values[0], self.control_points) + np.matmul(
-            basis_function_values[1], self.tangents
+        value = np.matmul(basis_function_values[..., 0], self.control_points) + np.matmul(
+            basis_function_values[..., 1], self.tangents
         )
         return np.squeeze(value)
 
