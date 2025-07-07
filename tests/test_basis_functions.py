@@ -77,20 +77,28 @@ def test_call_output_type(basis_function, derivative, not_differentiable_twice, 
     """
     if derivative == 2 and not_differentiable_twice(basis_function):
         return
-    for t in [0.5, np.array([0.5]), np.array([-0.5, 0.0, 0.5])]:
+
+    for t in [
+        0.5,
+        np.array([0.5]),
+        np.array([-0.5, 0.0, 0.5]),
+        np.array([[-0.7, -0.2, 0.3], [-0.6, -0.1, 0.4], [-0.5, 0.0, 0.5], [-0.4, 0.1, 0.6]]),
+    ]:
+
         vals = basis_function(t, derivative=derivative)
+
         if is_hermite_basis_function(basis_function):
             assert isinstance(vals, np.ndarray)
-            print(basis_function, t, vals.shape)
             assert vals.shape[-1] == 2
             if isinstance(t, float):
                 assert vals.ndim == 1
             else:
-                assert len(vals) == len(t)
+                assert np.all(vals.shape[:-1] == t.shape)
+
         else:
             assert isinstance(vals, type(t))
             if isinstance(t, np.ndarray):
-                assert len(vals) == len(t)
+                assert np.all(vals.shape == t.shape)
 
 
 def test_call_derivative_argument(basis_function, not_differentiable_twice):
@@ -104,7 +112,7 @@ def test_call_derivative_argument(basis_function, not_differentiable_twice):
         basis_function(t, derivative=4)
 
 
-def test_derivatives(basis_function, derivative, not_differentiable_twice):
+def test_derivatives(basis_function, derivative, not_differentiable_twice, is_hermite_basis_function):
     if derivative == 0:
         return
 
@@ -113,8 +121,8 @@ def test_derivatives(basis_function, derivative, not_differentiable_twice):
     y = basis_function(x, derivative=derivative - 1)
 
     dx = np.diff(x)
-    dy = np.diff(y)
-    estimated_derivative = dy / dx
+    dy = np.diff(y, axis=0)
+    estimated_derivative = dy / dx[:, np.newaxis] if is_hermite_basis_function(basis_function) else dy / dx
 
     if not_differentiable_twice(basis_function) and derivative == 2:
         # B1, CubicHermite, and ExponentialHermite basis functions are not differentiable twice.
@@ -133,17 +141,17 @@ def test_derivatives(basis_function, derivative, not_differentiable_twice):
         # basis function. These should be isolated values since there are never
         # two kinks right next to each other.
         kernel = np.ones(2)
-        if close.ndim == 2:
+        if is_hermite_basis_function(basis_function):
             # the output of CubicHermite and ExponentialHermite basis functions is 2D
             for i in range(2):
-                close[i] = np.convolve(close[i], kernel, mode="same")
+                close[:, i] = np.convolve(close[:, i], kernel, mode="same")
         else:
             close = np.convolve(close, kernel, mode="same")
 
         assert np.all(close > 0)
 
 
-def test_partition_of_unity(basis_function):
+def test_partition_of_unity(basis_function, is_hermite_basis_function):
     support = math.ceil(basis_function.support)
     x = np.linspace(0, 1, 10000)
     summed = np.zeros_like(x)
@@ -151,8 +159,8 @@ def test_partition_of_unity(basis_function):
         vals = basis_function(x - k)
         if basis_function.multigenerator:
             vals = vals[0]
-        if vals.ndim == 2:
-            vals = vals[:, 0]
+        if is_hermite_basis_function(basis_function):
+            vals = vals[0]
         summed += vals
     assert np.allclose(summed, np.ones_like(summed))
 
