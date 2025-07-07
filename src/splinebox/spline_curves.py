@@ -1998,7 +1998,7 @@ def splines_to_json(path, splines, version=1):
 
 def splines_from_json(path):
     """
-    Loades multiple splines from a json file generated using
+    Loads multiple splines from a json file generated using
     :func:`splinebox.spline_curves.splines_to_json`.
 
     Parameters

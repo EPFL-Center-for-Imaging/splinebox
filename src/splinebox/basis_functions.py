@@ -1,13 +1,13 @@
 """
-This module provides a collection of basis function classes, each designed for a specific type of spline construction.
-The modular design enables users to easily explore different spline types by swapping the basis function object when creating a spline.
+This module provides a collection of basis function classes, each designed for constructing a specific type of spline.
+The modular design enables users to easily explore different spline types, by swapping the basis function object when creating a spline.
 
 All basis function classes inherit from the base class :class:`splinebox.basis_functions.BasisFunction`.
 The base class defines methods such as :code:`__call__`, :code:`filter_periodic`, and :code:`filter_symmetric`.
 The latter two methods should be overridden as appropriate in any subclass to ensure they align with the behavior of the specific basis function.
-To enable the :code:`__call__` method, subclasses must implement the following methods: :code:`_func(t)`, :code:`_derivative_1(t)`, and :code:`_derivative_2(t)`, which correspond to the function itself and its first and second derivatives, respectively.
+To enable the :code:`__call__` method, subclasses must implement :code:`_func(t)`, :code:`_derivative_1(t)`, and :code:`_derivative_2(t)`, which correspond to the function itself and its first and second derivatives, respectively.
 
-For more information on implementing a new basis function see: :class:`splinebox.basis_functions.BasisFunction`.
+For more information on implementing a new basis function, see :class:`splinebox.basis_functions.BasisFunction`.
 """
 
 import inspect
@@ -31,11 +31,10 @@ class BasisFunction:
     Parameters
     ----------
     multigenerator : boolean
-        This indicates if the basis function generates
-        multiple outputs. In practice, this is used to indicate
-        if a basis function is meant for a Hermite spline or not.
-        Basis functions for Hermite splines return two values
-        instead of one.
+        Indicates whether the basis function generates
+        multiple outputs. This is used to distinguish basis
+        functions designed for Hermite splines, which return two
+        values instead of one.
     support : float
         The support of the function, i.e. the size of the area
         being mapped to non-zero values.
@@ -52,28 +51,28 @@ class BasisFunction:
     ...         return "MyBasis"
     ...
     ...     def __repr__(self):
-    ...         # Change this if your new basis function in not in splinebox.basis_functions
+    ...         # Change this if your new basis function is not in splinebox.basis_functions
     ...         return "splinebox.basis_functions.MyBasis()"
     ...
-    ...     def _func(t):
-    ...         # Implement your function here.
+    ...     def _func(self, t):
+    ...         # Implement your function here
     ...         return val
     ...
-    ...     def _derivative_1(t):
-    ...         # Implement the first derivative of your function here.
+    ...     def _derivative_1(self, t):
+    ...         # Implement the first derivative of your function here
     ...         return val
     ...
-    ...     def _derivative_2(t):
+    ...     def _derivative_2(self, t):
     ...         # Implement the second derivative of your function here
-    ...         # or raise an error.
+    ...         # or raise an error if not differentiable
     ...         raise RuntimeError("MyBasis isn't twice differentiable.")
     ...
-    ...     def filter_symmetric(s):
+    ...     def filter_symmetric(self, s):
     ...         # Implement the function that can turn knots into control points
     ...         # for an open spline
     ...         return s
     ...
-    ...     def filter_periodic(s):
+    ...     def filter_periodic(self, s):
     ...         # Implement the function that can turn knots into control points
     ...         # for a closed spline
     ...         return s
@@ -100,6 +99,9 @@ class BasisFunction:
 
     def __call__(self, t, derivative=0):
         """
+        Evaluate the function at position(s) t. You can optionally
+        pass derivative=1 or 2 to obtain the respective derivative(s).
+
         Evaluate the function at position(s) `t`.
 
         Parameters
@@ -154,8 +156,8 @@ class BasisFunction:
 
     def filter_symmetric(self, s):
         """
-        The filter used to turn knots into control points for an
-        open spline.
+        Returns a filtered version of the input s,
+        used to convert knots into control points for an **open spline**.
 
         Parameters
         ----------
@@ -201,8 +203,8 @@ class BasisFunction:
 
     def filter_periodic(self, s):
         """
-        The filter used to turn knots into control points for a
-        closed spline.
+        Returns a filtered version of the input s, used to convert
+        knots into control points for a **closed spline**.
 
         Parameters
         ----------
@@ -269,8 +271,8 @@ class B1(BasisFunction):
     r"""
     Basis function for a linear (:math:`1^{\text{st}}` order) polynomial basis spline.
 
-    For a detailed theoretical description, including the equation and
-    a plot of the function, refer to the :ref:`theory/polynomial:Polynomial basis (B-spline)`
+    For a detailed theoretical description -- including the equation and
+    a plot of the function -- refer to the :ref:`theory/polynomial:Polynomial basis (B-spline)`
     section in the documentation.
 
     The constructor does not require any arguments.
@@ -282,7 +284,7 @@ class B1(BasisFunction):
     >>> import numpy as np
     >>> import matplotlib.pyplot as plt
 
-    Creat a basis function object:
+    Create a basis function object:
 
     >>> basis_function = splinebox.basis_functions.B1()
 
@@ -291,7 +293,7 @@ class B1(BasisFunction):
     >>> basis_function(0.5)
     0.5
 
-    Evaluate the basis function at multiple positions simulatneously:
+    Evaluate the basis function at multiple positions simultaneously:
 
     >>> t = np.array([-0.2, 0, 0.5])
     >>> basis_function(t)
@@ -360,8 +362,8 @@ class B2(BasisFunction):
     r"""
     Basis function for a quadratic (:math:`2^{\text{nd}}` order) polynomial basis spline.
 
-    For a detailed theoretical description, including the equation and
-    a plot of the function, refer to the :ref:`theory/polynomial:Polynomial basis (B-spline)`
+    For a detailed theoretical description -- including the equation and
+    a plot of the function -- refer to the :ref:`theory/polynomial:Polynomial basis (B-spline)`
     section in the documentation.
 
     The constructor does not require any arguments.
@@ -373,7 +375,7 @@ class B2(BasisFunction):
     >>> import numpy as np
     >>> import matplotlib.pyplot as plt
 
-    Creat a basis function object:
+    Create a basis function object:
 
     >>> basis_function = splinebox.basis_functions.B2()
 
@@ -382,7 +384,7 @@ class B2(BasisFunction):
     >>> basis_function(0.5)
     0.5
 
-    Evaluate the basis function at multiple positions simulatneously:
+    Evaluate the basis function at multiple positions simultaneously:
 
     >>> t = np.array([-0.2, 0, 0.5])
     >>> basis_function(t)
@@ -454,8 +456,8 @@ class B3(BasisFunction):
     r"""
     Basis function for a cubic (:math:`3^{\text{rd}}` order) polynomial basis spline.
 
-    For a detailed theoretical description, including the equation and
-    a plot of the function, refer to the :ref:`theory/polynomial:Polynomial basis (B-spline)`
+    For a detailed theoretical description -- including the equation and
+    a plot of the function -- refer to the :ref:`theory/polynomial:Polynomial basis (B-spline)`
     section in the documentation.
 
     The constructor does not require any arguments.
@@ -467,7 +469,7 @@ class B3(BasisFunction):
     >>> import numpy as np
     >>> import matplotlib.pyplot as plt
 
-    Creat a basis function object:
+    Create a basis function object:
 
     >>> basis_function = splinebox.basis_functions.B3()
 
@@ -476,7 +478,7 @@ class B3(BasisFunction):
     >>> basis_function(0.5)
     0.47916666666666663
 
-    Evaluate the basis function at multiple positions simulatneously:
+    Evaluate the basis function at multiple positions simultaneously:
 
     >>> t = np.array([-0.2, 0, 0.5])
     >>> basis_function(t)
@@ -628,8 +630,8 @@ class Exponential(BasisFunction):
     r"""
     Basis function for an exponential spline.
 
-    For a detailed theoretical description, including the equation and
-    a plot of the function, refer to the :ref:`theory/exponential:Exponential basis`
+    For a detailed theoretical description -- including the equation and
+    a plot of the function -- refer to the :ref:`theory/exponential:Exponential basis`
     section in the documentation.
 
     The constructor requires `M`, the number of knots in the spline, as an argument.
@@ -641,7 +643,7 @@ class Exponential(BasisFunction):
     >>> import numpy as np
     >>> import matplotlib.pyplot as plt
 
-    Creat a basis function object:
+    Create a basis function object:
 
     >>> basis_function = splinebox.basis_functions.Exponential(M=5)
 
@@ -650,7 +652,7 @@ class Exponential(BasisFunction):
     >>> basis_function(0.5)
     0.5
 
-    Evaluate the basis function at multiple positions simulatneously:
+    Evaluate the basis function at multiple positions simultaneously:
 
     >>> t = np.array([-0.2, 0, 0.5])
     >>> basis_function(t)
@@ -852,8 +854,8 @@ class CatmullRom(BasisFunction):
     r"""
     Basis function for a Catmull Rom spline.
 
-    For a detailed theoretical description, including the equation and
-    a plot of the function, refer to the :ref:`theory/catmullrom:Catmull Rom basis`
+    For a detailed theoretical description -- including the equation and
+    a plot of the function -- refer to the :ref:`theory/catmullrom:Catmull Rom basis`
     section in the documentation.
 
     The constructor does not require any arguments.
@@ -865,7 +867,7 @@ class CatmullRom(BasisFunction):
     >>> import numpy as np
     >>> import matplotlib.pyplot as plt
 
-    Creat a basis function object:
+    Create a basis function object:
 
     >>> basis_function = splinebox.basis_functions.CatmullRom()
 
@@ -874,7 +876,7 @@ class CatmullRom(BasisFunction):
     >>> basis_function(0.5)
     0.5625
 
-    Evaluate the basis function at multiple positions simulatneously:
+    Evaluate the basis function at multiple positions simultaneously:
 
     >>> t = np.array([-0.2, 0, 0.5])
     >>> basis_function(t)
@@ -950,13 +952,13 @@ class CubicHermite(BasisFunction):
     r"""
     Basis function for a cubic Hermite spline.
 
-    For a detailed theoretical description, including the equation and
-    a plot of the function, refer to the :ref:`theory/cubichermite:Cubic Hermite basis`
+    For a detailed theoretical description -- including the equation and
+    a plot of the function -- refer to the :ref:`theory/cubichermite:Cubic Hermite basis`
     section in the documentation.
 
     The constructor does not require any arguments.
 
-    **Note**: This is basis function is a :class:`multigenerator <splinebox.basis_functions.BasisFunction>` and
+    **Note**: This basis function is a :class:`multigenerator <splinebox.basis_functions.BasisFunction>` and
     :func:`__call__ <splinebox.basis_functions.BasisFunction.__call__>` returns two values.
 
     Examples
@@ -966,7 +968,7 @@ class CubicHermite(BasisFunction):
     >>> import numpy as np
     >>> import matplotlib.pyplot as plt
 
-    Creat a basis function object:
+    Create a basis function object:
 
     >>> basis_function = splinebox.basis_functions.CubicHermite()
 
@@ -975,7 +977,7 @@ class CubicHermite(BasisFunction):
     >>> basis_function(0.5)
     array([0.5  , 0.125])
 
-    Evaluate the basis function at multiple positions simulatneously:
+    Evaluate the basis function at multiple positions simultaneously:
 
     >>> t = np.array([-0.2, 0, 0.5])
     >>> basis_function(t)
@@ -1196,13 +1198,13 @@ class ExponentialHermite(BasisFunction):
     r"""
     Basis function for an exponential Hermite spline.
 
-    For a detailed theoretical description, including the equation and
-    a plot of the function, refer to the :ref:`theory/exponentialhermite:Exponential Hermite basis`
+    For a detailed theoretical description -- including the equation and
+    a plot of the function -- refer to the :ref:`theory/exponentialhermite:Exponential Hermite basis`
     section in the documentation.
 
     The constructor requires `M`, the number of knots in the spline, as an argument.
 
-    **Note**: This is basis function is a :class:`multigenerator <splinebox.basis_functions.BasisFunction>` and
+    **Note**: This basis function is a :class:`multigenerator <splinebox.basis_functions.BasisFunction>` and
     :func:`__call__ <splinebox.basis_functions.BasisFunction.__call__>` returns two values.
 
     Examples
@@ -1212,7 +1214,7 @@ class ExponentialHermite(BasisFunction):
     >>> import numpy as np
     >>> import matplotlib.pyplot as plt
 
-    Creat a basis function object:
+    Create a basis function object:
 
     >>> basis_function = splinebox.basis_functions.ExponentialHermite(M=5)
 
@@ -1221,7 +1223,7 @@ class ExponentialHermite(BasisFunction):
     >>> basis_function(0.5)
     array([0.5  , 0.129])
 
-    Evaluate the basis function at multiple positions simulatneously:
+    Evaluate the basis function at multiple positions simultaneously:
 
     >>> t = np.array([-0.2, 0, 0.5])
     >>> basis_function(t)
@@ -1446,15 +1448,17 @@ def basis_function_from_name(name, **kwargs):
     Parameters
     ----------
     name : str
-        The name of the basis function, e.g. 'B1', 'ExponentialHermite', ...
+        The name of the basis function (e.g. 'B1', 'ExponentialHermite', etc.)
     kwargs
-        Additional keyword arguments that might be required to create some basis functions,
-        such as M (i.e. the number of knots/control points) for Exponential basis functions.
+        Additional keyword arguments that may be required to instantiate
+        certain basis functions. For example, :code:`M`(the number of
+        knots/control points) is required for exponential basis functions.
 
     Returns
     -------
     basis_function : Object of one of the subcases of :class:`splinebox.basis_functions.BasisFunction`.
-        The basis function object required for the construction of a spline.
+        An instance of a subclass of splinebox.basis_functions.BasisFunction,
+        initialized according to the provided name and keyword arguments.
 
     Examples
     --------
