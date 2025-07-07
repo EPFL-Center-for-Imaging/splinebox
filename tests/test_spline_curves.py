@@ -963,3 +963,33 @@ def test_protected_spline_attributes(spline_curve, coeff_gen, basis_function):
         spline.half_support = spline.half_support + 1
     with pytest.raises(RuntimeError):
         spline.pad = spline.pad + 1
+
+
+def test_output_types(initialized_spline_curve):
+    """
+    Test that functions return a single value when
+    the input is a single value and return and
+    array when the input is an array.
+    """
+    spline = initialized_spline_curve
+
+    def _check_output(output, t):
+        assert isinstance(output, type(t))
+        if isinstance(t, np.ndarray):
+            assert np.all(output.shape == t.shape)
+
+    for t in [
+        0.5,
+        np.array([0.5]),
+        np.array([-0.5, 0.0, 0.5]),
+        np.array([[-0.7, -0.2, 0.3], [-0.6, -0.1, 0.4], [-0.5, 0.0, 0.5], [-0.4, 0.1, 0.6]]),
+    ]:
+        _check_output(spline(t), t)
+        _check_output(spline.dtheta(t), t)
+        arc_lengths = spline.arc_length(t)
+        _check_output(arc_lengths, t)
+        _check_output(spline.arc_length_to_parameter(arc_lengths), t)
+        _check_output(spline.curvature(t), t)
+        _check_output(spline.normal(t), t)
+        _check_output(spline.moving_frame(t), t)
+        _check_output(spline.distance(t), t)
