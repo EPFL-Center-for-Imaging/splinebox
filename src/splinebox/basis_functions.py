@@ -973,14 +973,16 @@ class CubicHermite(BasisFunction):
 
     >>> t = np.array([-0.2, 0, 0.5])
     >>> basis_function(t)
-    array([[ 0.896,  1.   ,  0.5  ],
-           [-0.128,  0.   ,  0.125]])
+    array([[ 0.896, -0.128],
+           [ 1.   ,  0.   ],
+           [ 0.5  ,  0.125]])
 
     Compute the first derivative of the basis function at multiple positions:
 
     >>> basis_function(t, derivative=1)
-    array([[ 0.96, -0.  , -1.5 ],
-           [ 0.32,  1.  , -0.25]])
+    array([[ 0.96,  0.32],
+           [-0.  ,  1.  ],
+           [-1.5 , -0.25]])
 
     >>> t = np.linspace(-2.1, 2.1, 500)
     >>> plt.plot(t, basis_function(t)[0])  # doctest: +SKIP
@@ -998,7 +1000,7 @@ class CubicHermite(BasisFunction):
         return "splinebox.basis_functions.CubicHermite()"
 
     def _func(self, t):
-        return np.array([self.h31(t), self.h32(t)])
+        return np.stack([self.h31(t), self.h32(t)], axis=-1)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
@@ -1021,7 +1023,7 @@ class CubicHermite(BasisFunction):
         return val
 
     def _derivative_1(self, t):
-        return np.array([self.h31prime(t), self.h32prime(t)])
+        return np.stack([self.h31prime(t), self.h32prime(t)], axis=-1)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
@@ -1044,7 +1046,7 @@ class CubicHermite(BasisFunction):
         return val
 
     def _derivative_2(self, t):
-        return np.array([self.h31primeprime(t), self.h32primeprime(t)])
+        return np.stack([self.h31primeprime(t), self.h32primeprime(t)], axis=-1)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
@@ -1219,14 +1221,16 @@ class ExponentialHermite(BasisFunction):
 
     >>> t = np.array([-0.2, 0, 0.5])
     >>> basis_function(t)
-    array([[ 0.897,  1.   ,  0.5  ],
-           [-0.13 ,  0.   ,  0.129]])
+    array([[ 0.897, -0.13 ],
+           [ 1.   ,  0.   ],
+           [ 0.5  ,  0.129]])
 
     Compute the first derivative of the basis function at multiple positions:
 
     >>> basis_function(t, derivative=1)
-    array([[ 0.955, -0.   , -1.51 ],
-           [ 0.336,  1.   , -0.255]])
+    array([[ 0.955,  0.336],
+           [-0.   ,  1.   ],
+           [-1.51 , -0.255]])
 
     >>> t = np.linspace(-2.1, 2.1, 500)
     >>> plt.plot(t, basis_function(t)[0])  # doctest: +SKIP
@@ -1248,7 +1252,7 @@ class ExponentialHermite(BasisFunction):
         return isinstance(other, type(self)) and other.M == self.M
 
     def _func(self, t):
-        return np.array([self._he31(t, self.M), self._he32(t, self.M)])
+        return np.stack([self._he31(t, self.M), self._he32(t, self.M)], axis=-1)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
@@ -1290,7 +1294,7 @@ class ExponentialHermite(BasisFunction):
         return val
 
     def _derivative_1(self, t):
-        return np.array([self._he31prime(t, self.M), self._he32prime(t, self.M)])
+        return np.stack([self._he31prime(t, self.M), self._he32prime(t, self.M)], axis=-1)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
@@ -1327,7 +1331,7 @@ class ExponentialHermite(BasisFunction):
         return val
 
     def _derivative_2(self, t):
-        return np.array([self._he31primeprime(t, self.M), self._he32primeprime(t, self.M)])
+        return np.stack([self._he31primeprime(t, self.M), self._he32primeprime(t, self.M)], axis=-1)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
