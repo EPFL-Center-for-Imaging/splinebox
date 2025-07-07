@@ -70,6 +70,29 @@ def test_refinement_mask(basis_function, is_locally_refinable, request):
             basis_function.refinement_mask()
 
 
+def test_call_output_type(basis_function, derivative, not_differentiable_twice, is_hermite_basis_function):
+    """
+    If a single value is provided, a single value should be returned.
+    Otherwise, a numpy array should be returned.
+    """
+    if derivative == 2 and not_differentiable_twice(basis_function):
+        return
+    for t in [0.5, np.array([0.5]), np.array([-0.5, 0.0, 0.5])]:
+        vals = basis_function(t, derivative=derivative)
+        if is_hermite_basis_function(basis_function):
+            assert isinstance(vals, np.ndarray)
+            print(basis_function, t, vals.shape)
+            assert vals.shape[-1] == 2
+            if isinstance(t, float):
+                assert vals.ndim == 1
+            else:
+                assert len(vals) == len(t)
+        else:
+            assert isinstance(vals, type(t))
+            if isinstance(t, np.ndarray):
+                assert len(vals) == len(t)
+
+
 def test_call_derivative_argument(basis_function, not_differentiable_twice):
     t = np.linspace(-1, 1, 20)
     # Check that 0, 1, 2 don't raise errors
