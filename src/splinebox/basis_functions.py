@@ -171,9 +171,9 @@ class BasisFunction:
         >>> knots = np.array([[4, 3], [2, 2], [1, 3]])
         >>> b1 = splinebox.basis_functions.B1()
         >>> b1.filter_symmetric(knots)
-        array([[4, 3],
-               [2, 2],
-               [1, 3]])
+        array([[4., 3.],
+               [2., 2.],
+               [1., 3.]])
 
         For non-interpolating spline the returned control points are different.
 
@@ -218,9 +218,9 @@ class BasisFunction:
         >>> knots = np.array([[4, 3], [2, 2], [1, 3]])
         >>> b1 = splinebox.basis_functions.B1()
         >>> b1.filter_periodic(knots)
-        array([[4, 3],
-               [2, 2],
-               [1, 3]])
+        array([[4., 3.],
+               [2., 2.],
+               [1., 3.]])
 
         For non-interpolating spline the returned control points are different.
 
