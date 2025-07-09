@@ -70,12 +70,12 @@ class BasisFunction:
     ...     def filter_symmetric(self, s):
     ...         # Implement the function that can turn knots into control points
     ...         # for an open spline
-    ...         return s
+    ...         return s.astype(float)
     ...
     ...     def filter_periodic(self, s):
     ...         # Implement the function that can turn knots into control points
     ...         # for a closed spline
-    ...         return s
+    ...         return s.astype(float)
     """
 
     _unimplemented_message = "This function is not implemented."
@@ -337,11 +337,11 @@ class B1(BasisFunction):
 
     @staticmethod
     def filter_symmetric(s):
-        return s
+        return s.astype(float)
 
     @staticmethod
     def filter_periodic(s):
-        return s
+        return s.astype(float)
 
     def refinement_mask(self):
         order = int(self.support)
@@ -535,7 +535,7 @@ class B3(BasisFunction):
 
     def filter_symmetric(self, s):
         # This is necessary for the docs to build correctly
-        return self._filter_symmetric(s)
+        return np.squeeze(self._filter_symmetric(s.astype(float)))
 
     @staticmethod
     @numba.jit(nopython=True, nogil=True, cache=True)
@@ -574,7 +574,7 @@ class B3(BasisFunction):
 
     def filter_periodic(self, s):
         # This is necessary for the docs to build correctly
-        return self._filter_periodic(s)
+        return np.squeeze(self._filter_periodic(s.astype(float)))
 
     @staticmethod
     @numba.jit(nopython=True, nogil=True, cache=True)
@@ -742,7 +742,7 @@ class Exponential(BasisFunction):
         b0 = self._func(0)
         b1 = self._func(1)
 
-        return self._filter_symmetric(s, self.M, b0, b1)
+        return np.squeeze(self._filter_symmetric(s.astype(float), self.M, b0, b1))
 
     @staticmethod
     @numba.jit(nopython=True, nogil=True, cache=True)
@@ -784,7 +784,7 @@ class Exponential(BasisFunction):
     def filter_periodic(self, s):
         self.M = len(s)
         b0 = self._func(0)
-        return self._filter_periodic(s, self.M, b0)
+        return np.squeeze(self._filter_periodic(s.astype(float), self.M, b0))
 
     @staticmethod
     @numba.jit(nopython=True, nogil=True, cache=True)
@@ -933,11 +933,11 @@ class CatmullRom(BasisFunction):
 
     @staticmethod
     def filter_symmetric(s):
-        return s
+        return s.astype(float)
 
     @staticmethod
     def filter_periodic(s):
-        return s
+        return s.astype(float)
 
 
 class CubicHermite(BasisFunction):
@@ -1181,11 +1181,11 @@ class CubicHermite(BasisFunction):
 
     @staticmethod
     def filter_symmetric(s):
-        return s
+        return s.astype(float)
 
     @staticmethod
     def filter_periodic(s):
-        return s
+        return s.astype(float)
 
 
 class ExponentialHermite(BasisFunction):
@@ -1367,11 +1367,11 @@ class ExponentialHermite(BasisFunction):
 
     @staticmethod
     def filter_symmetric(s):
-        return s
+        return s.astype(float)
 
     @staticmethod
     def filter_periodic(s):
-        return s
+        return s.astype(float)
 
 
 def _multinomial(
