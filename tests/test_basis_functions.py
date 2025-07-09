@@ -101,6 +101,24 @@ def test_call_output_type(basis_function, derivative, not_differentiable_twice, 
                 assert np.all(vals.shape == t.shape)
 
 
+def test_filter_output_type(basis_function, request):
+
+    if isinstance(basis_function, splinebox.basis_functions.B2):
+        # The filter_symmetric and filter_periodic are not implemented for B2
+        request.node.add_marker(pytest.mark.xfail)
+
+    for s in [np.array([1, 2, 3, 4, 5]), np.array([[1, 1], [2, 2], [3, 3], [4, 4], [5, 5]])]:
+        output = basis_function.filter_periodic(s)
+        assert isinstance(output, np.ndarray)
+        assert np.issubdtype(output.dtype, np.floating)
+        print(output.shape, s.shape)
+        assert np.all(output.shape == s.shape)
+        output = basis_function.filter_symmetric(s)
+        assert isinstance(output, np.ndarray)
+        assert np.issubdtype(output.dtype, np.floating)
+        assert np.all(output.shape == s.shape)
+
+
 def test_call_derivative_argument(basis_function, not_differentiable_twice):
     t = np.linspace(-1, 1, 20)
     # Check that 0, 1, 2 don't raise errors
