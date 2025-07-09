@@ -303,7 +303,7 @@ def test_rotate(initialized_spline_curve, rotation_matrix, is_hermite_spline):
     spline = initialized_spline_curve
     spline_copy = spline.copy()
     spline_copy._check_control_points = unittest.mock.MagicMock()
-    if spline.control_points.ndim == 1:
+    if spline.ndim == 1:
         with pytest.raises(RuntimeError):
             spline_copy.rotate(rotation_matrix)
     else:
@@ -745,7 +745,7 @@ def test_saving_and_loading_of_multiple_splines(is_hermite_basis_function, tmpdi
 def test_distance(initialized_spline_curve):
     spline = initialized_spline_curve
 
-    if spline.control_points.ndim == 1:
+    if spline.ndim == 1:
         with pytest.raises(RuntimeError):
             spline.distance(np.array((1.0,)))
         return
@@ -774,7 +774,7 @@ def test_moving_frame(initialized_spline_curve, not_differentiable_twice):
         # remove all of the integers from t
         t = t[(t % 1) != 0]
 
-    if spline.control_points.ndim != 2 or spline.control_points.shape[1] != 3:
+    if spline.ndim != 3:
         with pytest.raises(RuntimeError):
             frame = spline.moving_frame(t)
     else:
@@ -879,7 +879,7 @@ def test_mesh(
 ):
     spline = initialized_spline_curve
 
-    if spline.control_points.ndim != 2 or spline.control_points.shape[1] != 3:
+    if spline.ndim != 3:
         # mesh is only implemented for splines in 3D
         with pytest.raises(RuntimeError):
             spline.mesh(
@@ -966,27 +966,25 @@ def test_protected_spline_attributes(spline_curve, coeff_gen, basis_function):
 
 def test_single_value_input_call(initialized_spline_curve, single_value_t):
     spline = initialized_spline_curve
-    ndim = spline.control_points.shape[-1] if spline.control_points.ndim == 2 else 1
 
     output = spline(single_value_t)
-    if ndim == 1:
+    if spline.ndim == 1:
         assert isinstance(output, float)
     else:
         assert isinstance(output, np.ndarray)
         assert np.issubdtype(output.dtype, np.floating)
-        assert np.all(output.shape == (ndim,))
+        assert np.all(output.shape == (spline.ndim,))
 
 
 def test_array_input_call(initialized_spline_curve, array_t):
     spline = initialized_spline_curve
-    ndim = spline.control_points.shape[-1] if spline.control_points.ndim == 2 else 1
     output = spline(array_t)
     assert isinstance(output, np.ndarray)
     assert np.issubdtype(output.dtype, np.floating)
-    if ndim == 1:
+    if spline.ndim == 1:
         assert np.all(output.shape == (len(array_t),))
     else:
-        assert np.all(output.shape == (len(array_t), ndim))
+        assert np.all(output.shape == (len(array_t), spline.ndim))
 
 
 def test_single_value_input_arc_length(initialized_spline_curve, single_value_t):
