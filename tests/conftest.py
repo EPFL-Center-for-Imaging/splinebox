@@ -1,3 +1,4 @@
+import functools
 import itertools
 import math
 import unittest.mock
@@ -61,9 +62,25 @@ def non_hermite_basis_function(request):
         (splinebox.basis_functions.CubicHermite, {}),
         (splinebox.basis_functions.ExponentialHermite, {"M": 5}),
     ],
-    ids=["CubicHermite", "ExponentialHermite"],
+    ids=["CubicHermite", "ExponentialHermite-M5"],
 )
 def hermite_basis_function(request):
+    basis_function, params = request.param
+    return basis_function(**params)
+
+
+@pytest.fixture(
+    params=[
+        (splinebox.basis_functions.B2, {}),
+        (splinebox.basis_functions.B3, {}),
+        (splinebox.basis_functions.Exponential, {"M": 5}),
+        (splinebox.basis_functions.CatmullRom, {}),
+        (splinebox.basis_functions.CubicHermite, {}),
+        (splinebox.basis_functions.ExponentialHermite, {"M": 5}),
+    ],
+    ids=["B2", "B3", "Exponential-M5", "CatmullRom", "CubicHermite", "ExponentialHermite-M5"],
+)
+def twice_differentiable_basis_function(request):
     basis_function, params = request.param
     return basis_function(**params)
 
@@ -125,25 +142,28 @@ def hermite_spline_curve(hermite_basis_function, M, closed):
 
 
 @pytest.fixture
-def closed_spline_curve(basis_function, M):
+def closed_spline_curve(basis_function, M, is_hermite_basis_function):
     if hasattr(basis_function, "M"):
         M = basis_function.M
-    if isinstance(
-        basis_function, (splinebox.basis_functions.CubicHermite, splinebox.basis_functions.ExponentialHermite)
-    ):
+    if is_hermite_basis_function(basis_function):
         return splinebox.spline_curves.HermiteSpline(M, basis_function, closed=True)
     return splinebox.spline_curves.Spline(M, basis_function, closed=True)
 
 
 @pytest.fixture
-def open_spline_curve(basis_function, M):
+def open_spline_curve(basis_function, M, is_hermite_basis_function):
     if hasattr(basis_function, "M"):
         M = basis_function.M
-    if isinstance(
-        basis_function, (splinebox.basis_functions.CubicHermite, splinebox.basis_functions.ExponentialHermite)
-    ):
+    if is_hermite_basis_function(basis_function):
         return splinebox.spline_curves.HermiteSpline(M, basis_function, closed=False)
     return splinebox.spline_curves.Spline(M, basis_function, closed=False)
+
+
+@pytest.fixture
+def twice_differentiable_spline_curve(twice_differentiable_basis_function, M, closed, is_hermite_basis_function):
+    if is_hermite_basis_function(twice_differentiable_basis_function):
+        return splinebox.spline_curves.HermiteSpline(M, twice_differentiable_basis_function, closed=closed)
+    return splinebox.spline_curves.Spline(M, twice_differentiable_basis_function, closed=closed)
 
 
 @pytest.fixture(params=[0, 1, 2])
@@ -167,19 +187,30 @@ def codomain_dimensionality(request):
     return request.param
 
 
+def _control_point_gen(M, support, closed, ndim, rng=None):
+    if rng is None:
+        rng = np.random.default_rng(seed=42)
+    points = rng.random((M, ndim)) * 100 if closed else rng.random((M + 2 * (math.ceil(support / 2) - 1), ndim)) * 100
+    # remove superfluos dimension if codomain_dimensionlity is 1
+    return np.squeeze(points)
+
+
 @pytest.fixture
 def coeff_gen(codomain_dimensionality):
     rng = np.random.default_rng(seed=1492)
+    return functools.partial(_control_point_gen, ndim=codomain_dimensionality, rng=rng)
 
-    def _coeff_gen(M, support, closed):
-        if closed:
-            points = rng.random((M, codomain_dimensionality)) * 100
-        else:
-            points = rng.random((M + 2 * (math.ceil(support / 2) - 1), codomain_dimensionality)) * 100
-        # remove superfluos dimension if codomain_dimensionlity is 1
-        return np.squeeze(points)
 
-    return _coeff_gen
+@pytest.fixture
+def control_point_gen_2D():
+    rng = np.random.default_rng(seed=9052)
+    return functools.partial(_control_point_gen, ndim=2, rng=rng)
+
+
+@pytest.fixture
+def control_point_gen_3D():
+    rng = np.random.default_rng(seed=7755)
+    return functools.partial(_control_point_gen, ndim=3, rng=rng)
 
 
 @pytest.fixture
@@ -221,14 +252,15 @@ def not_differentiable_twice(is_spline):
     return _not_differentiable_twice
 
 
+def _is_hermite_spline(spline_curve):
+    return isinstance(
+        spline_curve,
+        splinebox.spline_curves.HermiteSpline,
+    )
+
+
 @pytest.fixture
 def is_hermite_spline():
-    def _is_hermite_spline(spline_curve):
-        return isinstance(
-            spline_curve,
-            splinebox.spline_curves.HermiteSpline,
-        )
-
     return _is_hermite_spline
 
 
@@ -237,17 +269,61 @@ def translation_vector(codomain_dimensionality):
     return np.random.rand(codomain_dimensionality) * 10 - 5
 
 
+def _initialize_spline_curve(spline, control_point_gen):
+    support = spline.basis_function.support
+    closed = spline.closed
+    M = spline.M
+
+    spline.control_points = control_point_gen(M, support, closed)
+    if _is_hermite_spline(spline):
+        spline.tangents = control_point_gen(M, support, closed)
+
+    return spline
+
+
 @pytest.fixture
-def initialized_spline_curve(spline_curve, is_hermite_spline, coeff_gen):
-    support = spline_curve.basis_function.support
-    closed = spline_curve.closed
-    M = spline_curve.M
+def initialize_spline_curve(is_hermite_spline, coeff_gen):
+    return functools.partial(_initialize_spline_curve, control_point_gen=coeff_gen)
 
-    spline_curve.control_points = coeff_gen(M, support, closed)
-    if is_hermite_spline(spline_curve):
-        spline_curve.tangents = coeff_gen(spline_curve.M, support, closed)
 
-    return spline_curve
+@pytest.fixture
+def initialize_2D_spline_curve(is_hermite_spline, control_point_gen_2D):
+    return functools.partial(_initialize_spline_curve, control_point_gen=control_point_gen_2D)
+
+
+@pytest.fixture
+def initialize_3D_spline_curve(is_hermite_spline, control_point_gen_3D):
+    return functools.partial(_initialize_spline_curve, control_point_gen=control_point_gen_3D)
+
+
+@pytest.fixture
+def initialized_spline_curve(spline_curve, initialize_spline_curve):
+    return initialize_spline_curve(spline_curve)
+
+
+@pytest.fixture
+def initialized_twice_differentiable_spline_curve(twice_differentiable_spline_curve, initialize_spline_curve):
+    return initialize_spline_curve(twice_differentiable_spline_curve)
+
+
+@pytest.fixture
+def initialized_2D_spline_curve(spline_curve, initialize_2D_spline_curve):
+    return initialize_2D_spline_curve(spline_curve)
+
+
+@pytest.fixture
+def initialized_3D_spline_curve(spline_curve, initialize_3D_spline_curve):
+    return initialize_3D_spline_curve(spline_curve)
+
+
+@pytest.fixture
+def initialized_twice_differentiable_2D_spline_curve(twice_differentiable_spline_curve, initialize_2D_spline_curve):
+    return initialize_2D_spline_curve(twice_differentiable_spline_curve)
+
+
+@pytest.fixture
+def initialized_twice_differentiable_3D_spline_curve(twice_differentiable_spline_curve, initialize_3D_spline_curve):
+    return initialize_3D_spline_curve(twice_differentiable_spline_curve)
 
 
 @pytest.fixture
@@ -332,4 +408,14 @@ def cap_ends(request):
 
 @pytest.fixture(params=["frenet", "bishop"])
 def frame(request):
+    return request.param
+
+
+@pytest.fixture(params=[0.5, 1])
+def single_value_t(request):
+    return request.param
+
+
+@pytest.fixture(params=[np.array([1.0, 1.5, 2.0, 2.5]), np.array([1, 2, 3], dtype=int)])
+def array_t(request):
     return request.param
