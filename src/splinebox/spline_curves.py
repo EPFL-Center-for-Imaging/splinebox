@@ -166,8 +166,7 @@ class Spline:
         if self.control_points is None:
             return f"uninitialized {closed_str} {self.basis_function} spline with {self.M} knots"
         else:
-            nD = 1 if self.control_points.ndim == 1 else self.control_points.shape[1]
-            return f"{closed_str} {nD}D {self.basis_function} spline with {self.M} knots"
+            return f"{closed_str} {self.ndim}D {self.basis_function} spline with {self.M} knots"
 
     def __repr__(self):
         return f"splinebox.spline_curves.Spline(M={repr(self.M)}, basis_function={repr(self.basis_function)}, closed={repr(self.closed)}, control_points=np.{repr(self.control_points)})"
@@ -320,6 +319,20 @@ class Spline:
         raise RuntimeError(
             "The amount of necessary padding is automatically calculated based on the support of the basis function and cannot be changed."
         )
+
+    @property
+    def ndim(self):
+        """
+        The dimensionality of the space the spline lives in, i.e. the codomain dimensionality.
+        """
+        if self.control_points is None:
+            raise RuntimeError(
+                "The spline does not have a dimensionality yet because it has not been initialized. Set the control_points or knots or use the fit method."
+            )
+        elif self.control_points.ndim == 1:
+            return 1
+        else:
+            return self.control_points.shape[-1]
 
     def copy(self):
         """
@@ -487,7 +500,7 @@ class Spline:
         """
         self._check_control_points()
 
-        if self.control_points.ndim != 2 or self.control_points.shape[1] != 2:
+        if self.ndim != 2:
             raise RuntimeError("draw() can only be used with 2D curves")
 
         if not self.closed:
@@ -512,7 +525,7 @@ class Spline:
             \frac{d \theta}{dt} = \frac{1}{r^2} \left( x\frac{dy}{dt} - y\frac{dx}{dt} \right) \text{, where } r^2 = x^2 + y^2
         """
         self._check_control_points()
-        if self.control_points.ndim != 2 or self.control_points.shape[1] != 2:
+        if self.ndim != 2:
             raise RuntimeError("dtheta() is only defined for 2D curves.")
         t, single_value = self._convert_to_array(t)
         r = self(t)
@@ -581,7 +594,7 @@ class Spline:
         if not self.closed:
             raise RuntimeError("isInside() can only be used with closed curves.")
         self._check_control_points()
-        if self.control_points.ndim != 2 or self.control_points.shape[1] != 2:
+        if self.ndim != 2:
             raise RuntimeError("isInside() can only be used with 2D curves.")
 
         if isinstance(x, (float, int)):
@@ -993,15 +1006,15 @@ class Spline:
         """
         self._check_control_points()
         t, single_value = self._convert_to_array(t)
-        if self.control_points.ndim != 2:
+        if self.ndim not in (2, 3):
             raise NotImplementedError(
-                "The normal vector is only implemented for curves in 2D and 3D. Your spline's codomain is 1 dimensional."
+                f"The normal vector is only implemented for curves in 2D and 3D. Your spline's codomain is {self.ndim} dimensional."
             )
-        if self.control_points.shape[1] == 2:
+        if self.ndim == 2:
             first_deriv = self(t, derivative=1)
             normals = (np.array([[0, -1], [1, 0]]) @ first_deriv.T).T
             normals /= np.linalg.norm(normals, axis=1)[:, np.newaxis]
-        elif self.control_points.shape[1] == 3:
+        elif self.ndim == 3:
             frame = self.moving_frame(t, method=frame, initial_vector=initial_vector)
             normals = frame[:, 1:]
         else:
@@ -1101,14 +1114,12 @@ class Spline:
         """
         self._check_control_points()
 
-        if self.control_points.ndim != 2 or self.control_points.shape[1] != 3:
+        if self.ndim != 3:
             raise RuntimeError("A frame can only be computed for splines in 3D.")
 
         t, single_value = self._convert_to_array(t)
 
         first_derivative = self(t, derivative=1)
-        if first_derivative.ndim == 1:
-            first_derivative = first_derivative[np.newaxis]
 
         frame = np.zeros((len(t), 3, 3))
         frame[:, 0] = first_derivative / np.linalg.norm(first_derivative, axis=-1)[:, np.newaxis]
@@ -1412,7 +1423,7 @@ class Spline:
         >>> plt.show()  # doctest: +SKIP
         """
         self._check_control_points()
-        if self.control_points.ndim == 1:
+        if self.ndim == 1:
             raise RuntimeError("1D splines can not be rotated.")
 
         if centred:
@@ -1478,7 +1489,7 @@ class Spline:
         >>> plt.show()  # doctest: +SKIP
         """
         self._check_control_points()
-        if self.control_points.ndim == 1:
+        if self.ndim == 1:
             raise RuntimeError("Cannot compute distance for 1D splines.")
 
         max_t = self.M if self.closed else self.M - 1
@@ -1645,7 +1656,7 @@ class Spline:
         (6480, 4)
         """
         self._check_control_points()
-        if self.control_points.ndim != 2 or self.control_points.shape[1] != 3:
+        if self.ndim != 3:
             raise NotImplementedError("Meshes are only implemented for splines in 3D.")
         t = np.arange(0, self.M if self.closed else self.M - 1 + step_t, step_t)
         if radius is None or radius == 0:
