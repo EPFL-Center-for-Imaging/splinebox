@@ -656,7 +656,7 @@ class Spline:
         basis_function_values = self.basis_function(tval, derivative=0)
         self.control_points = np.linalg.lstsq(basis_function_values, points, rcond=None)[0]
 
-    def arc_length(self, stop=None, start=0, epsabs=1e-6, epsrel=1e-6):
+    def arc_length(self, stop=None, start=0, epsabs=0, epsrel=1e-3):
         """
         Compute the arc length of the spline between
         the two parameter values specified. If no value for start is give,
@@ -672,9 +672,11 @@ class Spline:
         start : np.array / float (optional)
             Start point(s) in parameter space.
         epsabs : float (optional)
-            Absolute error tolerance. Default is 1e-6.
+            Absolute error tolerance. Default is 0, which means only the
+            relative error is used.
         epsrel : float (optional)
-            Relative error tolerance. Default is 1e-6.
+            Relative error tolerance. Default is 0.001, which corresponds
+            to a 0.1% error.
 
         Returns
         -------
@@ -780,7 +782,7 @@ class Spline:
         """
         self._check_control_points()
         midpoint = lower_bound + (upper_bound - lower_bound) / 2
-        midpoint_length = current_value + self.arc_length(lower_bound, midpoint, epsabs=atol)
+        midpoint_length = current_value + self.arc_length(lower_bound, midpoint, epsabs=atol, epsrel=0)
         if intermediate_results is not None:
             intermediate_results.append((midpoint, midpoint_length))
 

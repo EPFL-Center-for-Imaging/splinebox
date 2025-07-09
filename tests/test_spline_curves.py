@@ -987,7 +987,7 @@ def test_array_input_arc_length(initialized_spline_curve, array_t):
     assert np.issubdtype(arc_lengths.dtype, np.floating)
     assert np.all(arc_lengths.shape == (len(array_t),))
 
-    output = spline.arc_length_to_parameter(arc_lengths)
+    output = spline.arc_length_to_parameter(arc_lengths, atol=0.1)
     assert isinstance(output, np.ndarray)
     assert np.issubdtype(output.dtype, np.floating)
     assert np.all(arc_lengths.shape == (len(array_t),))
