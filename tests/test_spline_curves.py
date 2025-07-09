@@ -1090,3 +1090,9 @@ def test_array_input_moving_frame_3D(initialized_twice_differentiable_3D_spline_
     assert isinstance(output, np.ndarray)
     assert np.issubdtype(output.dtype, np.floating)
     assert np.all(output.shape == (len(array_t), 3, 3))
+
+
+def test_ndim(initialized_spline_curve):
+    spline = initialized_spline_curve
+    expected = spline(np.array([0.5])).shape[-1]
+    assert spline.ndim == expected
