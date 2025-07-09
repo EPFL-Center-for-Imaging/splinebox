@@ -321,6 +321,20 @@ class Spline:
             "The amount of necessary padding is automatically calculated based on the support of the basis function and cannot be changed."
         )
 
+    @property
+    def ndim(self):
+        """
+        The dimensionality of the space the spline lives in.
+        """
+        if self.control_points is None:
+            raise RuntimeError(
+                "The spline does not have a dimensionality yet because it has not been initialized. Set the control_points or knots or use the fit method."
+            )
+        elif self.control_points.ndim == 1:
+            return 1
+        else:
+            return self.control_points.shape[-1]
+
     def copy(self):
         """
         Returns a deep copy of this spline.
