@@ -6,7 +6,6 @@ import collections
 import copy
 import json
 import math
-import warnings
 
 import numba
 import numpy as np
@@ -513,21 +512,24 @@ class Spline:
             \frac{d \theta}{dt} = \frac{1}{r^2} \left( x\frac{dy}{dt} - y\frac{dx}{dt} \right) \text{, where } r^2 = x^2 + y^2
         """
         self._check_control_points()
-        t = self._convert_to_array(t)
+        if self.control_points.ndim != 2 or self.control_points.shape[1] != 2:
+            raise RuntimeError("dtheta() is only defined for 2D curves.")
+        t, single_value = self._convert_to_array(t)
         r = self(t)
         dr = self(t, derivative=1)
         if r.ndim == 1:
             r = r[np.newaxis, :]
             dr = dr[np.newaxis, :]
         r2 = np.linalg.norm(r, axis=1) ** 2
-        if np.any(np.isnan(dr)) or np.isclose(r2, 0):
-            # Happens the the spline is not differentiable in this location
-            # or when the point is at the origin
-            # The solution to return 0 is a bit of a hack but works in practice with
-            # the numerical integration
-            return np.squeeze(np.zeros(r.shape[0]))
         val = (1.0 / r2) * (r[:, 0] * dr[:, 1] - r[:, 1] * dr[:, 0])
-        return np.squeeze(val)
+        # Happens if the spline is not differentiable in this location
+        # or when the point is at the origin
+        # The solution to return 0 is a bit of a hack but works in practice with
+        # the numerical integration
+        val = np.nan_to_num(val)
+        if single_value:
+            val = val[0]
+        return val
 
     def is_inside(self, x, y):
         r"""
@@ -815,14 +817,14 @@ class Spline:
         >>> spline = splinebox.Spline(M=4, basis_function=splinebox.B3(), closed=False)
         >>> spline.control_points=np.array([2, 3, 2, 6, 1, 2])
 
-        >>> spline.arc_length_to_parameter(2.2)
-        array(2.12)
+        >>> spline.arc_length_to_parameter(2.2)  # doctest: +NUMBER
+        2.12
 
         >>> spline.arc_length(0, 2.12)  # doctest: +NUMBER
         2.2
         """
         self._check_control_points()
-        s = self._convert_to_array(s)
+        s, single_value = self._convert_to_array(s)
         sort_indices = np.argsort(s)
         results = np.zeros_like(s, dtype=float)
 
@@ -851,7 +853,9 @@ class Spline:
             lower_bound = results[i]
             _, current_value = min(intermediate_results, key=lambda x: abs(x[0] - lower_bound))
 
-        return np.squeeze(results)
+        if single_value:
+            results = results[0]
+        return results
 
     def curvilinear_reparametrization_energy(self, epsabs=1e-6, epsrel=1e-6):
         """
@@ -919,7 +923,7 @@ class Spline:
         array([ 2.234, -4.104])
         """
         self._check_control_points()
-        t = self._convert_to_array(t)
+        t, single_value = self._convert_to_array(t)
         first_deriv = self(t, derivative=1)
         second_deriv = self(t, derivative=2)
         if first_deriv.ndim == 1:
@@ -937,7 +941,9 @@ class Spline:
                 norm_first_deriv**2 * norm_second_deriv**2 - np.sum(first_deriv * second_deriv, axis=1) ** 2
             )
         k = nominator / norm_first_deriv**3
-        return np.squeeze(k)
+        if single_value:
+            k = k[0]
+        return k
 
     def normal(self, t, frame="bishop", initial_vector=None):
         """
@@ -986,7 +992,7 @@ class Spline:
         >>> plt.show()  # doctest: +SKIP
         """
         self._check_control_points()
-        t = self._convert_to_array(t)
+        t, single_value = self._convert_to_array(t)
         if self.control_points.ndim != 2:
             raise NotImplementedError(
                 "The normal vector is only implemented for curves in 2D and 3D. Your spline's codomain is 1 dimensional."
@@ -1002,6 +1008,8 @@ class Spline:
             raise RuntimeError(
                 f"The normal vector is only defined for curves in 2D and 3D. Your spline's codomain is {self.control_points.shape[1]} dimensional."
             )
+        if single_value:
+            normals = normals[0]
         return normals
 
     def moving_frame(self, t, method="frenet", initial_vector=None):
@@ -1074,9 +1082,9 @@ class Spline:
         >>> spline.knots = np.array([[1, 0, 0], [0, 1, 0], [-1, 0, 0], [0, -1, 0]])
 
         >>> spline.moving_frame(0)
-        array([[[ 0.,  1.,  0.],
-                [-1.,  0.,  0.],
-                [ 0., -0.,  1.]]])
+        array([[ 0.,  1.,  0.],
+               [-1.,  0.,  0.],
+               [ 0., -0.,  1.]])
 
         >>> spline.moving_frame([0, 2, spline.M])
         array([[[ 0.,  1.,  0.],
@@ -1096,7 +1104,7 @@ class Spline:
         if self.control_points.ndim != 2 or self.control_points.shape[1] != 3:
             raise RuntimeError("A frame can only be computed for splines in 3D.")
 
-        t = self._convert_to_array(t)
+        t, single_value = self._convert_to_array(t)
 
         first_derivative = self(t, derivative=1)
         if first_derivative.ndim == 1:
@@ -1156,6 +1164,8 @@ class Spline:
                     )
         else:
             raise ValueError(f"Unkown method '{method}' for moving frame.")
+        if single_value:
+            frame = frame[0]
         return frame
 
     def __call__(self, t, derivative=0):
@@ -1191,33 +1201,36 @@ class Spline:
                [ 3. ,  1. ]])
         """
         self._check_control_points()
-        t = self._convert_to_array(t)
+        t, single_value = self._convert_to_array(t)
         # Get values at which the basis functions have to be evaluated
         tval = self._get_tval(t)
         basis_function_values = self.basis_function(tval, derivative=derivative)
         value = np.matmul(basis_function_values, self.control_points)
-        return np.squeeze(value)
+        if single_value:
+            value = value[0]
+        return value
 
     def _convert_to_array(self, t):
         """
         Helper function that converts the a function input
         to an array. This allows functions to accept int and float
         values in addition to arrays.
+
+        single_value is used to tell the calling function if the
+        final result should be converted back into a single value.
         """
-        if (isinstance(t, np.ndarray) and t.shape == ()) or (isinstance(t, collections.abc.Iterable) and len(t) == 1):
-            warnings.warn(
-                "Starting from version 1.0 splinebox will return an array of length 1 if the input is length 1 instead of returning a single value. For details see https://github.com/EPFL-Center-for-Imaging/splinebox/issues/53.",
-                FutureWarning,
-                stacklevel=2,
-            )
+        single_value = False
         if not isinstance(t, collections.abc.Iterable):
             t = np.array([t])
+            single_value = True
         elif isinstance(t, np.ndarray) and t.shape == ():
             # Array with only one element, e.g. np.array(0.)
             t = np.array([t.item()])
         elif not isinstance(t, np.ndarray):
             t = np.array(t)
-        return t
+        if t.ndim > 1:
+            raise ValueError("The parameter array has to be 1D.")
+        return t, single_value
 
     def _get_tval(self, t):
         """
@@ -1857,7 +1870,7 @@ class HermiteSpline(Spline):
             t = np.linspace(0, self.M, len(points) + 1)[:-1] if self.closed else np.linspace(0, self.M - 1, len(points))
         tval = self._get_tval(t)
         basis_function_values = self.basis_function(tval, derivative=0)
-        basis_function_values = np.concatenate([basis_function_values[0], basis_function_values[1]], axis=1)
+        basis_function_values = np.concatenate([basis_function_values[..., 0], basis_function_values[..., 1]], axis=1)
         solution = np.linalg.lstsq(basis_function_values, points, rcond=None)[0]
         half = self.M if self.closed else self.M + 2 * self.pad
         self.control_points = solution[:half]
@@ -1865,14 +1878,16 @@ class HermiteSpline(Spline):
 
     def __call__(self, t, derivative=0):
         self._check_control_points_and_tangents()
-        t = self._convert_to_array(t)
+        t, single_value = self._convert_to_array(t)
 
         tval = self._get_tval(t)
         basis_function_values = self.basis_function(tval, derivative=derivative)
-        value = np.matmul(basis_function_values[0], self.control_points) + np.matmul(
-            basis_function_values[1], self.tangents
+        value = np.matmul(basis_function_values[..., 0], self.control_points) + np.matmul(
+            basis_function_values[..., 1], self.tangents
         )
-        return np.squeeze(value)
+        if single_value:
+            value = value[0]
+        return value
 
     def scale(self, scaling_factor):
         self._check_control_points_and_tangents()
