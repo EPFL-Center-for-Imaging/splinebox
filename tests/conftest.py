@@ -416,6 +416,12 @@ def single_value_t(request):
     return request.param
 
 
-@pytest.fixture(params=[np.array([1.0, 1.5, 2.0, 2.5]), np.array([1, 2, 3], dtype=int)])
+@pytest.fixture(
+    params=[
+        np.array([1.0]),
+        np.array([1.0, 1.5, 2.0, 2.5]),
+        np.array([1, 2, 3], dtype=int),
+    ]
+)
 def array_t(request):
     return request.param
