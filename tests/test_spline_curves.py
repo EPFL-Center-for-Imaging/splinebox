@@ -855,6 +855,26 @@ def test_moving_frame_raises():
         spline.moving_frame(t, method="frenet")
 
 
+def test_moving_frame_unsorted(frame):
+    np.random.seed(499)
+
+    spline = splinebox.spline_curves.Spline(M=7, basis_function=splinebox.basis_functions.B3(), closed=False)
+    spline.knots = np.random.rand(7, 3)
+
+    t = np.random.rand(100) * (spline.M - 1)
+    # t = np.linspace(spline.M - 1, 0, 100)[1:-1]
+
+    sort_indices = np.argsort(t)
+    sorted_t = t[sort_indices]
+
+    initial_vector = np.cross(spline(t[0], derivative=1), spline(sorted_t[0], derivative=1))
+
+    sorted_frame = spline.moving_frame(sorted_t, method=frame, initial_vector=initial_vector)
+    unsorted_frame = spline.moving_frame(t, method=frame, initial_vector=initial_vector)
+
+    assert np.allclose(sorted_frame[np.argsort(sort_indices)], unsorted_frame)
+
+
 def test_mesh(
     initialized_spline_curve, radius, step_t, step_angle, mesh_type, cap_ends, frame, not_differentiable_twice
 ):
