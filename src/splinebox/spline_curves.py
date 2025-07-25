@@ -6,6 +6,7 @@ import collections
 import copy
 import json
 import math
+import warnings
 
 import numba
 import numpy as np
@@ -1188,11 +1189,8 @@ class Spline:
         else:
             raise ValueError(f"Unkown method '{method}' for moving frame.")
 
-        if single_value:
-            frame = frame[0]
-        else:
-            # Restore to the original order of t
-            frame = frame[np.argsort(sort_indices)]
+        # Restore to the original order of t
+        frame = frame[0] if single_value else frame[np.argsort(sort_indices)]
         return frame
 
     def __call__(self, t, derivative=0):
@@ -1239,20 +1237,6 @@ class Spline:
 
     def _convert_to_array(self, t):
         """
-<<<<<<< HEAD
-=======
-        eval is deprecated use :meth:`splinebox.spline_curves.Spline.__call__` instead.
-        """
-        warnings.warn(
-            "`spline.eval(t)` is deprecated and will be removed in v1 use `spline(t)` instead.",
-            DeprecationWarning,
-            stacklevel=1,
-        )
-        return self(t, derivative=derivative)
-
-    def _convert_to_array(self, t):
-        """
->>>>>>> 8edaf1f (Add future warning about change in squeez policy for outputs. See issue 53.)
         Helper function that converts the a function input
         to an array. This allows functions to accept int and float
         values in addition to arrays.
