@@ -766,6 +766,10 @@ class Spline:
 
         t = self._convert_to_array(t)
 
+        # Sort t and keep the indicies so the original order can be restored
+        sort_indices = np.argsort(t)
+        t = t[sort_indices]
+
         first_derivative = self(t, derivative=1)
         if first_derivative.ndim == 1:
             first_derivative = first_derivative[np.newaxis]
@@ -798,6 +802,12 @@ class Spline:
                     other_axis = (max_axis + 1) % 3
                     initial_vector[max_axis] = tangent[other_axis]
                     initial_vector[other_axis] = -tangent[max_axis]
+            elif t[0] != t[np.argmin(sort_indices)]:
+                warnings.warn(
+                    "You provided an unsorted array. The initial vector will be applied to the smallest t instead of the t[0].",
+                    UserWarning,
+                    stacklevel=2,
+                )
             initial_vector /= np.linalg.norm(initial_vector)
             if not np.isclose(np.dot(frame[0, 0], initial_vector), 0):
                 raise ValueError("The initial vector has to be orthogonal to the tangent at t[0].")
@@ -824,7 +834,8 @@ class Spline:
                     )
         else:
             raise ValueError(f"Unkown method '{method}' for moving frame.")
-        return frame
+        # Restore to the original order of t
+        return frame[np.argsort(sort_indices)]
 
     def __call__(self, t, derivative=0):
         """
