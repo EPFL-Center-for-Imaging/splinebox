@@ -753,7 +753,7 @@ def test_distance(initialized_spline_curve):
     point = np.array([1] * spline.control_points.shape[1])
     distance = spline.distance(point)
 
-    # Check that a set of equality spaced points on the spline are at as far away as the distance
+    # Check that a set of equaly spaced points on the spline are at least as far away as the distance
     t = np.linspace(0, spline.M if spline.closed else spline.M - 1, spline.M * 10)
     points_on_spline = spline(t)
     distances = np.linalg.norm(points_on_spline - point[np.newaxis], axis=-1)
@@ -763,6 +763,21 @@ def test_distance(initialized_spline_curve):
     distance, t = spline.distance(point, return_t=True)
     point_on_spline = spline(t)
     assert np.isclose(distance, np.linalg.norm(point - point_on_spline))
+
+
+def test_distance_multiple_points(initialized_spline_curve):
+    spline = initialized_spline_curve
+
+    if spline.ndim == 1:
+        return
+
+    np.random.seed(45)
+    points = np.random.rand(10, spline.control_points.shape[1]) * 10
+
+    distances, t = spline.distance(points, return_t=True)
+
+    points_on_spline = spline(t)
+    assert np.allclose(distances, np.linalg.norm(points - points_on_spline, axis=1))
 
 
 def test_moving_frame(initialized_spline_curve, not_differentiable_twice):
