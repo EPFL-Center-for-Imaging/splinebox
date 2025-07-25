@@ -303,7 +303,7 @@ def test_rotate(initialized_spline_curve, rotation_matrix, is_hermite_spline):
     spline = initialized_spline_curve
     spline_copy = spline.copy()
     spline_copy._check_control_points = unittest.mock.MagicMock()
-    if spline.control_points.ndim == 1:
+    if spline.ndim == 1:
         with pytest.raises(RuntimeError):
             spline_copy.rotate(rotation_matrix)
     else:
@@ -421,7 +421,6 @@ def test_knots(spline_curve, knot_gen, is_hermite_spline, request):
             tangents = (diff[:-1] + diff[1:]) / 2
             tangents = np.squeeze(tangents)
         spline_curve.tangents = tangents
-
     # This assert makes sense because the knots are not saved in
     # the spline class but are converted to coefficients which are saved.
     if spline_curve.padding_function is None and not spline_curve.closed and pad != 0:
@@ -746,7 +745,7 @@ def test_saving_and_loading_of_multiple_splines(is_hermite_basis_function, tmpdi
 def test_distance(initialized_spline_curve):
     spline = initialized_spline_curve
 
-    if spline.control_points.ndim == 1:
+    if spline.ndim == 1:
         with pytest.raises(RuntimeError):
             spline.distance(np.array((1.0,)))
         return
@@ -754,7 +753,7 @@ def test_distance(initialized_spline_curve):
     point = np.array([1] * spline.control_points.shape[1])
     distance = spline.distance(point)
 
-    # Check that a set of equality spaced points on the spline are at as far away as the distance
+    # Check that a set of equaly spaced points on the spline are at least as far away as the distance
     t = np.linspace(0, spline.M if spline.closed else spline.M - 1, spline.M * 10)
     points_on_spline = spline(t)
     distances = np.linalg.norm(points_on_spline - point[np.newaxis], axis=-1)
@@ -766,6 +765,21 @@ def test_distance(initialized_spline_curve):
     assert np.isclose(distance, np.linalg.norm(point - point_on_spline))
 
 
+def test_distance_multiple_points(initialized_spline_curve):
+    spline = initialized_spline_curve
+
+    if spline.ndim == 1:
+        return
+
+    np.random.seed(45)
+    points = np.random.rand(10, spline.control_points.shape[1]) * 10
+
+    distances, t = spline.distance(points, return_t=True)
+
+    points_on_spline = spline(t)
+    assert np.allclose(distances, np.linalg.norm(points - points_on_spline, axis=1))
+
+
 def test_moving_frame(initialized_spline_curve, not_differentiable_twice):
     spline = initialized_spline_curve
     t = np.linspace(0, spline.M if spline.closed else spline.M - 1, spline.M * 10)
@@ -775,7 +789,7 @@ def test_moving_frame(initialized_spline_curve, not_differentiable_twice):
         # remove all of the integers from t
         t = t[(t % 1) != 0]
 
-    if spline.control_points.ndim != 2 or spline.control_points.shape[1] != 3:
+    if spline.ndim != 3:
         with pytest.raises(RuntimeError):
             frame = spline.moving_frame(t)
     else:
@@ -880,7 +894,7 @@ def test_mesh(
 ):
     spline = initialized_spline_curve
 
-    if spline.control_points.ndim != 2 or spline.control_points.shape[1] != 3:
+    if spline.ndim != 3:
         # mesh is only implemented for splines in 3D
         with pytest.raises(RuntimeError):
             spline.mesh(
@@ -963,3 +977,135 @@ def test_protected_spline_attributes(spline_curve, coeff_gen, basis_function):
         spline.half_support = spline.half_support + 1
     with pytest.raises(RuntimeError):
         spline.pad = spline.pad + 1
+
+
+def test_single_value_input_call(initialized_spline_curve, single_value_t):
+    spline = initialized_spline_curve
+
+    output = spline(single_value_t)
+    if spline.ndim == 1:
+        assert isinstance(output, float)
+    else:
+        assert isinstance(output, np.ndarray)
+        assert np.issubdtype(output.dtype, np.floating)
+        assert np.all(output.shape == (spline.ndim,))
+
+
+def test_array_input_call(initialized_spline_curve, array_t):
+    spline = initialized_spline_curve
+    output = spline(array_t)
+    assert isinstance(output, np.ndarray)
+    assert np.issubdtype(output.dtype, np.floating)
+    if spline.ndim == 1:
+        assert np.all(output.shape == (len(array_t),))
+    else:
+        assert np.all(output.shape == (len(array_t), spline.ndim))
+
+
+def test_single_value_input_arc_length(initialized_spline_curve, single_value_t):
+    spline = initialized_spline_curve
+
+    arc_length = spline.arc_length(single_value_t)
+    assert isinstance(arc_length, float)
+
+    output = spline.arc_length_to_parameter(arc_length)
+    assert isinstance(output, float)
+
+
+def test_array_input_arc_length(initialized_spline_curve, array_t):
+    spline = initialized_spline_curve
+
+    arc_lengths = spline.arc_length(array_t)
+    assert isinstance(arc_lengths, np.ndarray)
+    assert np.issubdtype(arc_lengths.dtype, np.floating)
+    assert np.all(arc_lengths.shape == (len(array_t),))
+
+    output = spline.arc_length_to_parameter(arc_lengths, atol=0.1)
+    assert isinstance(output, np.ndarray)
+    assert np.issubdtype(output.dtype, np.floating)
+    assert np.all(arc_lengths.shape == (len(array_t),))
+
+
+def test_single_value_input_curvature(initialized_twice_differentiable_spline_curve, single_value_t):
+    spline = initialized_twice_differentiable_spline_curve
+
+    curvature = spline.curvature(single_value_t)
+    assert isinstance(curvature, float)
+
+
+def test_array_input_curvature(initialized_twice_differentiable_spline_curve, array_t, not_differentiable_twice):
+    spline = initialized_twice_differentiable_spline_curve
+
+    curvatures = spline.curvature(array_t)
+    assert isinstance(curvatures, np.ndarray)
+    assert np.issubdtype(curvatures.dtype, np.floating)
+    assert np.all(curvatures.shape == (len(array_t),))
+
+
+def test_single_value_input_dtheta(initialized_twice_differentiable_2D_spline_curve, single_value_t):
+    spline = initialized_twice_differentiable_2D_spline_curve
+    dtheta = spline.dtheta(single_value_t)
+    assert isinstance(dtheta, float)
+
+
+def test_array_input_dtheta(initialized_twice_differentiable_2D_spline_curve, array_t):
+    spline = initialized_twice_differentiable_2D_spline_curve
+
+    dthetas = spline.dtheta(array_t)
+    assert isinstance(dthetas, np.ndarray)
+    assert np.issubdtype(dthetas.dtype, np.floating)
+    assert np.all(dthetas.shape == (len(array_t),))
+
+
+def test_single_value_input_normal_2D(initialized_2D_spline_curve, single_value_t):
+    spline = initialized_2D_spline_curve
+    output = spline.normal(single_value_t)
+    assert isinstance(output, np.ndarray)
+    assert np.issubdtype(output.dtype, np.floating)
+    assert np.all(output.shape == (2,))
+
+
+def test_array_input_normal_2D(initialized_2D_spline_curve, array_t):
+    spline = initialized_2D_spline_curve
+    output = spline.normal(array_t)
+    assert isinstance(output, np.ndarray)
+    assert np.issubdtype(output.dtype, np.floating)
+    assert np.all(output.shape == (len(array_t), 2))
+
+
+def test_single_value_input_normal_3D(initialized_twice_differentiable_3D_spline_curve, single_value_t, frame):
+    spline = initialized_twice_differentiable_3D_spline_curve
+    output = spline.normal(single_value_t, frame=frame)
+    assert isinstance(output, np.ndarray)
+    assert np.issubdtype(output.dtype, np.floating)
+    assert np.all(output.shape == (2, 3))
+
+
+def test_array_input_normal_3D(initialized_twice_differentiable_3D_spline_curve, array_t, frame):
+    spline = initialized_twice_differentiable_3D_spline_curve
+    output = spline.normal(array_t, frame=frame)
+    assert isinstance(output, np.ndarray)
+    assert np.issubdtype(output.dtype, np.floating)
+    assert np.all(output.shape == (len(array_t), 2, 3))
+
+
+def test_single_value_input_moving_frame_3D(initialized_twice_differentiable_3D_spline_curve, single_value_t, frame):
+    spline = initialized_twice_differentiable_3D_spline_curve
+    output = spline.moving_frame(single_value_t, method=frame)
+    assert isinstance(output, np.ndarray)
+    assert np.issubdtype(output.dtype, np.floating)
+    assert np.all(output.shape == (3, 3))
+
+
+def test_array_input_moving_frame_3D(initialized_twice_differentiable_3D_spline_curve, array_t, frame):
+    spline = initialized_twice_differentiable_3D_spline_curve
+    output = spline.moving_frame(array_t, method=frame)
+    assert isinstance(output, np.ndarray)
+    assert np.issubdtype(output.dtype, np.floating)
+    assert np.all(output.shape == (len(array_t), 3, 3))
+
+
+def test_ndim(initialized_spline_curve):
+    spline = initialized_spline_curve
+    expected = spline(np.array([0.5])).shape[-1]
+    assert spline.ndim == expected

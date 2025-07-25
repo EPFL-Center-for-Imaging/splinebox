@@ -1,5 +1,13 @@
 """
-This module provides spline basis functions.
+This module provides a collection of basis function classes, each designed for constructing a specific type of spline.
+The modular design enables users to easily explore different spline types, by swapping the basis function object when creating a spline.
+
+All basis function classes inherit from the base class :class:`splinebox.basis_functions.BasisFunction`.
+The base class defines methods such as :code:`__call__`, :code:`filter_periodic`, and :code:`filter_symmetric`.
+The latter two methods should be overridden as appropriate in any subclass to ensure they align with the behavior of the specific basis function.
+To enable the :code:`__call__` method, subclasses must implement :code:`_func(t)`, :code:`_derivative_1(t)`, and :code:`_derivative_2(t)`, which correspond to the function itself and its first and second derivatives, respectively.
+
+For more information on implementing a new basis function, see :class:`splinebox.basis_functions.BasisFunction`.
 """
 
 import inspect
@@ -14,18 +22,60 @@ import numpy as np
 class BasisFunction:
     """
     Base class for all basis functions.
+    This class should not be used directly, but instead classes for
+    specific basis functions should inherit from this class.
+
+    An example of how to implement your own basis function using
+    inheriting from this class is given below.
 
     Parameters
     ----------
     multigenerator : boolean
-        This indicates if the basis function generates
-        multiple outputs. In practice, this is used to indicate
-        if a basis function is meant for a Hermite spline or not.
-        Basis functions for Hermite splines return two values
-        instead of one.
+        Indicates whether the basis function generates
+        multiple outputs. This is used to distinguish basis
+        functions designed for Hermite splines, which return two
+        values instead of one.
     support : float
         The support of the function, i.e. the size of the area
         being mapped to non-zero values.
+
+    Examples
+    --------
+    This example shows how to implement a new basis function.
+
+    >>> class MyBasis(splinebox.BasisFunction):
+    ...     def __init__(self):
+    ...         super().__init__(multigenerator=False, support=2)
+    ...
+    ...     def __str__(self):
+    ...         return "MyBasis"
+    ...
+    ...     def __repr__(self):
+    ...         # Change this if your new basis function is not in splinebox.basis_functions
+    ...         return "splinebox.basis_functions.MyBasis()"
+    ...
+    ...     def _func(self, t):
+    ...         # Implement your function here
+    ...         return val
+    ...
+    ...     def _derivative_1(self, t):
+    ...         # Implement the first derivative of your function here
+    ...         return val
+    ...
+    ...     def _derivative_2(self, t):
+    ...         # Implement the second derivative of your function here
+    ...         # or raise an error if not differentiable
+    ...         raise RuntimeError("MyBasis isn't twice differentiable.")
+    ...
+    ...     def filter_symmetric(self, s):
+    ...         # Implement the function that can turn knots into control points
+    ...         # for an open spline
+    ...         return s.astype(float)
+    ...
+    ...     def filter_periodic(self, s):
+    ...         # Implement the function that can turn knots into control points
+    ...         # for a closed spline
+    ...         return s.astype(float)
     """
 
     _unimplemented_message = "This function is not implemented."
@@ -49,6 +99,9 @@ class BasisFunction:
 
     def __call__(self, t, derivative=0):
         """
+        Evaluate the function at position(s) t. You can optionally
+        pass derivative=1 or 2 to obtain the respective derivative(s).
+
         Evaluate the function at position(s) `t`.
 
         Parameters
@@ -64,6 +117,16 @@ class BasisFunction:
         y : numpy.array
             Values of the function or its first or second derivative
             at position(s) `t`.
+
+        Examples
+        --------
+        >>> basis_function = splinebox.basis_functions.B1()
+        >>> basis_function(0.5)
+        0.5
+
+        >>> t = np.array([-0.2, 0.5])
+        >>> basis_function(t, derivative=1)
+        array([ 1., -1.])
         """
         if derivative == 0:
             return self._func(t)
@@ -73,14 +136,6 @@ class BasisFunction:
             return self._derivative_2(t)
         else:
             raise ValueError(f"derivative has to be 0, 1, or 2 not {derivative}")
-
-    def eval(self, t, derivative=0):
-        warnings.warn(
-            "`basis_function.eval(t)` is deprecated and will be removed in v1. Use `basis_function(t)` instead.",
-            DeprecationWarning,
-            stacklevel=1,
-        )
-        return self(t, derivative=derivative)
 
     def _func(self, t):
         raise NotImplementedError(BasisFunction._unimplemented_message)
@@ -93,8 +148,8 @@ class BasisFunction:
 
     def filter_symmetric(self, s):
         """
-        The filter used to turn knots into control points for an
-        open spline.
+        Returns a filtered version of the input s,
+        used to convert knots into control points for an **open spline**.
 
         Parameters
         ----------
@@ -108,13 +163,40 @@ class BasisFunction:
         -------
         control_points : numpy.array
             The control points for the spline passing through the knots provided.
+
+        Examples
+        --------
+        For interpolating basis functions the filter is the identity.
+
+        >>> knots = np.array([[4, 3], [2, 2], [1, 3]])
+        >>> b1 = splinebox.basis_functions.B1()
+        >>> b1.filter_symmetric(knots)
+        array([[4., 3.],
+               [2., 2.],
+               [1., 3.]])
+
+        For non-interpolating spline the returned control points are different.
+
+        >>> b3 = splinebox.basis_functions.B3()
+        >>> b3.filter_symmetric(knots)
+        array([[5.25, 4.  ],
+               [1.5 , 1.  ],
+               [0.75, 4.  ]])
+
+        We can confirm that the returned control points indeed results in the second knot provided.
+
+        >>> control_points = b3.filter_symmetric(knots)
+        >>> b3(-1) * control_points[0] + b3(0) * control_points[1] + b3(1) * control_points[2]
+        array([2., 2.])
+
+        To perform the same test for the first and the last knot, padding is required.
         """
         raise NotImplementedError(BasisFunction._unimplemented_message)
 
     def filter_periodic(self, s):
         """
-        The filter used to turn knots into control points for a
-        closed spline.
+        Returns a filtered version of the input s, used to convert
+        knots into control points for a **closed spline**.
 
         Parameters
         ----------
@@ -128,6 +210,39 @@ class BasisFunction:
         -------
         control_points : numpy.array
             The control points for the spline passing through the knots provided.
+
+        Examples
+        --------
+        For interpolating basis functions the is the identity.
+
+        >>> knots = np.array([[4, 3], [2, 2], [1, 3]])
+        >>> b1 = splinebox.basis_functions.B1()
+        >>> b1.filter_periodic(knots)
+        array([[4., 3.],
+               [2., 2.],
+               [1., 3.]])
+
+        For non-interpolating spline the returned control points are different.
+
+        >>> b3 = splinebox.basis_functions.B3()
+        >>> b3.filter_periodic(knots)
+        array([[ 5.667,  3.333],
+               [ 1.667,  1.333],
+               [-0.333,  3.333]])
+
+        We can confirm that the returned control points indeed results in the knots provided.
+
+        >>> control_points = b3.filter_periodic(knots)
+        >>> b3(-1) * control_points[0] + b3(0) * control_points[1] + b3(1) * control_points[2]
+        array([2., 2.])
+
+        For the other two knots we need to take the preiodicity into account.
+
+        >>> b3(-1) * control_points[-1] + b3(0) * control_points[0] + b3(1) * control_points[1]
+        array([4., 3.])
+
+        >>> b3(-1) * control_points[1] + b3(0) * control_points[2] + b3(1) * control_points[0]
+        array([1., 3.])
         """
         raise NotImplementedError(BasisFunction._unimplemented_message)
 
@@ -148,14 +263,42 @@ class B1(BasisFunction):
     r"""
     Basis function for a linear (:math:`1^{\text{st}}` order) polynomial basis spline.
 
-    For a detailed theoretical description, including the equation and
-    a plot of the function, refer to the :ref:`theory/polynomial:Polynomial basis (B-spline)`
+    For a detailed theoretical description -- including the equation and
+    a plot of the function -- refer to the :ref:`theory/polynomial:Polynomial basis (B-spline)`
     section in the documentation.
 
     The constructor does not require any arguments.
 
-    For more information on the methods and attributes available in this class,
-    please see the documentation for :class:`splinebox.basis_functions.BasisFunction`.
+    Examples
+    --------
+
+    >>> import splinebox
+    >>> import numpy as np
+    >>> import matplotlib.pyplot as plt
+
+    Create a basis function object:
+
+    >>> basis_function = splinebox.basis_functions.B1()
+
+    Evaluate the basis function at a single position:
+
+    >>> basis_function(0.5)
+    0.5
+
+    Evaluate the basis function at multiple positions simultaneously:
+
+    >>> t = np.array([-0.2, 0, 0.5])
+    >>> basis_function(t)
+    array([0.8, 1. , 0.5])
+
+    Compute the first derivative of the basis function at multiple positions:
+
+    >>> basis_function(t, derivative=1)
+    array([ 1., nan, -1.])
+
+    >>> t = np.linspace(-1.4, 1.4, 500)
+    >>> plt.plot(t, basis_function(t))  # doctest: +SKIP
+    >>> plt.show()  # doctest: +SKIP
     """
 
     def __init__(self):
@@ -194,11 +337,11 @@ class B1(BasisFunction):
 
     @staticmethod
     def filter_symmetric(s):
-        return s
+        return s.astype(float)
 
     @staticmethod
     def filter_periodic(s):
-        return s
+        return s.astype(float)
 
     def refinement_mask(self):
         order = int(self.support)
@@ -211,14 +354,42 @@ class B2(BasisFunction):
     r"""
     Basis function for a quadratic (:math:`2^{\text{nd}}` order) polynomial basis spline.
 
-    For a detailed theoretical description, including the equation and
-    a plot of the function, refer to the :ref:`theory/polynomial:Polynomial basis (B-spline)`
+    For a detailed theoretical description -- including the equation and
+    a plot of the function -- refer to the :ref:`theory/polynomial:Polynomial basis (B-spline)`
     section in the documentation.
 
     The constructor does not require any arguments.
 
-    For more information on the methods and attributes available in this class,
-    please see the documentation for :class:`splinebox.basis_functions.BasisFunction`.
+    Examples
+    --------
+
+    >>> import splinebox
+    >>> import numpy as np
+    >>> import matplotlib.pyplot as plt
+
+    Create a basis function object:
+
+    >>> basis_function = splinebox.basis_functions.B2()
+
+    Evaluate the basis function at a single position:
+
+    >>> basis_function(0.5)
+    0.5
+
+    Evaluate the basis function at multiple positions simultaneously:
+
+    >>> t = np.array([-0.2, 0, 0.5])
+    >>> basis_function(t)
+    array([0.71, 0.75, 0.5 ])
+
+    Compute the first derivative of the basis function at multiple positions:
+
+    >>> basis_function(t, derivative=1)
+    array([ 0.4, -0. , -1. ])
+
+    >>> t = np.linspace(-2.1, 2.1, 500)
+    >>> plt.plot(t, basis_function(t))  # doctest: +SKIP
+    >>> plt.show()  # doctest: +SKIP
     """
 
     def __init__(self):
@@ -277,14 +448,42 @@ class B3(BasisFunction):
     r"""
     Basis function for a cubic (:math:`3^{\text{rd}}` order) polynomial basis spline.
 
-    For a detailed theoretical description, including the equation and
-    a plot of the function, refer to the :ref:`theory/polynomial:Polynomial basis (B-spline)`
+    For a detailed theoretical description -- including the equation and
+    a plot of the function -- refer to the :ref:`theory/polynomial:Polynomial basis (B-spline)`
     section in the documentation.
 
     The constructor does not require any arguments.
 
-    For more information on the methods and attributes available in this class,
-    please see the documentation for :class:`splinebox.basis_functions.BasisFunction`.
+    Examples
+    --------
+
+    >>> import splinebox
+    >>> import numpy as np
+    >>> import matplotlib.pyplot as plt
+
+    Create a basis function object:
+
+    >>> basis_function = splinebox.basis_functions.B3()
+
+    Evaluate the basis function at a single position:
+
+    >>> basis_function(0.5)
+    0.47916666666666663
+
+    Evaluate the basis function at multiple positions simultaneously:
+
+    >>> t = np.array([-0.2, 0, 0.5])
+    >>> basis_function(t)
+    array([0.631, 0.667, 0.479])
+
+    Compute the first derivative of the basis function at multiple positions:
+
+    >>> basis_function(t, derivative=1)
+    array([ 0.34 ,  0.   , -0.625])
+
+    >>> t = np.linspace(-2.1, 2.1, 500)
+    >>> plt.plot(t, basis_function(t))  # doctest: +SKIP
+    >>> plt.show()  # doctest: +SKIP
     """
 
     def __init__(self):
@@ -334,9 +533,13 @@ class B3(BasisFunction):
             val = 2 + t
         return val
 
+    def filter_symmetric(self, s):
+        # This is necessary for the docs to build correctly
+        return np.squeeze(self._filter_symmetric(s.astype(float)))
+
     @staticmethod
     @numba.jit(nopython=True, nogil=True, cache=True)
-    def filter_symmetric(s):  # pragma: no cover
+    def _filter_symmetric(s):  # pragma: no cover
         M = len(s)
         pole = -2 + np.sqrt(3)
 
@@ -369,9 +572,13 @@ class B3(BasisFunction):
         c = c.reshape(shape)
         return c
 
+    def filter_periodic(self, s):
+        # This is necessary for the docs to build correctly
+        return np.squeeze(self._filter_periodic(s.astype(float)))
+
     @staticmethod
     @numba.jit(nopython=True, nogil=True, cache=True)
-    def filter_periodic(s):  # pragma: no cover
+    def _filter_periodic(s):  # pragma: no cover
         M = len(s)
         pole = -2 + np.sqrt(3)
 
@@ -415,14 +622,42 @@ class Exponential(BasisFunction):
     r"""
     Basis function for an exponential spline.
 
-    For a detailed theoretical description, including the equation and
-    a plot of the function, refer to the :ref:`theory/exponential:Exponential basis`
+    For a detailed theoretical description -- including the equation and
+    a plot of the function -- refer to the :ref:`theory/exponential:Exponential basis`
     section in the documentation.
 
     The constructor requires `M`, the number of knots in the spline, as an argument.
 
-    For more information on the methods and attributes available in this class,
-    please see the documentation for :class:`splinebox.basis_functions.BasisFunction`.
+    Examples
+    --------
+
+    >>> import splinebox
+    >>> import numpy as np
+    >>> import matplotlib.pyplot as plt
+
+    Create a basis function object:
+
+    >>> basis_function = splinebox.basis_functions.Exponential(M=5)
+
+    Evaluate the basis function at a single position:
+
+    >>> basis_function(0.5)
+    0.5
+
+    Evaluate the basis function at multiple positions simultaneously:
+
+    >>> t = np.array([-0.2, 0, 0.5])
+    >>> basis_function(t)
+    array([0.687, 0.724, 0.5  ])
+
+    Compute the first derivative of the basis function at multiple positions:
+
+    >>> basis_function(t, derivative=1)
+    array([ 0.366,  0.   , -0.865])
+
+    >>> t = np.linspace(-2.1, 2.1, 500)
+    >>> plt.plot(t, basis_function(t))  # doctest: +SKIP
+    >>> plt.show()  # doctest: +SKIP
     """
 
     def __init__(self, M):
@@ -507,7 +742,7 @@ class Exponential(BasisFunction):
         b0 = self._func(0)
         b1 = self._func(1)
 
-        return self._filter_symmetric(s, self.M, b0, b1)
+        return np.squeeze(self._filter_symmetric(s.astype(float), self.M, b0, b1))
 
     @staticmethod
     @numba.jit(nopython=True, nogil=True, cache=True)
@@ -549,7 +784,7 @@ class Exponential(BasisFunction):
     def filter_periodic(self, s):
         self.M = len(s)
         b0 = self._func(0)
-        return self._filter_periodic(s, self.M, b0)
+        return np.squeeze(self._filter_periodic(s.astype(float), self.M, b0))
 
     @staticmethod
     @numba.jit(nopython=True, nogil=True, cache=True)
@@ -611,14 +846,42 @@ class CatmullRom(BasisFunction):
     r"""
     Basis function for a Catmull Rom spline.
 
-    For a detailed theoretical description, including the equation and
-    a plot of the function, refer to the :ref:`theory/catmullrom:Catmull Rom basis`
+    For a detailed theoretical description -- including the equation and
+    a plot of the function -- refer to the :ref:`theory/catmullrom:Catmull Rom basis`
     section in the documentation.
 
     The constructor does not require any arguments.
 
-    For more information on the methods and attributes available in this class,
-    please see the documentation for :class:`splinebox.basis_functions.BasisFunction`.
+    Examples
+    --------
+
+    >>> import splinebox
+    >>> import numpy as np
+    >>> import matplotlib.pyplot as plt
+
+    Create a basis function object:
+
+    >>> basis_function = splinebox.basis_functions.CatmullRom()
+
+    Evaluate the basis function at a single position:
+
+    >>> basis_function(0.5)
+    0.5625
+
+    Evaluate the basis function at multiple positions simultaneously:
+
+    >>> t = np.array([-0.2, 0, 0.5])
+    >>> basis_function(t)
+    array([0.912, 1.   , 0.562])
+
+    Compute the first derivative of the basis function at multiple positions:
+
+    >>> basis_function(t, derivative=1)
+    array([ 0.82 , -0.   , -1.375])
+
+    >>> t = np.linspace(-2.1, 2.1, 500)
+    >>> plt.plot(t, basis_function(t))  # doctest: +SKIP
+    >>> plt.show()  # doctest: +SKIP
     """
 
     def __init__(self):
@@ -670,28 +933,61 @@ class CatmullRom(BasisFunction):
 
     @staticmethod
     def filter_symmetric(s):
-        return s
+        return s.astype(float)
 
     @staticmethod
     def filter_periodic(s):
-        return s
+        return s.astype(float)
 
 
 class CubicHermite(BasisFunction):
     r"""
     Basis function for a cubic Hermite spline.
 
-    For a detailed theoretical description, including the equation and
-    a plot of the function, refer to the :ref:`theory/cubichermite:Cubic Hermite basis`
+    For a detailed theoretical description -- including the equation and
+    a plot of the function -- refer to the :ref:`theory/cubichermite:Cubic Hermite basis`
     section in the documentation.
 
     The constructor does not require any arguments.
 
-    For more information on the methods and attributes available in this class,
-    please see the documentation for :class:`splinebox.basis_functions.BasisFunction`.
-
-    **Note**: This is basis function is a :class:`multigenerator <splinebox.basis_functions.BasisFunction>` and
+    **Note**: This basis function is a :class:`multigenerator <splinebox.basis_functions.BasisFunction>` and
     :func:`__call__ <splinebox.basis_functions.BasisFunction.__call__>` returns two values.
+
+    Examples
+    --------
+
+    >>> import splinebox
+    >>> import numpy as np
+    >>> import matplotlib.pyplot as plt
+
+    Create a basis function object:
+
+    >>> basis_function = splinebox.basis_functions.CubicHermite()
+
+    Evaluate the basis function at a single position:
+
+    >>> basis_function(0.5)
+    array([0.5  , 0.125])
+
+    Evaluate the basis function at multiple positions simultaneously:
+
+    >>> t = np.array([-0.2, 0, 0.5])
+    >>> basis_function(t)
+    array([[ 0.896, -0.128],
+           [ 1.   ,  0.   ],
+           [ 0.5  ,  0.125]])
+
+    Compute the first derivative of the basis function at multiple positions:
+
+    >>> basis_function(t, derivative=1)
+    array([[ 0.96,  0.32],
+           [-0.  ,  1.  ],
+           [-1.5 , -0.25]])
+
+    >>> t = np.linspace(-2.1, 2.1, 500)
+    >>> plt.plot(t, basis_function(t)[0])  # doctest: +SKIP
+    >>> plt.plot(t, basis_function(t)[1], linestyle="-.")  # doctest: +SKIP
+    >>> plt.show()  # doctest: +SKIP
     """
 
     def __init__(self):
@@ -704,7 +1000,7 @@ class CubicHermite(BasisFunction):
         return "splinebox.basis_functions.CubicHermite()"
 
     def _func(self, t):
-        return np.array([self.h31(t), self.h32(t)])
+        return np.stack([self.h31(t), self.h32(t)], axis=-1)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
@@ -727,7 +1023,7 @@ class CubicHermite(BasisFunction):
         return val
 
     def _derivative_1(self, t):
-        return np.array([self.h31prime(t), self.h32prime(t)])
+        return np.stack([self.h31prime(t), self.h32prime(t)], axis=-1)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
@@ -750,7 +1046,7 @@ class CubicHermite(BasisFunction):
         return val
 
     def _derivative_2(self, t):
-        return np.array([self.h31primeprime(t), self.h32primeprime(t)])
+        return np.stack([self.h31primeprime(t), self.h32primeprime(t)], axis=-1)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
@@ -885,28 +1181,61 @@ class CubicHermite(BasisFunction):
 
     @staticmethod
     def filter_symmetric(s):
-        return s
+        return s.astype(float)
 
     @staticmethod
     def filter_periodic(s):
-        return s
+        return s.astype(float)
 
 
 class ExponentialHermite(BasisFunction):
     r"""
     Basis function for an exponential Hermite spline.
 
-    For a detailed theoretical description, including the equation and
-    a plot of the function, refer to the :ref:`theory/exponentialhermite:Exponential Hermite basis`
+    For a detailed theoretical description -- including the equation and
+    a plot of the function -- refer to the :ref:`theory/exponentialhermite:Exponential Hermite basis`
     section in the documentation.
 
     The constructor requires `M`, the number of knots in the spline, as an argument.
 
-    For more information on the methods and attributes available in this class,
-    please see the documentation for :class:`splinebox.basis_functions.BasisFunction`.
-
-    **Note**: This is basis function is a :class:`multigenerator <splinebox.basis_functions.BasisFunction>` and
+    **Note**: This basis function is a :class:`multigenerator <splinebox.basis_functions.BasisFunction>` and
     :func:`__call__ <splinebox.basis_functions.BasisFunction.__call__>` returns two values.
+
+    Examples
+    --------
+
+    >>> import splinebox
+    >>> import numpy as np
+    >>> import matplotlib.pyplot as plt
+
+    Create a basis function object:
+
+    >>> basis_function = splinebox.basis_functions.ExponentialHermite(M=5)
+
+    Evaluate the basis function at a single position:
+
+    >>> basis_function(0.5)
+    array([0.5  , 0.129])
+
+    Evaluate the basis function at multiple positions simultaneously:
+
+    >>> t = np.array([-0.2, 0, 0.5])
+    >>> basis_function(t)
+    array([[ 0.897, -0.13 ],
+           [ 1.   ,  0.   ],
+           [ 0.5  ,  0.129]])
+
+    Compute the first derivative of the basis function at multiple positions:
+
+    >>> basis_function(t, derivative=1)
+    array([[ 0.955,  0.336],
+           [-0.   ,  1.   ],
+           [-1.51 , -0.255]])
+
+    >>> t = np.linspace(-2.1, 2.1, 500)
+    >>> plt.plot(t, basis_function(t)[0])  # doctest: +SKIP
+    >>> plt.plot(t, basis_function(t)[1], linestyle="-.")  # doctest: +SKIP
+    >>> plt.show()  # doctest: +SKIP
     """
 
     def __init__(self, M):
@@ -923,7 +1252,7 @@ class ExponentialHermite(BasisFunction):
         return isinstance(other, type(self)) and other.M == self.M
 
     def _func(self, t):
-        return np.array([self._he31(t, self.M), self._he32(t, self.M)])
+        return np.stack([self._he31(t, self.M), self._he32(t, self.M)], axis=-1)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
@@ -965,7 +1294,7 @@ class ExponentialHermite(BasisFunction):
         return val
 
     def _derivative_1(self, t):
-        return np.array([self._he31prime(t, self.M), self._he32prime(t, self.M)])
+        return np.stack([self._he31prime(t, self.M), self._he32prime(t, self.M)], axis=-1)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
@@ -1002,7 +1331,7 @@ class ExponentialHermite(BasisFunction):
         return val
 
     def _derivative_2(self, t):
-        return np.array([self._he31primeprime(t, self.M), self._he32primeprime(t, self.M)])
+        return np.stack([self._he31primeprime(t, self.M), self._he32primeprime(t, self.M)], axis=-1)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
@@ -1038,11 +1367,11 @@ class ExponentialHermite(BasisFunction):
 
     @staticmethod
     def filter_symmetric(s):
-        return s
+        return s.astype(float)
 
     @staticmethod
     def filter_periodic(s):
-        return s
+        return s.astype(float)
 
 
 def _multinomial(
@@ -1093,6 +1422,12 @@ def inventory():
     implemented basis function.
     The keys are the names of the basis function and the
     values are the classes.
+
+    Examples
+    --------
+
+    >>> splinebox.basis_functions.inventory()
+    {'B1': <class 'splinebox.basis_functions.B1'>, 'B2': <class 'splinebox.basis_functions.B2'>, 'B3': <class 'splinebox.basis_functions.B3'>, 'CatmullRom': <class 'splinebox.basis_functions.CatmullRom'>, 'CubicHermite': <class 'splinebox.basis_functions.CubicHermite'>, 'Exponential': <class 'splinebox.basis_functions.Exponential'>, 'ExponentialHermite': <class 'splinebox.basis_functions.ExponentialHermite'>}
     """
     _inventory = inspect.getmembers(sys.modules[__name__])
     # Filter out everything that is not a class
@@ -1109,15 +1444,23 @@ def basis_function_from_name(name, **kwargs):
     Parameters
     ----------
     name : str
-        The name of the basis function, e.g. 'B1', 'ExponentialHermite', ...
+        The name of the basis function (e.g. 'B1', 'ExponentialHermite', etc.)
     kwargs
-        Additional keyword arguments that might be required to create some basis functions,
-        such as M (i.e. the number of knots/control points) for Exponential basis functions.
+        Additional keyword arguments that may be required to instantiate
+        certain basis functions. For example, :code:`M`(the number of
+        knots/control points) is required for exponential basis functions.
 
     Returns
     -------
     basis_function : Object of one of the subcases of :class:`splinebox.basis_functions.BasisFunction`.
-        The basis function object required for the construction of a spline.
+        An instance of a subclass of splinebox.basis_functions.BasisFunction,
+        initialized according to the provided name and keyword arguments.
+
+    Examples
+    --------
+
+    >>> splinebox.basis_functions.basis_function_from_name("B3")
+    splinebox.basis_functions.B3()
     """
     basis_function_inventory = inventory()
     if name not in basis_function_inventory:

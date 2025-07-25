@@ -8,7 +8,7 @@ write_to = "src/splinebox/_version.py"
 
 [tool.black]
 line-length = 120
-target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
+target-version = ['py39', 'py310', 'py311', 'py312', 'py313']
 
 
 [tool.ruff]
@@ -28,7 +28,6 @@ select = [
 ]
 ignore = [
     "E501", # line too long. let black handle this
-    "A003", # shadowing of a Python builtin
 ]
 
 exclude = [
@@ -81,11 +80,11 @@ classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering",
 ]
 
@@ -100,14 +99,16 @@ examples = [
     "scikit-image",
     "pandas",
     "seaborn",
+    "skan",
 ]
 docs = [
     "splinebox[examples]",
     "sphinx-gallery",
+    "sphinx-copybutton",
     "pydata-sphinx-theme",
     "sphinx-design",
     "pyvista[jupyter]",
-    "skan",
+    "numpydoc",
 ]
 all = [
     "splinebox[test,examples,docs]",
