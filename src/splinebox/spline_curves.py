@@ -1450,14 +1450,14 @@ class Spline:
         if centred:
             self.translate(centroid)
 
-    def distance(self, point, return_t=False):
+    def distance(self, points, return_t=False):
         """
         Computes the distance of point from the spline.
 
         Parameters
         ----------
-        point : numpy.array
-            Array with the coordinates of the point.
+        points : numpy.array
+            Array with the coordinates of one or multiple point(s).
         return_t : bool
             Whether to return the paramter t of the spline.
             `spline(t)` gives the location on the spline
@@ -1506,23 +1506,35 @@ class Spline:
         if self.ndim == 1:
             raise RuntimeError("Cannot compute distance for 1D splines.")
 
+        single_point = False
+        if points.ndim == 1:
+            points = points[np.newaxis, :]
+            single_point = True
+
         max_t = self.M if self.closed else self.M - 1
         t = np.linspace(0, max_t, self.M * 10)
         points_on_spline = self(t)
-        distances = np.linalg.norm(points_on_spline - point[np.newaxis], axis=-1)
-        t_initial = t[np.argmin(distances)]
+        distances = np.linalg.norm(points_on_spline[:, np.newaxis] - points[np.newaxis], axis=-1)
+        t_initial = t[np.argmin(distances, axis=0)]
 
-        def _distance(t):
+        def _distance(t, point):
             return np.linalg.norm(self(t) - point)
 
-        result = scipy.optimize.minimize(_distance, np.array((t_initial,)), bounds=((0, max_t),))
+        min_distances = np.zeros(points.shape[0])
+        min_t = np.zeros(points.shape[0])
+        for i, point in enumerate(points):
+            result = scipy.optimize.minimize(_distance, np.array((t_initial[i],)), (point,), bounds=((0, max_t),))
+            min_distances[i] = np.linalg.norm(self(result.x) - point)
+            min_t[i] = result.x[0]
 
-        min_distance = np.linalg.norm(self(result.x) - point)
+        if single_point:
+            min_distances = min_distances[0]
+            min_t = min_t[0]
 
         if return_t:
-            return (min_distance, result.x)
+            return (min_distances, min_t)
 
-        return min_distance
+        return min_distances
 
     def mesh(
         self,
