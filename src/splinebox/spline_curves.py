@@ -867,15 +867,17 @@ class Spline:
         >>> spline.arc_length(np.arange(M - 1), np.arange(1, M))
         array([4.982, 5.288, 3.09 , 3.675])
         """
-        if epsabs == 1e-6:
-            warnings.warn("The default value for epsabs will change to 0 in v1.0", UserWarning, stacklevel=1)
-        if epsrel == 1e-6:
-            warnings.warn("The default value for epsrel will change to 0.01 in v1.0", UserWarning, stacklevel=1)
         self._check_control_points()
 
         # Replace None values with proper defaults
         if stop is None:
             stop = self.M if self.closed else self.M - 1
+
+        # Determin if a single an array should be returned
+        # Note that the array can have length 1.
+        single_values = False
+        if not isinstance(start, collections.abc.Iterable) and not isinstance(stop, collections.abc.Iterable):
+            single_values = True
 
         if not isinstance(start, collections.abc.Iterable):
             start = np.array([start])
@@ -895,6 +897,8 @@ class Spline:
         if len(start) == 1 and len(stop) == 1:
             # Both start and stop are just single values
             integral, error = self._arc_length_segment(None, start[0], stop[0], epsabs, epsrel, limit)
+            if not single_values:
+                integral = np.array([integral])
             return integral
 
         elif len(start) > 1 and len(stop) > 1:
