@@ -1202,3 +1202,52 @@ def test_ndim(initialized_spline_curve):
     spline = initialized_spline_curve
     expected = spline(np.array([0.5])).shape[-1]
     assert spline.ndim == expected
+
+
+def test_ArcLengthCache():
+    cache = splinebox.spline_curves._ArcLengthCache()
+    cache.add(1.1, 21.7, 0.02)
+    cache.add(5.9, 58.3, 0.03)
+    cache.add(2.4, 35.7, 0.01)
+
+    param, arclen, err = cache.get(parameter=2.3)
+    assert param == 1.1
+    assert arclen == 21.7
+    assert err == 0.02
+
+    param, arclen, err = cache.get(arc_length=50)
+    assert param == 2.4
+    assert arclen == 35.7
+    assert err == 0.01
+
+    param, arclen, err = cache.get(parameter=0)
+    assert param == 0
+    assert arclen == 0
+    assert err == 0
+
+    param, arclen, err = cache.get(parameter=0.5)
+    assert param == 0
+    assert arclen == 0
+    assert err == 0
+
+    param, arclen, err = cache.get(arc_length=0)
+    assert param == 0
+    assert arclen == 0
+    assert err == 0
+
+    param, arclen, err = cache.get(parameter=2.4)
+    assert param == 2.4
+    assert arclen == 35.7
+    assert err == 0.01
+
+    param, arclen, err = cache.get(arc_length=21.7)
+    assert param == 1.1
+    assert arclen == 21.7
+    assert err == 0.02
+
+    cache.clear()
+
+    param, arclen, err = cache.get(arc_length=50)
+    assert param == 0
+    assert arclen == 0
+    assert err == 0

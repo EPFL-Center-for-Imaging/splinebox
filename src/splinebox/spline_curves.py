@@ -2,6 +2,7 @@
 This module provides the classes necessary for constructing splines, along with all the methods required for spline fitting and inference.
 """
 
+import bisect
 import collections
 import copy
 import json
@@ -152,6 +153,7 @@ class Spline:
         # of an open spline
         self._pad = math.ceil(self._half_support) - 1
         self.closed = closed
+        self.arc_length_cache = _ArcLengthCache()
         self.control_points = control_points
         self.padding_function = padding_function
 
@@ -209,6 +211,7 @@ class Spline:
                     f"Non-closed splines are padded at the ends, i.e. the effective number of control points is M + 2 * (ceil(support/2) - 1). You provided {n} control points for a spline with M={self.M} and a basis function with support={self.basis_function.support}, expected {padded_M}."
                 )
         self._control_points = values
+        self.arc_length_cache.clear()
 
     @property
     def knots(self):
@@ -672,7 +675,7 @@ class Spline:
         basis_function_values = self.basis_function(tval, derivative=0)
         self.control_points = np.linalg.lstsq(basis_function_values, points, rcond=None)[0]
 
-    def _arc_length_segment(self, index, start, stop, epsabs, epsrel, limit):
+    def _arc_length_segment(self, index, start, stop, epsabs, epsrel, limit, use_cache=True):
         """
         Compute the arc length of a spline segment between given start and stop values.
         Supports multiprocessing by writing results into shared memory arrays.
@@ -696,6 +699,8 @@ class Spline:
             Relative error for `scipy.integrate.quad`.
         limit : integer
             The maximum number of subdivisions of `scipy.integrate.quad`.
+        use_cache : bool
+            Whether to use the splines cache of arc length values.
 
         Returns
         -------
@@ -711,15 +716,37 @@ class Spline:
         if start > stop:
             start, stop = stop, start
 
-        integral, error = scipy.integrate.quad(
-            lambda t: np.linalg.norm(np.nan_to_num(self(t, derivative=1))),
-            start,
-            stop,
-            epsabs=epsabs,
-            epsrel=epsrel,
-            maxp1=50,
-            limit=limit,
-        )
+        if start == 0 and use_cache:
+            param, arc_len, err = self.arc_length_cache.get(parameter=stop)
+            if param == stop and err <= max(epsabs, arc_len * epsrel):
+                integral = arc_len
+                error = err
+            elif epsabs != 0 and epsabs > err:
+                sub_integral, sub_error = self._arc_length_segment(
+                    None, param, stop, epsabs - err, epsrel, limit, use_cache=False
+                )
+                integral = arc_len + sub_integral
+                error = err + sub_error
+                eps = max(epsabs, integral * epsrel)
+                if error > eps:
+                    integral, error = self._arc_length_segment(
+                        None, start, stop, epsabs, epsrel, limit, use_cache=False
+                    )
+                self.arc_length_cache.add(stop, integral, error)
+            else:
+                integral, error = self._arc_length_segment(None, start, stop, epsabs, epsrel, limit, use_cache=False)
+                self.arc_length_cache.add(stop, integral, error)
+
+        else:
+            integral, error = scipy.integrate.quad(
+                lambda t: np.linalg.norm(np.nan_to_num(self(t, derivative=1))),
+                start,
+                stop,
+                epsabs=epsabs,
+                epsrel=epsrel,
+                maxp1=50,
+                limit=limit,
+            )
 
         if index is None:
             return integral, error
@@ -2290,3 +2317,39 @@ def splines_from_json(path):
             splines.append(Spline(**spline_data))
 
     return splines
+
+
+class _ArcLengthCache:
+    def __init__(self):
+        self.parameters = []
+        self.arc_lengths = []
+        self.errors = []
+
+    def add(self, parameter, arc_length, error):
+        index = bisect.bisect(self.parameters, parameter)
+        self.parameters.insert(index, parameter)
+        self.arc_lengths.insert(index, arc_length)
+        self.errors.insert(index, error)
+
+    def get(self, parameter=None, arc_length=None):
+        if len(self.parameters) == 0:
+            return 0, 0, 0
+        else:
+            if parameter is not None and arc_length is None:
+                if parameter < min(self.parameters):
+                    return 0, 0, 0
+                index = np.argmax((np.array(self.parameters) - parameter) > 0) - 1
+            elif parameter is None and arc_length is not None:
+                if arc_length < min(self.arc_lengths):
+                    return 0, 0, 0
+                index = np.argmax((np.array(self.arc_lengths) - arc_length) > 0) - 1
+            else:
+                raise ValueError(
+                    "Exactly one of `parameter` or `arc_length` has to be specified, i.e. should not be `None`."
+                )
+            return self.parameters[index], self.arc_lengths[index], self.errors[index]
+
+    def clear(self):
+        self.parameters.clear()
+        self.arc_lengths.clear()
+        self.errors.clear()
