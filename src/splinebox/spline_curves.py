@@ -2,10 +2,13 @@
 This module provides the classes necessary for constructing splines, along with all the methods required for spline fitting and inference.
 """
 
+import bisect
 import collections
 import copy
 import json
 import math
+import multiprocessing
+import os
 import warnings
 
 import numba
@@ -150,6 +153,7 @@ class Spline:
         # of an open spline
         self._pad = math.ceil(self._half_support) - 1
         self.closed = closed
+        self.arc_length_cache = _ArcLengthCache()
         self.control_points = control_points
         self.padding_function = padding_function
 
@@ -207,6 +211,7 @@ class Spline:
                     f"Non-closed splines are padded at the ends, i.e. the effective number of control points is M + 2 * (ceil(support/2) - 1). You provided {n} control points for a spline with M={self.M} and a basis function with support={self.basis_function.support}, expected {padded_M}."
                 )
         self._control_points = values
+        self.arc_length_cache.clear()
 
     @property
     def knots(self):
@@ -670,7 +675,163 @@ class Spline:
         basis_function_values = self.basis_function(tval, derivative=0)
         self.control_points = np.linalg.lstsq(basis_function_values, points, rcond=None)[0]
 
-    def arc_length(self, stop=None, start=0, epsabs=0, epsrel=1e-3):
+    def _arc_length_segment(self, index, start, stop, epsabs, epsrel, limit, use_cache=True):
+        """
+        Compute the arc length of a spline segment between given start and stop values.
+        Supports multiprocessing by writing results into shared memory arrays.
+        Helper function for :meth:`splinebox.spline_curves.arc_length`.
+
+        Parameters
+        ----------
+        index : integer or None
+            The location in the integrals and errors array
+            when multiprocessing is used. The arrays are inherited
+            from :meth:`splinebox.spline_curves._init_pool_arc_length`.
+            If None, the integral and error are returned instead of
+            writing them to the arrays.
+        start : float
+            Start parameter value of segment.
+        stop : float
+            Stop parameter value of segment.
+        epsabs : float
+            Absolute error for `scipy.integrate.quad`.
+        epsrel : float
+            Relative error for `scipy.integrate.quad`.
+        limit : integer
+            The maximum number of subdivisions of `scipy.integrate.quad`.
+        use_cache : bool
+            Whether to use the splines cache of arc length values.
+
+        Returns
+        -------
+        integral : float
+            The arc length of the interval between start and stop.
+            Only returned when `index=None` otherwise the result is written to
+            the shared memory array `integrals` inherited from `splinebox.spline_curves._init_pool_arc_length`.
+        error : float
+            An estimate of the accuracy of integral, see `scipy.integrate.quad`.
+            Only returned when `index=None` otherwise the result is written to
+            the shared memory array `errors` inherited from `splinebox.spline_curves._init_pool_arc_length`.
+        """
+        if start > stop:
+            start, stop = stop, start
+
+        if start == 0 and use_cache:
+            param, arc_len, err = self.arc_length_cache.get(parameter=stop)
+            if param == stop and err <= max(epsabs, arc_len * epsrel):
+                integral = arc_len
+                error = err
+            elif epsabs != 0 and epsabs > err:
+                sub_integral, sub_error = self._arc_length_segment(
+                    None, param, stop, epsabs - err, epsrel, limit, use_cache=False
+                )
+                integral = arc_len + sub_integral
+                error = err + sub_error
+                eps = max(epsabs, integral * epsrel)
+                if error > eps:
+                    integral, error = self._arc_length_segment(
+                        None, start, stop, epsabs, epsrel, limit, use_cache=False
+                    )
+                self.arc_length_cache.add(stop, integral, error)
+            else:
+                integral, error = self._arc_length_segment(None, start, stop, epsabs, epsrel, limit, use_cache=False)
+                self.arc_length_cache.add(stop, integral, error)
+
+        else:
+            integral, error = scipy.integrate.quad(
+                lambda t: np.linalg.norm(np.nan_to_num(self(t, derivative=1))),
+                start,
+                stop,
+                epsabs=epsabs,
+                epsrel=epsrel,
+                maxp1=50,
+                limit=limit,
+            )
+
+        if index is None:
+            return integral, error
+
+        integrals[index] = integral
+        errors[index] = error
+
+    def _init_pool_arc_length(self, integrals_, errors_):
+        """
+        Initialize shared memory for multiprocessing pool.
+        Helper function for :meth:`splinebox.spline_curves.arc_length`.
+
+        Parameters
+        ----------
+        integrals_ : multiprocessing.Array
+            A shared memory array for storing the results during multiprocessing.
+        errors_ : multiprocessing.Array
+            A shared memory array for storing the errors during multiprocessing.
+        """
+        global integrals, errors
+        integrals = integrals_
+        errors = errors_
+
+    def _compute_arc_lengths(self, start, stop, epsabs, epsrel, limit, processes):
+        """
+        Compute arc lengths for multiple segments using multiprocessing if needed.
+
+        Parameters
+        ----------
+        start : np.array
+            Start parameter values of the segments.
+        stop : np.array
+            Stop parameter values of the segments.
+        epsabs : float
+            Absolute error tolerance.
+        epsrel : float
+            Relative error tolerance.
+        limit : int
+            The maximum number of subdivision for `scipy.integrate.quad`.
+        processes : int
+            The number of processes to use.
+
+        Returns
+        -------
+        integrals : np.array
+            The arc lengths for each segment.
+        errors np.array
+            Estimates of the accuracy of the arc lengths result for each segment.
+        """
+        # number of segments, i.e. start/stop parameter pairs
+        n = len(stop)
+
+        if processes == 1:
+            integrals = np.zeros(n)
+            errors = np.zeros(n)
+            for i in range(n):
+                integrals[i], errors[i] = self._arc_length_segment(None, start[i], stop[i], epsabs, epsrel, limit)
+        else:
+            integrals = multiprocessing.Array("d", n, lock=False)
+            errors = multiprocessing.Array("d", n, lock=False)
+
+            with multiprocessing.Pool(
+                processes=min(n, processes),
+                initializer=self._init_pool_arc_length,
+                initargs=(integrals, errors),
+            ) as pool:
+                pool.starmap(
+                    self._arc_length_segment,
+                    zip(
+                        np.arange(n),
+                        start,
+                        stop,
+                        np.full(n, epsabs, dtype=float),
+                        np.full(n, epsrel, dtype=float),
+                        np.full(n, limit, dtype=int),
+                    ),
+                )
+
+            # Convert multiprocessing arrays to numpy arrays
+            integrals = np.frombuffer(integrals)
+            errors = np.frombuffer(errors)
+
+        return integrals, errors
+
+    def arc_length(self, stop=None, start=0, epsabs=0, epsrel=1e-3, limit=1000, processes=None):
         """
         Compute the arc length of the spline between
         the two parameter values specified. If no value for start is give,
@@ -691,11 +852,25 @@ class Spline:
         epsrel : float (optional)
             Relative error tolerance. Default is 0.001, which corresponds
             to a 0.1% error.
+        limit : integer
+            The maximum number of subdivisions when computing
+            the integral (see `scipy.integrate.quad`). Default is 1000.
+        processes : None or integers
+            The number of process used when many values are provided.
+            Default is None, which is equivalent to `os.cpu_count()`.
 
         Returns
         -------
         arc_length : float or numpy array of floats
             The arc length(s) between start and stop.
+
+        Notes
+        -----
+        * The error tolerance is calculated as `min(epsabs, integral * epsrel)`.
+          See also `scipy.integrate.quad`.
+        * Multiprocessing incures an overhead that might not be worth it for
+          small numbers of start/stop values depending on your spline.
+          Try setting processes to 1.
 
         Examples
         --------
@@ -721,49 +896,110 @@ class Spline:
         """
         self._check_control_points()
 
-        if isinstance(stop, collections.abc.Iterable):
-            results = np.zeros(len(stop))
-            if isinstance(start, collections.abc.Iterable):
-                if len(stop) != len(start):
-                    raise ValueError(
-                        "If you provide array like objects for start and stop, they need to have the same length."
-                    )
-                for i in range(len(stop)):
-                    results[i] = self.arc_length(stop[i], start[i], epsabs=epsabs, epsrel=epsrel)
-            else:
-                sort_indices = np.argsort(stop)
-                sorted_stop = stop[sort_indices]
-                for i in range(len(stop)):
-                    if i == 0:
-                        results[i] = self.arc_length(sorted_stop[i], start, epsabs=epsabs, epsrel=epsrel)
-                    else:
-                        results[i] = results[i - 1] + self.arc_length(
-                            sorted_stop[i], sorted_stop[i - 1], epsabs=epsabs, epsrel=epsrel
-                        )
-                # Undo the sorting
-                results = results[np.argsort(sort_indices)]
-            return results
-
+        # Replace None values with proper defaults
         if stop is None:
             stop = self.M if self.closed else self.M - 1
 
-        if start == stop:
-            return 0
+        # Determin if a single an array should be returned
+        # Note that the array can have length 1.
+        single_values = False
+        if not isinstance(start, collections.abc.Iterable) and not isinstance(stop, collections.abc.Iterable):
+            single_values = True
 
-        if start > stop:
-            start, stop = stop, start
+        if not isinstance(start, collections.abc.Iterable):
+            start = np.array([start])
+        if not isinstance(stop, collections.abc.Iterable):
+            stop = np.array([stop])
 
-        integral = scipy.integrate.quad(
-            lambda t: np.linalg.norm(np.nan_to_num(self(t, derivative=1))),
-            start,
-            stop,
-            epsabs=epsabs,
-            epsrel=epsrel,
-            maxp1=50,
-            limit=100,
-        )
+        if len(np.unique(start)) == 1:
+            start = start[:1]
+        if len(np.unique(stop)) == 1:
+            stop = stop[:1]
 
-        return integral[0]
+        if processes is None:
+            # Empirically the multiprocessing overhead is only worth it
+            # if there are at least 800 parameter pairs.
+            processes = os.cpu_count() if max(len(start), len(stop)) > 800 else 1
+
+        if len(start) == 1 and len(stop) == 1:
+            # Both start and stop are just single values
+            integral, error = self._arc_length_segment(None, start[0], stop[0], epsabs, epsrel, limit)
+            if not single_values:
+                integral = np.array([integral])
+            return integral
+
+        elif len(start) > 1 and len(stop) > 1:
+            # Both start and stop are arrays
+            if len(stop) != len(start):
+                raise ValueError(
+                    "If you provide array like objects for start and stop, they must have the same length."
+                )
+            integrals, errors = self._compute_arc_lengths(start, stop, epsabs, epsrel, limit, processes)
+            return integrals
+        else:
+            # Only one of start or stop is an array
+            # This allows us to use a trick to avoid computing the same segment
+            # many times by sorting the array. We can then compute the length between
+            # consecutive parameters in the array, instead of starting/stopping at the
+            # same value every time. To get the final results we just sum the segments.
+            if len(start) > 1 and len(stop) == 1:
+                if np.any(start > stop):
+                    raise ValueError("All start values must be less than or equal to stop.")
+                sort_indices = np.argsort(-start)
+                sorted_start = start[sort_indices]
+                sorted_stop = np.append(stop, sorted_start[:-1])
+            else:
+                # stop is an array
+                if np.any(stop < start):
+                    raise ValueError("All stop values must be greater than or equal to start.")
+                sort_indices = np.argsort(stop)
+                sorted_stop = stop[sort_indices]
+                sorted_start = np.append(start, sorted_stop[:-1])
+
+            partial_integrals, partial_errors = self._compute_arc_lengths(
+                sorted_start, sorted_stop, epsabs, epsrel, limit, processes
+            )
+
+            integrals = np.cumsum(partial_integrals)
+            errors = np.cumsum(partial_errors)
+
+            # Compute the maximum allowed error like scipy.intregrate.quad
+            eps = np.maximum(np.full(len(integrals), epsabs), np.abs(integrals) * epsrel)
+
+            # Ensure that the epsabs/epsrel are respected even though
+            # cumsum accumulates the errors
+            while np.any(errors > eps):
+                # Find the index of the first element that excides the maximum error
+                index = np.argmax(errors > eps)
+
+                # Calculate the full integral for given index to avoid accumulation of the error
+                integral, error = self._arc_length_segment(
+                    None,
+                    sorted_start[0] if len(stop) > 1 else sorted_start[index],
+                    sorted_stop[index] if len(stop) > 1 else sorted_stop[0],
+                    epsabs=epsabs,
+                    epsrel=epsrel,
+                    limit=limit,
+                )
+
+                if error > eps[index]:
+                    warnings.warn(
+                        f"Unable to meet accuracy constrained. Error: {error}, Allowed: {eps[index]}. Try increasing the limit parameter.",
+                        UserWarning,
+                        stacklevel=1,
+                    )
+                    error = eps[index]
+
+                integrals[index] = integral
+                errors[index] = error
+
+                # Propagate the new value and error to everything follwing index
+                integrals[index + 1 :] = integral + np.cumsum(partial_integrals[index + 1 :])
+                errors[index + 1 :] = error + np.cumsum(partial_errors[index + 1 :])
+
+            # Undo the sorting befor returning the values
+            integrals = integrals[np.argsort(sort_indices)]
+            return integrals
 
     def _length_to_parameter_recursion(
         self, s, current_value, lower_bound, upper_bound, intermediate_results=None, atol=1e-4
@@ -2081,3 +2317,39 @@ def splines_from_json(path):
             splines.append(Spline(**spline_data))
 
     return splines
+
+
+class _ArcLengthCache:
+    def __init__(self):
+        self.parameters = []
+        self.arc_lengths = []
+        self.errors = []
+
+    def add(self, parameter, arc_length, error):
+        index = bisect.bisect(self.parameters, parameter)
+        self.parameters.insert(index, parameter)
+        self.arc_lengths.insert(index, arc_length)
+        self.errors.insert(index, error)
+
+    def get(self, parameter=None, arc_length=None):
+        if len(self.parameters) == 0:
+            return 0, 0, 0
+        else:
+            if parameter is not None and arc_length is None:
+                if parameter < min(self.parameters):
+                    return 0, 0, 0
+                index = np.argmax((np.array(self.parameters) - parameter) > 0) - 1
+            elif parameter is None and arc_length is not None:
+                if arc_length < min(self.arc_lengths):
+                    return 0, 0, 0
+                index = np.argmax((np.array(self.arc_lengths) - arc_length) > 0) - 1
+            else:
+                raise ValueError(
+                    "Exactly one of `parameter` or `arc_length` has to be specified, i.e. should not be `None`."
+                )
+            return self.parameters[index], self.arc_lengths[index], self.errors[index]
+
+    def clear(self):
+        self.parameters.clear()
+        self.arc_lengths.clear()
+        self.errors.clear()
