@@ -1085,12 +1085,12 @@ class Spline:
         sort_indices = np.argsort(s)
         results = np.zeros_like(s, dtype=float)
 
-        total_arclen = self.arc_length()
+        total_arclen = self.arc_length(epsabs=atol, epsrel=0)
 
-        for i in sort_indices:
-            if s[i] > total_arclen + atol:
+        for i in sort_indices[::-1]:
+            if (s[i] - total_arclen) > atol:
                 raise ValueError(
-                    f"s={s[i]} is larger than the total length of the spline plus the tolerance ({total_arclen}+{atol})"
+                    f"s={s[i]} is larger than the total arc length of the spline plus the tolerance ({total_arclen}+{atol}). Consider decreasing the allowed tollerance when computing the total arc length of the spline or increasing `atol`."
                 )
             results[i] = self._length_to_parameter_recursion(s[i], atol)
 
@@ -2313,6 +2313,21 @@ class _ArcLengthCache:
         self.parameters = [0]
         self.arc_lengths = [0]
         self.errors = [0]
+
+    def __str__(self):
+        len_indices = len(str(len(self.parameters)))
+        string = " " * (len_indices + 1) + "| Parameter | Arc length | Error\n"
+        string += "-" * (len(string) + 4) + "\n"
+        for i in range(len(self.parameters)):
+            string += str(i).zfill(len_indices)
+            string += " | "
+            string += f"{self.parameters[i]:9.6f}"
+            string += " | "
+            string += f"{self.arc_lengths[i]:10.8f}"
+            string += " | "
+            string += f"{self.errors[i]:10.8f}"
+            string += "\n"
+        return string
 
     def add(self, parameter, arc_length, error):
         if parameter < 0:
