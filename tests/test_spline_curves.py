@@ -187,7 +187,7 @@ def test_is_inside():
         spline.is_inside(np.arange(10), np.arange(15))
 
 
-def test_arc_length():
+def test_arc_length(processes):
     # Create circular spline with radius sqrt(2)
     M = 10
     basis_function = splinebox.basis_functions.Exponential(M)
@@ -202,7 +202,7 @@ def test_arc_length():
     # Reset mock in case it was called by any of the methods befor
     spline._check_control_points.reset_mock()
 
-    arc_lengths = [spline.arc_length(t) for t in ts]
+    arc_lengths = [spline.arc_length(t, processes=processes) for t in ts]
     arc_lengths = np.array(arc_lengths)
 
     # Check that the presence of the coefficients was verified
@@ -213,36 +213,36 @@ def test_arc_length():
 
     # Check that it works with a vector for stop
     permutation = np.random.permutation(len(ts))
-    arc_lengths = spline.arc_length(ts[permutation])
+    arc_lengths = spline.arc_length(ts[permutation], processes=processes)
     assert np.allclose(arc_lengths, expected[permutation])
 
     # Check that is works with vectors for start and stop
-    arc_lengths = spline.arc_length(stop=ts[permutation], start=np.zeros(len(ts)), processes=1)
+    arc_lengths = spline.arc_length(stop=ts[permutation], start=np.zeros(len(ts)), processes=processes)
     assert np.allclose(arc_lengths, expected[permutation])
 
     # Check that it works with a vector for start
-    arc_lengths = spline.arc_length(stop=np.array([M]), start=ts[permutation])
+    arc_lengths = spline.arc_length(stop=np.array([M]), start=ts[permutation], processes=processes)
     assert np.allclose(arc_lengths, 2 * np.pi - expected[permutation])
 
     # start and stop must have the same length
     with pytest.raises(ValueError):
-        spline.arc_length(np.linspace(0, M / 2, 100), np.linspace(M / 2, M, 50))
+        spline.arc_length(np.linspace(0, M / 2, 100), np.linspace(M / 2, M, 50), processes=processes)
 
     # Check that it works with two arrays
     start = np.linspace(0, M / 2, 100)
     stop = np.linspace(M / 2, M, 100)
-    arc_lengths = spline.arc_length(start, stop)
+    arc_lengths = spline.arc_length(start, stop, processes=processes)
     assert np.allclose(arc_lengths, np.pi)
 
     # stop must be greater or equal to all start values
     with pytest.raises(ValueError):
-        spline.arc_length(np.linspace(0, M, 100), M / 2)
+        spline.arc_length(np.linspace(0, M, 100), M / 2, processes=processes)
     # start must be less or equal to all start values
     with pytest.raises(ValueError):
-        spline.arc_length(M / 2, np.linspace(0, M, 100))
+        spline.arc_length(M / 2, np.linspace(0, M, 100), processes=processes)
 
 
-def test_arc_length_epsabs_and_epsrel():
+def test_arc_length_epsabs_and_epsrel(processes):
     # Check epsabs and epsrel
     # In most cases quad returns very accurate results independent of epsabs and epsrel.
     # Found the following combination of values by chance when measuring the speed
@@ -286,27 +286,27 @@ def test_arc_length_epsabs_and_epsrel():
     # Test absolute error
     epsabs = 0.001
 
-    arc_lengths = spline.arc_length(stop=ts, epsabs=epsabs, epsrel=0)
+    arc_lengths = spline.arc_length(stop=ts, epsabs=epsabs, epsrel=0, processes=processes)
     assert np.allclose(arc_lengths, expected, atol=epsabs)
 
     # Test with start vector
     expected_total_length = distance_to_knot_n[-1] + distances_between_knots[-1]
-    arc_lengths = spline.arc_length(start=ts, epsabs=epsabs, epsrel=0)
+    arc_lengths = spline.arc_length(start=ts, epsabs=epsabs, epsrel=0, processes=processes)
     assert np.allclose(arc_lengths, expected_total_length - expected, atol=epsabs)
 
     # Test relative error
     epsrel = 0.01
-    arc_lengths = spline.arc_length(ts, epsabs=0, epsrel=epsrel)
+    arc_lengths = spline.arc_length(ts, epsabs=0, epsrel=epsrel, processes=processes)
 
     assert np.allclose(arc_lengths, expected, rtol=epsrel)
 
     # Test with start vector
-    arc_lengths = spline.arc_length(start=ts, epsabs=0, epsrel=epsrel)
+    arc_lengths = spline.arc_length(start=ts, epsabs=0, epsrel=epsrel, processes=processes)
     assert np.allclose(arc_lengths, expected_total_length - expected, rtol=epsrel)
 
     # warning is raised when the accuracy constrained cannot be met
     with pytest.warns(UserWarning):
-        spline.arc_length(ts, epsabs=1e-6, limit=1)
+        spline.arc_length(ts, epsabs=1e-6, limit=1, processes=processes)
 
 
 def test_arc_length_to_parameter():
@@ -378,6 +378,10 @@ def test_arc_length_to_parameter():
     expected = to_param(ls[10])
     result = spline.arc_length_to_parameter(ls[10], atol=atol)
     assert np.isclose(result, expected, atol=atol)
+
+    # Check that the arc length cannot be longer than the spline
+    with pytest.raises(ValueError):
+        spline.arc_length_to_parameter(1e10)
 
 
 def test_translate(initialized_spline_curve, translation_vector):
@@ -1210,40 +1214,95 @@ def test_ArcLengthCache():
     cache.add(5.9, 58.3, 0.03)
     cache.add(2.4, 35.7, 0.01)
 
-    param, arclen, err = cache.get(parameter=2.3)
-    assert param == 1.1
-    assert arclen == 21.7
-    assert err == 0.02
-
-    param, arclen, err = cache.get(arc_length=50)
-    assert param == 2.4
-    assert arclen == 35.7
-    assert err == 0.01
-
+    # Test that zero is in the cache
     param, arclen, err = cache.get(parameter=0)
     assert param == 0
     assert arclen == 0
     assert err == 0
-
     param, arclen, err = cache.get(parameter=0.5)
     assert param == 0
     assert arclen == 0
     assert err == 0
-
     param, arclen, err = cache.get(arc_length=0)
     assert param == 0
     assert arclen == 0
     assert err == 0
 
-    param, arclen, err = cache.get(parameter=2.4)
+    # Test that the closest element is returned in the case
+    # where bound is not specified
+    param, arclen, err = cache.get(parameter=2.3)
     assert param == 2.4
     assert arclen == 35.7
     assert err == 0.01
+    param, arclen, err = cache.get(parameter=1.3)
+    assert param == 1.1
+    assert arclen == 21.7
+    assert err == 0.02
+    param, arclen, err = cache.get(arc_length=50)
+    assert param == 5.9
+    assert arclen == 58.3
+    assert err == 0.03
+    param, arclen, err = cache.get(parameter=6.0)
+    assert param == 5.9
+    assert arclen == 58.3
+    assert err == 0.03
 
+    # Test the boundsj
+    param, arclen, err = cache.get(arc_length=21.1, bound="lower")
+    assert param == 0
+    assert arclen == 0
+    assert err == 0
+    param, arclen, err = cache.get(arc_length=21.1, bound="upper")
+    assert param == 1.1
+    assert arclen == 21.7
+    assert err == 0.02
+    param, arclen, err = cache.get(arc_length=59, bound="upper")
+    assert param == 5.9
+    assert arclen == 58.3
+    assert err == 0.03
+    param, arclen, err = cache.get(parameter=5.7, bound="lower")
+    assert param == 2.4
+    assert arclen == 35.7
+    assert err == 0.01
+    param, arclen, err = cache.get(parameter=0.2, bound="upper")
+    assert param == 1.1
+    assert arclen == 21.7
+    assert err == 0.02
+
+    # Test that the exact element is returned when it exists in the cache
+    # this is opposed to returning upper and lower bounds, i.e. the next
+    # bigger or smaller element.
+    param, arclen, err = cache.get(parameter=1.1)
+    assert param == 1.1
+    assert arclen == 21.7
+    assert err == 0.02
+    param, arclen, err = cache.get(parameter=1.1, bound="upper")
+    assert param == 1.1
+    assert arclen == 21.7
+    assert err == 0.02
+    param, arclen, err = cache.get(parameter=1.1, bound="lower")
+    assert param == 1.1
+    assert arclen == 21.7
+    assert err == 0.02
     param, arclen, err = cache.get(arc_length=21.7)
     assert param == 1.1
     assert arclen == 21.7
     assert err == 0.02
+    param, arclen, err = cache.get(arc_length=21.7, bound="upper")
+    assert param == 1.1
+    assert arclen == 21.7
+    assert err == 0.02
+    param, arclen, err = cache.get(arc_length=21.7, bound="lower")
+    assert param == 1.1
+    assert arclen == 21.7
+    assert err == 0.02
+
+    # Test if cache is updated when the error is smaller
+    cache.add(1.1, 21.72, 0.001)
+    param, arclen, err = cache.get(arc_length=21.7)
+    assert param == 1.1
+    assert arclen == 21.72
+    assert err == 0.001
 
     cache.clear()
 
@@ -1251,3 +1310,16 @@ def test_ArcLengthCache():
     assert param == 0
     assert arclen == 0
     assert err == 0
+
+    # You have to provide a parameter or an arc length
+    with pytest.raises(ValueError):
+        cache.get()
+    # Parameters and arc lengths have to be positive
+    with pytest.raises(ValueError):
+        cache.add(-0.1, 1, 1)
+    with pytest.raises(ValueError):
+        cache.get(parameter=-0.1)
+    with pytest.raises(ValueError):
+        cache.get(arc_length=-1)
+    with pytest.raises(ValueError):
+        cache.add(0.1, -1, 1)

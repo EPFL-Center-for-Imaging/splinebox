@@ -425,3 +425,8 @@ def single_value_t(request):
 )
 def array_t(request):
     return request.param
+
+
+@pytest.fixture(params=[1, 2])
+def processes(request):
+    return request.param

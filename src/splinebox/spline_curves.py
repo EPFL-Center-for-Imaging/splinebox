@@ -718,13 +718,21 @@ class Spline:
 
         if start == 0 and use_cache:
             param, arc_len, err = self.arc_length_cache.get(parameter=stop)
-            if param == stop and err <= max(epsabs, arc_len * epsrel):
-                integral = arc_len
-                error = err
-            elif epsabs != 0 and epsabs > err:
+            if param == stop:
+                if err <= max(epsabs, arc_len * epsrel):
+                    integral = arc_len
+                    error = err
+                else:
+                    integral, error = self._arc_length_segment(
+                        None, start, stop, epsabs, epsrel, limit, use_cache=False
+                    )
+                    self.arc_length_cache.add(stop, integral, error)
+            elif max(epsabs, arc_len * epsrel) > err:
                 sub_integral, sub_error = self._arc_length_segment(
                     None, param, stop, epsabs - err, epsrel, limit, use_cache=False
                 )
+                if param > stop:
+                    sub_integral *= -1
                 integral = arc_len + sub_integral
                 error = err + sub_error
                 eps = max(epsabs, integral * epsrel)
@@ -1001,9 +1009,7 @@ class Spline:
             integrals = integrals[np.argsort(sort_indices)]
             return integrals
 
-    def _length_to_parameter_recursion(
-        self, s, current_value, lower_bound, upper_bound, intermediate_results=None, atol=1e-4
-    ):
+    def _length_to_parameter_recursion(self, s, atol=1e-4):
         """
         Convert the given arc length s on the curve to a value in parameters space.
         This is done recursively, i.e. check if the point is before or after halfway
@@ -1031,21 +1037,20 @@ class Spline:
             The paramters value for the given length `s`.
         """
         self._check_control_points()
-        midpoint = lower_bound + (upper_bound - lower_bound) / 2
-        midpoint_length = current_value + self.arc_length(lower_bound, midpoint, epsabs=atol, epsrel=0)
-        if intermediate_results is not None:
-            intermediate_results.append((midpoint, midpoint_length))
+        lower_bound_param, lower_bound_arclen, lower_bound_err = self.arc_length_cache.get(arc_length=s, bound="lower")
+        upper_bound_param, _, _ = self.arc_length_cache.get(arc_length=s, bound="upper")
 
-        if np.isclose(s, midpoint_length, atol=atol, rtol=0):
-            return midpoint
-        elif s < midpoint_length:
-            return self._length_to_parameter_recursion(
-                s, current_value, lower_bound, midpoint, intermediate_results, atol
-            )
+        midpoint_param = lower_bound_param + (upper_bound_param - lower_bound_param) / 2
+        midpoint_arclen, midpoint_err = self._arc_length_segment(
+            None, 0, midpoint_param, epsabs=atol, epsrel=0, limit=1000
+        )
+        if np.isclose(s, midpoint_arclen, atol=atol, rtol=0):
+            return midpoint_param
         else:
-            return self._length_to_parameter_recursion(
-                s, midpoint_length, midpoint, upper_bound, intermediate_results, atol
-            )
+            # The key to this recursion is that everytime the midpoint arc length is
+            # calculated it is added to the arc_length_cache. That way the lower and upper
+            # bounds become narrower every time the function is called.
+            return self._length_to_parameter_recursion(s, atol)
 
     def arc_length_to_parameter(self, s, atol=1e-4):
         """
@@ -1080,30 +1085,14 @@ class Spline:
         sort_indices = np.argsort(s)
         results = np.zeros_like(s, dtype=float)
 
-        current_value = 0
-        lower_bound = 0
-        upper_bound = self.M if self.closed else self.M - 1
-        intermediate_results = []
-
-        def upper_bound_key_func(x):
-            diff = x[1] - s[i]
-            if diff >= 0:
-                return diff
-            else:
-                return np.inf
+        total_arclen = self.arc_length()
 
         for i in sort_indices:
-            if len(intermediate_results) > 0:
-                upper_bound, upper_bound_len = min(intermediate_results, key=upper_bound_key_func)
-                if s[i] > upper_bound_len:
-                    upper_bound = self.M if self.closed else self.M - 1
-
-            results[i] = self._length_to_parameter_recursion(
-                s[i], current_value, lower_bound, upper_bound, intermediate_results, atol=atol
-            )
-
-            lower_bound = results[i]
-            _, current_value = min(intermediate_results, key=lambda x: abs(x[0] - lower_bound))
+            if s[i] > total_arclen + atol:
+                raise ValueError(
+                    f"s={s[i]} is larger than the total length of the spline plus the tolerance ({total_arclen}+{atol})"
+                )
+            results[i] = self._length_to_parameter_recursion(s[i], atol)
 
         if single_value:
             results = results[0]
@@ -2321,35 +2310,62 @@ def splines_from_json(path):
 
 class _ArcLengthCache:
     def __init__(self):
-        self.parameters = []
-        self.arc_lengths = []
-        self.errors = []
+        self.parameters = [0]
+        self.arc_lengths = [0]
+        self.errors = [0]
 
     def add(self, parameter, arc_length, error):
-        index = bisect.bisect(self.parameters, parameter)
-        self.parameters.insert(index, parameter)
-        self.arc_lengths.insert(index, arc_length)
-        self.errors.insert(index, error)
-
-    def get(self, parameter=None, arc_length=None):
-        if len(self.parameters) == 0:
-            return 0, 0, 0
-        else:
-            if parameter is not None and arc_length is None:
-                if parameter < min(self.parameters):
-                    return 0, 0, 0
-                index = np.argmax((np.array(self.parameters) - parameter) > 0) - 1
-            elif parameter is None and arc_length is not None:
-                if arc_length < min(self.arc_lengths):
-                    return 0, 0, 0
-                index = np.argmax((np.array(self.arc_lengths) - arc_length) > 0) - 1
+        if parameter < 0:
+            raise ValueError("parameter has to be > 0")
+        if arc_length < 0:
+            raise ValueError("arc_length has to be > 0")
+        if parameter not in self.parameters:
+            index = bisect.bisect(self.parameters, parameter)
+            index_arclen = bisect.bisect(self.arc_lengths, arc_length)
+            if index == index_arclen:
+                self.parameters.insert(index, parameter)
+                self.arc_lengths.insert(index, arc_length)
+                self.errors.insert(index, error)
             else:
-                raise ValueError(
-                    "Exactly one of `parameter` or `arc_length` has to be specified, i.e. should not be `None`."
+                warnings.warn(
+                    "Could not add arc length to cache because the insert position is abiguous.",
+                    RuntimeWarning,
+                    stacklevel=1,
                 )
-            return self.parameters[index], self.arc_lengths[index], self.errors[index]
+        else:
+            # Update the cache if the error is smaller
+            index = self.parameters.index(parameter)
+            if self.errors[index] > error:
+                self.arc_lengths[index] = arc_length
+                self.errors[index] = error
+
+    def get(self, parameter=None, arc_length=None, bound=None):
+
+        if parameter is not None and arc_length is None:
+            if parameter < 0:
+                raise ValueError("parameter has to be > 0")
+            index = np.argmin(np.abs(np.array(self.parameters) - parameter))
+            if bound == "lower" and self.parameters[index] > parameter and index != 0:
+                index -= 1
+            elif bound == "upper" and self.parameters[index] < parameter and index != len(self.parameters) - 1:
+                index += 1
+
+        elif parameter is None and arc_length is not None:
+            if arc_length < 0:
+                raise ValueError("arc_length has to be > 0")
+            index = np.argmin(np.abs(np.array(self.arc_lengths) - arc_length))
+            if bound == "lower" and self.arc_lengths[index] > arc_length and index != 0:
+                index -= 1
+            elif bound == "upper" and self.arc_lengths[index] < arc_length and index != len(self.arc_lengths) - 1:
+                index += 1
+        else:
+            raise ValueError(
+                "Exactly one of `parameter` or `arc_length` has to be specified, i.e. should not be `None`."
+            )
+
+        return self.parameters[index], self.arc_lengths[index], self.errors[index]
 
     def clear(self):
-        self.parameters.clear()
-        self.arc_lengths.clear()
-        self.errors.clear()
+        self.parameters = [0]
+        self.arc_lengths = [0]
+        self.errors = [0]
