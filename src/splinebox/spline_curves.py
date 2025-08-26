@@ -1520,10 +1520,17 @@ class Spline:
         def _distance(t, point):
             return np.linalg.norm(self(t) - point)
 
+        def _jac_distance(t, point):
+            spline_point = self(t)
+            tangent = self(t, derivative=1)
+            norm = np.linalg.norm(spline_point - point)
+            dot_product = np.sum((spline_point - point) * tangent)
+            return 2 / norm * dot_product
+
         min_distances = np.zeros(points.shape[0])
         min_t = np.zeros(points.shape[0])
         for i, point in enumerate(points):
-            result = scipy.optimize.minimize(_distance, np.array((t_initial[i],)), (point,), bounds=((0, max_t),))
+            result = scipy.optimize.minimize(_distance, t_initial[i], (point,), jac=_jac_distance, bounds=((0, max_t),))
             min_distances[i] = np.linalg.norm(self(result.x) - point)
             min_t[i] = result.x[0]
 
