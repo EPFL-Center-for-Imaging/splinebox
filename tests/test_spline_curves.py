@@ -2,6 +2,7 @@ import json
 import math
 import unittest.mock
 
+import intervaltree
 import numpy as np
 import pytest
 import scipy
@@ -1208,118 +1209,97 @@ def test_ndim(initialized_spline_curve):
     assert spline.ndim == expected
 
 
-def test_ArcLengthCache():
+def test_ArcLengthCache_get_intervals_overlapping_intervals():
+    """
+    Test no two overlapping intervals are returned.
+    """
     cache = splinebox.spline_curves._ArcLengthCache()
-    cache.add(1.1, 21.7, 0.02)
-    cache.add(5.9, 58.3, 0.03)
-    cache.add(2.4, 35.7, 0.01)
+    cache.add_intervals(
+        [
+            intervaltree.Interval(1, 3, (2, 0)),
+            intervaltree.Interval(2, 5, (3, 0)),
+            intervaltree.Interval(7, 8, (1, 0)),
+        ]
+    )
+    intervals, missing_intervals = cache.get_intervals(0, 10, epsabs=1, epsrel=0)
 
-    # Test that zero is in the cache
-    param, arclen, err = cache.get(parameter=0)
-    assert param == 0
-    assert arclen == 0
-    assert err == 0
-    param, arclen, err = cache.get(parameter=0.5)
-    assert param == 0
-    assert arclen == 0
-    assert err == 0
-    param, arclen, err = cache.get(arc_length=0)
-    assert param == 0
-    assert arclen == 0
-    assert err == 0
+    assert len(intervals) == 2
+    assert intervals[0] == intervaltree.Interval(2, 5, (3, 0))
+    assert intervals[1] == intervaltree.Interval(7, 8, (1, 0))
 
-    # Test that the closest element is returned in the case
-    # where bound is not specified
-    param, arclen, err = cache.get(parameter=2.3)
-    assert param == 2.4
-    assert arclen == 35.7
-    assert err == 0.01
-    param, arclen, err = cache.get(parameter=1.3)
-    assert param == 1.1
-    assert arclen == 21.7
-    assert err == 0.02
-    param, arclen, err = cache.get(arc_length=50)
-    assert param == 5.9
-    assert arclen == 58.3
-    assert err == 0.03
-    param, arclen, err = cache.get(parameter=6.0)
-    assert param == 5.9
-    assert arclen == 58.3
-    assert err == 0.03
+    assert len(missing_intervals) == 3
+    assert missing_intervals[0] == intervaltree.Interval(0, 2)
+    assert missing_intervals[1] == intervaltree.Interval(5, 7)
+    assert missing_intervals[2] == intervaltree.Interval(8, 10)
 
-    # Test the boundsj
-    param, arclen, err = cache.get(arc_length=21.1, bound="lower")
-    assert param == 0
-    assert arclen == 0
-    assert err == 0
-    param, arclen, err = cache.get(arc_length=21.1, bound="upper")
-    assert param == 1.1
-    assert arclen == 21.7
-    assert err == 0.02
-    param, arclen, err = cache.get(arc_length=59, bound="upper")
-    assert param == 5.9
-    assert arclen == 58.3
-    assert err == 0.03
-    param, arclen, err = cache.get(parameter=5.7, bound="lower")
-    assert param == 2.4
-    assert arclen == 35.7
-    assert err == 0.01
-    param, arclen, err = cache.get(parameter=0.2, bound="upper")
-    assert param == 1.1
-    assert arclen == 21.7
-    assert err == 0.02
+def test_ArcLengthCache_get_intervals_contiguous_intervals():
+    """
+    Tests if contiguous intervals are connected properly.
+    """
+    cache = splinebox.spline_curves._ArcLengthCache()
+    cache.add_intervals(
+        [
+            intervaltree.Interval(1, 4, (3, 0.2)),
+            intervaltree.Interval(3, 5, (2, 0.3)),
+            intervaltree.Interval(7, 8, (1, 0.1)),
+            intervaltree.Interval(1, 11, (10, 0.3)),
+            intervaltree.Interval(1, 3, (2, 0.3)),
+        ]
+    )
+    intervals, missing_intervals = cache.get_intervals(0, 10, epsabs=1, epsrel=0)
 
-    # Test that the exact element is returned when it exists in the cache
-    # this is opposed to returning upper and lower bounds, i.e. the next
-    # bigger or smaller element.
-    param, arclen, err = cache.get(parameter=1.1)
-    assert param == 1.1
-    assert arclen == 21.7
-    assert err == 0.02
-    param, arclen, err = cache.get(parameter=1.1, bound="upper")
-    assert param == 1.1
-    assert arclen == 21.7
-    assert err == 0.02
-    param, arclen, err = cache.get(parameter=1.1, bound="lower")
-    assert param == 1.1
-    assert arclen == 21.7
-    assert err == 0.02
-    param, arclen, err = cache.get(arc_length=21.7)
-    assert param == 1.1
-    assert arclen == 21.7
-    assert err == 0.02
-    param, arclen, err = cache.get(arc_length=21.7, bound="upper")
-    assert param == 1.1
-    assert arclen == 21.7
-    assert err == 0.02
-    param, arclen, err = cache.get(arc_length=21.7, bound="lower")
-    assert param == 1.1
-    assert arclen == 21.7
-    assert err == 0.02
+    assert len(intervals) == 3
+    assert intervals[0] == intervaltree.Interval(1, 3, (2, 0.3))
+    assert intervals[1] == intervaltree.Interval(3, 5, (2, 0.3))
+    assert intervals[2] == intervaltree.Interval(7, 8, (1, 0.1))
 
-    # Test if cache is updated when the error is smaller
-    cache.add(1.1, 21.72, 0.001)
-    param, arclen, err = cache.get(arc_length=21.7)
-    assert param == 1.1
-    assert arclen == 21.72
-    assert err == 0.001
+    assert len(missing_intervals) == 3
+    assert missing_intervals[0] == intervaltree.Interval(0, 1)
+    assert missing_intervals[1] == intervaltree.Interval(5, 7)
+    assert missing_intervals[2] == intervaltree.Interval(8, 10)
 
-    cache.clear()
+def test_ArcLengthCache_get_intervals_different_sorting_begins_ends():
+    """
+    Sorting the intervals by begin or ends does not result in the same
+    order. If get_intervals is implemented with a "greedy" algorithm
+    this would result in suboptimal coverage of the interval, i.e.
+    in this test it would pick (1, 4) and (7, 8) instead of
+    (2, 3), (3, 6), and (7, 8).
+    """
+    cache = splinebox.spline_curves._ArcLengthCache()
+    cache.add_intervals(
+        [
+            intervaltree.Interval(1, 4, (3, 0.2)),
+            intervaltree.Interval(7, 8, (1, 0.1)),
+            intervaltree.Interval(2, 3, (1, 0.3)),
+            intervaltree.Interval(3, 6, (3, 0.3)),
+        ]
+    )
+    intervals, missing_intervals = cache.get_intervals(0, 10, epsabs=1, epsrel=0)
 
-    param, arclen, err = cache.get(arc_length=50)
-    assert param == 0
-    assert arclen == 0
-    assert err == 0
+    assert len(intervals) == 3
+    assert intervals[0] == intervaltree.Interval(2, 3, (1, 0.3))
+    assert intervals[1] == intervaltree.Interval(3, 6, (3, 0.3))
+    assert intervals[2] == intervaltree.Interval(7, 8, (1, 0.1))
 
-    # You have to provide a parameter or an arc length
-    with pytest.raises(ValueError):
-        cache.get()
-    # Parameters and arc lengths have to be positive
-    with pytest.raises(ValueError):
-        cache.add(-0.1, 1, 1)
-    with pytest.raises(ValueError):
-        cache.get(parameter=-0.1)
-    with pytest.raises(ValueError):
-        cache.get(arc_length=-1)
-    with pytest.raises(ValueError):
-        cache.add(0.1, -1, 1)
+    assert len(missing_intervals) == 3
+    assert missing_intervals[0] == intervaltree.Interval(0, 2)
+    assert missing_intervals[1] == intervaltree.Interval(6, 7)
+    assert missing_intervals[2] == intervaltree.Interval(8, 10)
+
+def test_ArcLengthCache_get_bounds():
+    cache = splinebox.spline_curves._ArcLengthCache()
+    cache.add_intervals(
+        [
+            intervaltree.Interval(0, 1.5, (15, 1)),
+            intervaltree.Interval(1.5, 4.0, (15, 1)),
+            intervaltree.Interval(4.0, 8.0, (40, 1)),
+            intervaltree.Interval(8.0, 10.0, (20, 1)),
+            intervaltree.Interval(0.0, 10.0, (100, 1)),
+        ]
+    )
+    lower_bound_param, lower_bound_arclen, lower_bound_err, upper_bound_param = cache.get_bounds(50, epsabs=5, epsrel=0)
+    assert lower_bound_param == 4.0
+    assert lower_bound_arclen == 30
+    assert lower_bound_err == 2
+    assert upper_bound_param == 8.0

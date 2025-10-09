@@ -11,6 +11,7 @@ import multiprocessing
 import os
 import warnings
 
+import intervaltree
 import numba
 import numpy as np
 import scipy.integrate
@@ -716,35 +717,27 @@ class Spline:
         if start > stop:
             start, stop = stop, start
 
-        if start == 0 and use_cache:
-            param, arc_len, err = self.arc_length_cache.get(parameter=stop)
-            if param == stop:
-                if err <= max(epsabs, arc_len * epsrel):
-                    integral = arc_len
-                    error = err
-                else:
-                    integral, error = self._arc_length_segment(
-                        None, start, stop, epsabs, epsrel, limit, use_cache=False
-                    )
-                    self.arc_length_cache.add(stop, integral, error)
-            elif max(epsabs, arc_len * epsrel) > err:
-                sub_integral, sub_error = self._arc_length_segment(
-                    None, param, stop, epsabs - err, epsrel, limit, use_cache=False
-                )
-                if param > stop:
-                    sub_integral *= -1
-                integral = arc_len + sub_integral
-                error = err + sub_error
-                eps = max(epsabs, integral * epsrel)
-                if error > eps:
-                    integral, error = self._arc_length_segment(
-                        None, start, stop, epsabs, epsrel, limit, use_cache=False
-                    )
-                self.arc_length_cache.add(stop, integral, error)
-            else:
-                integral, error = self._arc_length_segment(None, start, stop, epsabs, epsrel, limit, use_cache=False)
-                self.arc_length_cache.add(stop, integral, error)
+        if use_cache:
+            intervals, missing_intervals = self.arc_length_cache.get_intervals(start, stop, epsabs, epsrel)
+            lens = [interval.data[0] for interval in intervals]
+            errs = [interval.data[1] for interval in intervals]
 
+            for missing_interval in missing_intervals:
+                length, error = self._arc_length_segment(
+                    None, missing_interval.begin, missing_interval.end, epsabs, epsrel, limit, use_cache=False
+                )
+                lens.append(length)
+                errs.append(error)
+                self.arc_length_cache.add_intervals(
+                    [intervaltree.Interval(missing_interval.begin, missing_interval.end, (length, error))]
+                )
+
+            integral = math.fsum(lens)
+            error = math.fsum(errs)
+
+            if error > max(epsabs, integral * epsrel):
+                integral, error = self._arc_length_segment(None, start, stop, epsabs, epsrel, limit, use_cache=False)
+                self.arc_length_cache.add_intervals([intervaltree.Interval(start, stop, (integral, error))])
         else:
             integral, error = scipy.integrate.quad(
                 lambda t: np.linalg.norm(np.nan_to_num(self(t, derivative=1))),
@@ -811,7 +804,9 @@ class Spline:
             integrals = np.zeros(n)
             errors = np.zeros(n)
             for i in range(n):
-                integrals[i], errors[i] = self._arc_length_segment(None, start[i], stop[i], epsabs, epsrel, limit)
+                integrals[i], errors[i] = self._arc_length_segment(
+                    None, start[i], stop[i], epsabs, epsrel, limit, use_cache=True
+                )
         else:
             integrals = multiprocessing.Array("d", n, lock=False)
             errors = multiprocessing.Array("d", n, lock=False)
@@ -830,6 +825,7 @@ class Spline:
                         np.full(n, epsabs, dtype=float),
                         np.full(n, epsrel, dtype=float),
                         np.full(n, limit, dtype=int),
+                        np.full(n, False, dtype=bool),
                     ),
                 )
 
@@ -1037,8 +1033,10 @@ class Spline:
             The paramters value for the given length `s`.
         """
         self._check_control_points()
-        lower_bound_param, lower_bound_arclen, lower_bound_err = self.arc_length_cache.get(arc_length=s, bound="lower")
-        upper_bound_param, _, _ = self.arc_length_cache.get(arc_length=s, bound="upper")
+
+        lower_bound_param, lower_bound_arclen, lower_bound_err, upper_bound_param = self.arc_length_cache.get_bounds(
+            arc_length=s, epsabs=atol, epsrel=0
+        )
 
         midpoint_param = lower_bound_param + (upper_bound_param - lower_bound_param) / 2
         midpoint_arclen, midpoint_err = self._arc_length_segment(
@@ -2310,77 +2308,139 @@ def splines_from_json(path):
 
 class _ArcLengthCache:
     def __init__(self):
-        self.parameters = [0]
-        self.arc_lengths = [0]
-        self.errors = [0]
+        self.tree = intervaltree.IntervalTree()
 
-    def __str__(self):
-        len_indices = len(str(len(self.parameters)))
-        string = " " * (len_indices + 1) + "| Parameter | Arc length | Error\n"
-        string += "-" * (len(string) + 4) + "\n"
-        for i in range(len(self.parameters)):
-            string += str(i).zfill(len_indices)
-            string += " | "
-            string += f"{self.parameters[i]:9.6f}"
-            string += " | "
-            string += f"{self.arc_lengths[i]:10.8f}"
-            string += " | "
-            string += f"{self.errors[i]:10.8f}"
-            string += "\n"
-        return string
+    def add_intervals(self, intervals):
+        for interval in intervals:
+            if interval.begin != interval.end:
+                self.tree.add(interval)
+                self.tree.merge_equals(data_reducer=lambda a, b: a if a[1] <= b[1] else b)
 
-    def add(self, parameter, arc_length, error):
-        if parameter < 0:
-            raise ValueError("parameter has to be > 0")
-        if arc_length < 0:
-            raise ValueError("arc_length has to be > 0")
-        if parameter not in self.parameters:
-            index = bisect.bisect(self.parameters, parameter)
-            index_arclen = bisect.bisect(self.arc_lengths, arc_length)
-            if index == index_arclen:
-                self.parameters.insert(index, parameter)
-                self.arc_lengths.insert(index, arc_length)
-                self.errors.insert(index, error)
+    def get_intervals(self, begin, end, epsabs, epsrel):
+        intervals = sorted(self.tree.envelop(begin, end + 1e-16))
+        intervals = [
+            interval
+            for interval in intervals
+            if interval.data[1] < epsabs or interval.data[1] / interval.data[0] < epsrel
+        ]
+
+        n = len(intervals)
+
+        if n == 0:
+            best_coverage_intervals = []
+            missing_intervals = [intervaltree.Interval(begin, end)]
+        else:
+            ends = np.array([interval.end for interval in intervals])
+            ends_sort_indices = np.argsort(ends)
+            sorted_ends = ends[ends_sort_indices]
+
+            dp = np.zeros(n)
+            prev = np.ones(n, dtype=int) * -1
+
+            for i in range(n):
+
+                length = intervals[i].end - intervals[i].begin
+
+                sorted_j = bisect.bisect_right(sorted_ends, intervals[i].begin) - 1
+
+                j_max = ends_sort_indices[sorted_j] if sorted_j >= 0 else sorted_j
+                while sorted_j >= 0:
+                    j = ends_sort_indices[sorted_j]
+                    if dp[j] > dp[j_max]:
+                        j_max = j
+                    sorted_j -= 1
+                if j_max < 0:
+                    dp[i] = length
+                else:
+                    prev[i] = j_max
+                    dp[i] = length + dp[j_max]
+
+            best_coverage_intervals = []
+
+            i = np.argmax(dp)
+            while i >= 0:
+                best_coverage_intervals.insert(0, intervals[i])
+                i = prev[i]
+
+            missing_intervals = []
+
+            if begin != best_coverage_intervals[0].begin:
+                missing_intervals.append(intervaltree.Interval(begin, best_coverage_intervals[0].begin))
+
+            for i in range(len(best_coverage_intervals) - 1):
+                if best_coverage_intervals[i].end != best_coverage_intervals[i + 1].begin:
+                    missing_intervals.append(
+                        intervaltree.Interval(best_coverage_intervals[i].end, best_coverage_intervals[i + 1].begin)
+                    )
+
+            if best_coverage_intervals[-1].end != end:
+                missing_intervals.append(intervaltree.Interval(best_coverage_intervals[-1].end, end))
+
+        return best_coverage_intervals, missing_intervals
+
+    def get_bounds(self, arc_length, epsabs, epsrel):
+        intervals = sorted(self.tree)
+        intervals = [
+            interval
+            for interval in intervals
+            if interval.data[1] < epsabs or interval.data[1] / interval.data[0] < epsrel
+        ]
+        ends = np.array([interval.end for interval in intervals])
+        ends_sort_indices = np.argsort(ends)
+        sorted_ends = ends[ends_sort_indices]
+
+        n = len(intervals)
+        lengths = [[] for _ in range(n)]
+        errors = [[] for _ in range(n)]
+        prev = np.ones(n, dtype=int) * -1
+
+        for i in range(n):
+            if intervals[i].begin == 0:
+                lengths[i].append(intervals[i].data[0])
+                errors[i].append(intervals[i].data[1])
             else:
-                warnings.warn(
-                    "Could not add arc length to cache because the insert position is abiguous.",
-                    RuntimeWarning,
-                    stacklevel=1,
-                )
+                sorted_j = bisect.bisect_left(sorted_ends, intervals[i].begin)
+
+                j = ends_sort_indices[sorted_j]
+                lengths[i].extend(lengths[j])
+                lengths[i].append(intervals[i].data[0])
+                errors[i].extend(errors[j])
+                errors[i].append(intervals[i].data[1])
+                prev[i] = j
+
+        lengths = np.array(list(map(math.fsum, lengths)))
+        errors = np.array(list(map(math.fsum, errors)))
+
+        lengths_sort_indices = np.argsort(lengths)
+        sorted_lengths = lengths[lengths_sort_indices]
+
+        i = bisect.bisect_left(sorted_lengths, arc_length)
+        lower_bound_i = (
+            i
+            if i < n and np.isclose(sorted_lengths[i], arc_length, rtol=0, atol=max(epsabs, arc_length * epsrel))
+            else i - 1
+        )
+        upper_bound_i = i if i < n else i - 1
+
+        if lower_bound_i >= 0:
+            lower_bound_i = lengths_sort_indices[lower_bound_i]
+            lower_bound_param = intervals[lower_bound_i].end
+            lower_bound_arclen = lengths[lower_bound_i]
+            lower_bound_err = errors[lower_bound_i]
         else:
-            # Update the cache if the error is smaller
-            index = self.parameters.index(parameter)
-            if self.errors[index] > error:
-                self.arc_lengths[index] = arc_length
-                self.errors[index] = error
+            lower_bound_param = 0
+            lower_bound_arclen = 0
+            lower_bound_err = 0
 
-    def get(self, parameter=None, arc_length=None, bound=None):
-
-        if parameter is not None and arc_length is None:
-            if parameter < 0:
-                raise ValueError("parameter has to be > 0")
-            index = np.argmin(np.abs(np.array(self.parameters) - parameter))
-            if bound == "lower" and self.parameters[index] > parameter and index != 0:
-                index -= 1
-            elif bound == "upper" and self.parameters[index] < parameter and index != len(self.parameters) - 1:
-                index += 1
-
-        elif parameter is None and arc_length is not None:
-            if arc_length < 0:
-                raise ValueError("arc_length has to be > 0")
-            index = np.argmin(np.abs(np.array(self.arc_lengths) - arc_length))
-            if bound == "lower" and self.arc_lengths[index] > arc_length and index != 0:
-                index -= 1
-            elif bound == "upper" and self.arc_lengths[index] < arc_length and index != len(self.arc_lengths) - 1:
-                index += 1
+        if upper_bound_i >= 0 and (
+            sorted_lengths[upper_bound_i] >= arc_length
+            or np.isclose(sorted_lengths[upper_bound_i], arc_length, rtol=0, atol=max(epsabs, arc_length * epsrel))
+        ):
+            upper_bound_i = lengths_sort_indices[upper_bound_i]
+            upper_bound_param = intervals[upper_bound_i].end
         else:
-            raise ValueError(
-                "Exactly one of `parameter` or `arc_length` has to be specified, i.e. should not be `None`."
-            )
-
-        return self.parameters[index], self.arc_lengths[index], self.errors[index]
+            raise RuntimeError(f"An upper bound cannot be computed. {self.tree} {arc_length}")
+        return lower_bound_param, lower_bound_arclen, lower_bound_err, upper_bound_param
 
     def clear(self):
-        self.parameters = [0]
-        self.arc_lengths = [0]
-        self.errors = [0]
+        self.tree.clear()
