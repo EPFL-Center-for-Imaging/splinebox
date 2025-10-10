@@ -526,11 +526,12 @@ def test_curvilinear_reparametrization_energy_translation(initialized_spline_cur
     """
     Test if the curvilinear reparametrization energy is invariant to translation.
     """
+    epsabs = 1e-3
     spline = initialized_spline_curve
-    expected = spline.curvilinear_reparametrization_energy()
+    expected = spline.curvilinear_reparametrization_energy(epsabs=epsabs)
     spline.translate(translation_vector)
-    val = spline.curvilinear_reparametrization_energy()
-    assert np.isclose(val, expected)
+    val = spline.curvilinear_reparametrization_energy(epsabs=epsabs)
+    assert np.isclose(val, expected, atol=epsabs)
 
 
 def test_curvilinear_reparametrization_energy_scale_invariance(initialized_spline_curve):

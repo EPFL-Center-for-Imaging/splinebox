@@ -899,7 +899,7 @@ class Spline:
 
         .. _scipy.integrate.quad: https://docs.scipy.org/doc/scipy-1.14.0/reference/generated/scipy.integrate.quad.html
         """
-        arc_length = self.arc_length()
+        arc_length = self.arc_length(epsabs=epsabs, epsrel=epsrel)
         c = (arc_length / self.M) ** 2
         upper_limit = self.M if self.closed else self.M - 1
         integral = scipy.integrate.quad(
