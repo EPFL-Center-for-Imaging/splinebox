@@ -40,8 +40,7 @@ for repetition in range(n_repetitions + 1):
     # Measure spline evaluation time for different number of parameter values (nt)
     t = np.linspace(0, M if closed else M - 1, nt)
     start_eval = time.perf_counter_ns()
-    spline(t, njit=True)
-    # spline.eval_loop(t)
+    spline(t)
     stop_eval = time.perf_counter_ns()
 
     if repetition != 0:
