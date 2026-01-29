@@ -8,6 +8,7 @@ import json
 import math
 import warnings
 
+import line_profiler
 import numba
 import numpy as np
 import scipy.integrate
@@ -1193,47 +1194,201 @@ class Spline:
         frame = frame[0] if single_value else frame[np.argsort(sort_indices)]
         return frame
 
-    def __call__(self, t, derivative=0):
-        """
-        Evalute the spline or one of its derivatives at
-        parameter value(s) `t`.
+    # def __call__(self, t, derivative=0):
+    #     """
+    #     Evalute the spline or one of its derivatives at
+    #     parameter value(s) `t`.
 
-        Parameters
-        ----------
-        t : numpy.array, float
-            A 1D numpy array or a single float value.
-        derivative : int
-            Can be 0, 1, 2 for the spline, and its
-            first and second derivative respectively.
+    #     Parameters
+    #     ----------
+    #     t : numpy.array, float
+    #         A 1D numpy array or a single float value.
+    #     derivative : int
+    #         Can be 0, 1, 2 for the spline, and its
+    #         first and second derivative respectively.
 
-        Examples
-        --------
-        We start by creating a spline.
+    #     Examples
+    #     --------
+    #     We start by creating a spline.
 
-        >>> spline = splinebox.Spline(M=4, basis_function=splinebox.B3(), closed=False)
-        >>> spline.knots = np.array([[0, 0], [1, 1], [2, 0], [3, 1]])
+    #     >>> spline = splinebox.Spline(M=4, basis_function=splinebox.B3(), closed=False)
+    #     >>> spline.knots = np.array([[0, 0], [1, 1], [2, 0], [3, 1]])
 
-        We can use __call__ to evaluate the spline at a parameter position
+    #     We can use __call__ to evaluate the spline at a parameter position
 
-        >>> spline(2.3)
-        array([2.349, 0.143])
+    #     >>> spline(2.3)
+    #     array([2.349, 0.143])
 
-        Or we can evaluate it a multiple positions at once:
-        >>> t = np.linspace(0, spline.M - 1, 3)
-        >>> spline(t)
-        array([[-0. , -0. ],
-               [ 1.5,  0.5],
-               [ 3. ,  1. ]])
-        """
+    #     Or we can evaluate it a multiple positions at once:
+    #     >>> t = np.linspace(0, spline.M - 1, 3)
+    #     >>> spline(t)
+    #     array([[-0. , -0. ],
+    #            [ 1.5,  0.5],
+    #            [ 3. ,  1. ]])
+    #     """
+    #     self._check_control_points()
+    #     t, single_value = self._convert_to_array(t)
+    #     # Get values at which the basis functions have to be evaluated
+    #     tval = self._get_tval(t)
+    #     basis_function_values = self.basis_function(tval, derivative=derivative)
+    #     value = np.matmul(basis_function_values, self.control_points)
+    #     if single_value:
+    #         value = value[0]
+    #     return value
+
+    @staticmethod
+    @numba.guvectorize(
+        [
+            (
+                numba.float64[:],
+                numba.int64[:],
+                numba.bool,
+                numba.int64,
+                numba.int64,
+                numba.float64[:, :],
+                numba.int64[:, :],
+            )
+        ],
+        "(n),(m),(),(),()->(n, m),(n, m)",
+        nopython=True,
+        cache=True,
+    )
+    def _compute_tval_and_indices(t, shift, closed, M, pad, tval, indices):
+        t_mod_1 = t % 1
+        tval[:] = t_mod_1[:, np.newaxis] - shift[np.newaxis, :]
+        if closed:
+            indices[:] = ((t - t_mod_1)[:, np.newaxis] + shift[np.newaxis, :]) % M
+        else:
+            indices[:] = ((t - t_mod_1)[:, np.newaxis] + shift[np.newaxis, :] + pad) % (M + 2 * pad)
+
+    # @staticmethod
+    # @numba.guvectorize(
+    #     [
+    #         (
+    #             numba.float64[:, :],
+    #             numba.float64[:, :, :],
+    #             numba.float64[:, :],
+    #         )
+    #     ],
+    #     "(i, j),(i, j, l)->(i, l)",
+    #     nopython=True,
+    #     cache=True,
+    # )
+    # def _compute_values(basis_function_values, control_points, values):
+    #     for i in range(basis_function_values.shape[0]):
+    #         for l in range(control_points.shape[-1]):
+    #             values[i, l] = np.dot(basis_function_values[i], control_points[i, :, l])
+
+    # @staticmethod
+    # @numba.guvectorize(
+    #     [
+    #         (
+    #             numba.float64[:, :],
+    #             numba.float64[:, :],
+    #             numba.int64[:, :],
+    #             numba.float64[:, :],
+    #         )
+    #     ],
+    #     "(i, j),(k, l),(i, j)->(i, l)",
+    #     nopython=True,
+    #     cache=True,
+    # )
+    # def _compute_values_indices(basis_function_values, control_points, indices, values):
+    #     for i in range(basis_function_values.shape[0]):
+    #         for l in range(control_points.shape[-1]):
+    #             values[i, l] = np.dot(basis_function_values[i], control_points[:, l][indices[i]])
+
+    # @staticmethod
+    # @numba.jit
+    # def _helper_njit(t, half_support, closed, M, pad):
+    #     t_mod_1 = t % 1
+    #     bound = math.ceil(half_support)
+    #     delta = np.arange(-bound + 1, bound + 1)
+    #     # tval = np.subtract.outer(t_mod_1, delta)
+    #     tval = t_mod_1[:, np.newaxis] - delta[np.newaxis, :]
+    #     # indices = np.add.outer(t - t_mod_1, delta)
+    #     indices = (t - t_mod_1)[:, np.newaxis] + delta[np.newaxis, :]
+    #     if closed:
+    #         indices = indices % M
+    #     else:
+    #         indices += pad
+    #         # For everything outside this range the basis function value will be zero anyway.
+    #         indices = indices % (M + 2 * pad)
+    #     indices = indices.reshape(tval.shape)
+    #     indices = indices.astype(np.int64)
+    #     return tval, indices
+
+    # def _helper(self, t):
+    #     t_mod_1 = t % 1
+    #     # print(f"{t_mod_1=}")
+    #     bound = math.ceil(self.half_support)
+    #     # print(f"{bound=}")
+    #     delta = np.arange(-bound + 1, bound + 1)
+    #     # print(f"{delta=}")
+    #     tval = np.subtract.outer(t_mod_1, delta)
+    #     # print(f"{t_val=}")
+    #     indices = np.add.outer(t - t_mod_1, delta)
+    #     # print(f"{indices=}")
+    #     if self.closed:
+    #         indices = indices % self.M
+    #     else:
+    #         indices += self.pad
+    #         # For everything outside this range the basis function value will be zero anyway.
+    #         indices = indices % (self.M + 2 * self.pad)
+    #     indices = indices.reshape(tval.shape)
+    #     indices = indices.astype(int)
+    #     return tval, indices
+
+    # def eval_loop(self, t, derivative=0):
+    @line_profiler.profile
+    def __call__(self, t, derivative=0, njit=False):
         self._check_control_points()
         t, single_value = self._convert_to_array(t)
-        # Get values at which the basis functions have to be evaluated
-        tval = self._get_tval(t)
+
+        # if njit:
+        #     tval, indices = self._helper_njit(t, self.half_support, self.closed, self.M, self.pad)
+        # else:
+        #     tval, indices = self._helper(t)
+
+        bound = math.ceil(self.half_support)
+        shift = np.arange(-bound + 1, bound + 1)
+        tval = np.empty((len(t), len(shift)), dtype=float)
+        indices = np.empty((len(t), len(shift)), dtype=int)
+        self._compute_tval_and_indices(t, shift, self.closed, self.M, self.pad, tval, indices)
+        # print(self.closed)
+        # print(self.M)
+        # print(self.pad)
+        # print(tval)
+        # print(indices)
         basis_function_values = self.basis_function(tval, derivative=derivative)
-        value = np.matmul(basis_function_values, self.control_points)
+
+        # print(f"{self.M=}")
+        # print(f"{self.closed=}")
+        # print(f"{self.pad=}")
+        # print(f"{self.basis_function=}")
+        # print(f"{self.half_support=}")
+        # print(f"{t=}")
+        # print(f"{indices=}")
+        # print(f"{self.control_points.shape=}")
+        control_points = self.control_points[indices]
+        # print(f"{basis_function_values.shape=}")
+        # print(f"{indices.shape=}")
+        # print(f"{control_points.shape=}")
+        # print(f"{self.ndim=}")
+
+        # values = np.empty((*t.shape, self.ndim))
+        # self._compute_values(basis_function_values, control_points, values)
+        # self._compute_values_indices(basis_function_values, self.control_points, indices, values)
+
+        # print(f"{self.control_points=}")
+        # print(f"{control_points=}")
+        if self.ndim == 1:
+            values = basis_function_values @ control_points.T
+        else:
+            values = np.einsum("ij,ijl->il", basis_function_values, control_points)
         if single_value:
-            value = value[0]
-        return value
+            values = values[0]
+        return values
 
     def _convert_to_array(self, t):
         """

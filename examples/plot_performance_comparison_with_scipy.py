@@ -73,7 +73,7 @@ for closed in [True, False]:
                                 M,
                                 nt,
                                 "closed" if closed else "open",
-                                stop - start,
+                                stop_eval - start_eval,
                             ]
                         )
 
@@ -115,7 +115,7 @@ for closed in [True, False]:
                                 M,
                                 nt,
                                 "closed" if closed else "open",
-                                stop - start,
+                                stop_eval - start_eval,
                             ]
                         )
 
