@@ -662,13 +662,33 @@ class Spline:
                 f"You provided too few points. For the fit to have a unique solution you need to provide at least as many points as your spline has control points (including padding). This spline has {self.M}+{2 * self.pad}(padding) control points but you provided {len(points)} points. Consider providing more points or reducing the number of knots M. If the number of points is equal to M, consider using `spline.knots = points` instead of fitting."
             )
 
+        n_points = len(points)
+        n_control_points = self.M if self.closed else self.M + 2 * self.pad
+
         if arc_length_parameterization:
             raise NotImplementedError
         else:
-            t = np.linspace(0, self.M, len(points) + 1)[:-1] if self.closed else np.linspace(0, self.M - 1, len(points))
-        tval = self._get_tval(t)
-        basis_function_values = self.basis_function(tval, derivative=0)
-        self.control_points = np.linalg.lstsq(basis_function_values, points, rcond=None)[0]
+            t = np.linspace(0, self.M, n_points + 1)[:-1] if self.closed else np.linspace(0, self.M - 1, n_points)
+
+        bound = math.ceil(self.half_support)
+        shift = np.arange(-bound + 1, bound + 1)
+        tval = np.empty((len(t), len(shift)), dtype=float)
+        indices = np.empty((len(t), len(shift)), dtype=int)
+        self._compute_tval_and_indices(t, shift, self.closed, self.M, self.pad, tval, indices)
+
+        row = np.repeat(np.arange(indices.shape[0]), indices.shape[1])
+        col = indices.flatten()
+        data = self.basis_function(tval).flatten()
+
+        basis_function_values = scipy.sparse.csr_array((data, (row, col)), shape=(n_points, n_control_points))
+
+        if points.ndim == 1:
+            self.control_points = scipy.sparse.linalg.lsqr(basis_function_values, points)[0]
+        else:
+            if self.control_points is None:
+                self.control_points = np.empty((n_control_points, points.shape[1]))
+            for i in range(self.ndim):
+                self.control_points[:, i] = scipy.sparse.linalg.lsqr(basis_function_values, points[:, i])[0]
 
     def arc_length(self, stop=None, start=0, epsabs=0, epsrel=1e-3):
         """
@@ -1193,6 +1213,33 @@ class Spline:
         frame = frame[0] if single_value else frame[np.argsort(sort_indices)]
         return frame
 
+    @staticmethod
+    @numba.guvectorize(
+        [
+            (
+                numba.float64[:],
+                numba.int64[:],
+                numba.bool,
+                numba.int64,
+                numba.int64,
+                numba.float64[:, :],
+                numba.int64[:, :],
+            )
+        ],
+        "(n),(m),(),(),()->(n, m),(n, m)",
+        nopython=True,
+        cache=True,
+    )
+    def _compute_tval_and_indices(t, shift, closed, M, pad, tval, indices):
+        t_mod_1 = t % 1
+        tval[:] = t_mod_1[:, np.newaxis] - shift[np.newaxis, :]
+        if closed:
+            indices[:] = ((t - t_mod_1)[:, np.newaxis] + shift[np.newaxis, :]) % M
+        else:
+            # The modulo prevents out of bounds errors and can be savely applied because
+            # the basis function values will be zero.
+            indices[:] = ((t - t_mod_1)[:, np.newaxis] + shift[np.newaxis, :] + pad) % (M + 2 * pad)
+
     def __call__(self, t, derivative=0):
         """
         Evalute the spline or one of its derivatives at
@@ -1227,13 +1274,26 @@ class Spline:
         """
         self._check_control_points()
         t, single_value = self._convert_to_array(t)
-        # Get values at which the basis functions have to be evaluated
-        tval = self._get_tval(t)
+        if np.any(np.isnan(t)):
+            raise ValueError("t should not cotain any NaN values.")
+        bound = math.ceil(self.half_support)
+        shift = np.arange(-bound + 1, bound + 1)
+        tval = np.empty((len(t), len(shift)), dtype=float)
+        indices = np.empty((len(t), len(shift)), dtype=int)
+        self._compute_tval_and_indices(t, shift, self.closed, self.M, self.pad, tval, indices)
+
         basis_function_values = self.basis_function(tval, derivative=derivative)
-        value = np.matmul(basis_function_values, self.control_points)
+        control_points = self.control_points[indices]
+
+        if self.ndim == 1:
+            control_points = control_points[..., np.newaxis]
+        values = np.einsum("ij,ijl->il", basis_function_values, control_points)
+        if self.ndim == 1:
+            values = values[..., 0]
         if single_value:
-            value = value[0]
-        return value
+            values = values[0]
+
+        return values
 
     def _convert_to_array(self, t):
         """
@@ -1256,60 +1316,6 @@ class Spline:
         if t.ndim > 1:
             raise ValueError("The parameter array has to be 1D.")
         return t, single_value
-
-    def _get_tval(self, t):
-        """
-        This is a helper method for `__call__`. It is its own method
-        to allow :class:`splinebox.spline_curves. HermiteSpline` to
-        overwrite the `__call__` method using `_get_tval`.
-        It is also used in :meth:`splinebox.spline_curves.Spline.fit`
-        """
-        if self.closed:
-            # all knot indices
-            k = np.arange(self.M)
-            # output array for the helper function _wrap_index
-            tval = np.full((len(t), len(k)), np.nan)
-            # compute the positions at which the basis functions have to be evaluated
-            # and save them in tval
-            self._wrap_index(t, k, self.half_support, self.M, tval)
-        else:
-            # take into account the padding with additional basis functions
-            # for non-closed splines
-            k = np.arange(self.M + 2 * self.pad) - self.pad
-            k = k[np.newaxis, :]
-            t = t[:, np.newaxis]
-            # positions at which the basis functions have to be evaluated
-            tval = t - k
-        return tval
-
-    @staticmethod
-    @numba.guvectorize(
-        [(numba.float64[:], numba.float64[:], numba.float64, numba.int64, numba.float64[:, :])], "(n),(m),(),()->(n,m)"
-    )
-    def _wrap_index(ts, ks, half_support, M, wrapped_tval):  # pragma: no cover
-        """
-        Fill the wrapped_tval array whenever a value t
-        is affected by the basis function at knot k, taking
-        into account that basis functions at the begging/end
-        affect positions on the opposite end for closed splines.
-        """
-        outside_tvalue = half_support + 1
-        for i, k in enumerate(ks):
-            for j, t in enumerate(ts):
-                if t >= M + k - half_support:
-                    # t is close enough to the end to be affected by
-                    # the k-th basis function from the beginning
-                    wrapped_tval[j, i] = t - M - k
-                elif t <= half_support - (M - k):
-                    # t is close enough to the beginning to be affected
-                    # by the k-th basis function, which is close to the end
-                    wrapped_tval[j, i] = t + M - k
-                elif t > k + half_support or t < k - half_support:
-                    # t is outside the support of the k-th basis function
-                    # this can be any value outside the support
-                    wrapped_tval[j, i] = outside_tvalue
-                else:
-                    wrapped_tval[j, i] = t - k
 
     def _control_points_centroid(self):
         """
@@ -1523,6 +1529,7 @@ class Spline:
         def _jac_distance(t, point):
             spline_point = self(t)
             tangent = self(t, derivative=1)
+            tangent = np.nan_to_num(tangent)
             norm = np.linalg.norm(spline_point - point)
             dot_product = np.sum((spline_point - point) * tangent)
             return 2 / norm * dot_product
@@ -1908,30 +1915,75 @@ class HermiteSpline(Spline):
             raise RuntimeError(
                 "You provided fewer data points than your spline has knots. For the fit to have a unique solution you need to provide at least as many data points as your spline has knots. Consider adding more data or reducing the number of knots M."
             )
+
+        n_points = len(points)
+        n_control_points = self.M if self.closed else self.M + 2 * self.pad
+
         if arc_length_parameterization:
             raise NotImplementedError
         else:
-            t = np.linspace(0, self.M, len(points) + 1)[:-1] if self.closed else np.linspace(0, self.M - 1, len(points))
-        tval = self._get_tval(t)
-        basis_function_values = self.basis_function(tval, derivative=0)
-        basis_function_values = np.concatenate([basis_function_values[..., 0], basis_function_values[..., 1]], axis=1)
-        solution = np.linalg.lstsq(basis_function_values, points, rcond=None)[0]
+            t = np.linspace(0, self.M, n_points + 1)[:-1] if self.closed else np.linspace(0, self.M - 1, n_points)
+
+        bound = math.ceil(self.half_support)
+        shift = np.arange(-bound + 1, bound + 1)
+        tval = np.empty((len(t), len(shift)), dtype=float)
+        indices = np.empty((len(t), len(shift)), dtype=int)
+        self._compute_tval_and_indices(t, shift, self.closed, self.M, self.pad, tval, indices)
+
+        row = np.repeat(np.arange(indices.shape[0]), indices.shape[1] * 2)
+        col = np.empty(2 * indices.shape[0] * indices.shape[1])
+        col[::2] = indices.flatten()
+        col[1::2] = col[::2] + n_control_points
+        data = self.basis_function(tval).flatten()
+
+        basis_function_values = scipy.sparse.csr_array((data, (row, col)), shape=(n_points, 2 * n_control_points))
+
         half = self.M if self.closed else self.M + 2 * self.pad
-        self.control_points = solution[:half]
-        self.tangents = solution[half:]
+
+        if points.ndim == 1:
+            solution = scipy.sparse.linalg.lsqr(basis_function_values, points)[0]
+            self.control_points = solution[:half]
+            self.tangents = solution[half:]
+        else:
+            if self.control_points is None:
+                self.control_points = np.empty((n_control_points, points.shape[1]))
+            if self.tangents is None:
+                self.tangents = np.empty((n_control_points, points.shape[1]))
+            for i in range(self.ndim):
+                solution = scipy.sparse.linalg.lsqr(basis_function_values, points[:, i])[0]
+                self.control_points[:, i] = solution[:half]
+                self.tangents[:, i] = solution[half:]
 
     def __call__(self, t, derivative=0):
         self._check_control_points_and_tangents()
         t, single_value = self._convert_to_array(t)
+        if np.any(np.isnan(t)):
+            raise ValueError("t should not cotain any NaN values.")
+        bound = math.ceil(self.half_support)
+        shift = np.arange(-bound + 1, bound + 1)
+        tval = np.empty((len(t), len(shift)), dtype=float)
+        indices = np.empty((len(t), len(shift)), dtype=int)
+        self._compute_tval_and_indices(t, shift, self.closed, self.M, self.pad, tval, indices)
 
-        tval = self._get_tval(t)
         basis_function_values = self.basis_function(tval, derivative=derivative)
-        value = np.matmul(basis_function_values[..., 0], self.control_points) + np.matmul(
-            basis_function_values[..., 1], self.tangents
+        control_points = self.control_points[indices]
+        tangents = self.tangents[indices]
+
+        if self.ndim == 1:
+            control_points = control_points[..., np.newaxis]
+            tangents = tangents[..., np.newaxis]
+
+        values = np.einsum("ij,ijl->il", basis_function_values[..., 0], control_points) + np.einsum(
+            "ij,ijl->il", basis_function_values[..., 1], tangents
         )
+
+        if self.ndim == 1:
+            values = values[..., 0]
+
         if single_value:
-            value = value[0]
-        return value
+            values = values[0]
+
+        return values
 
     def scale(self, scaling_factor):
         self._check_control_points_and_tangents()
