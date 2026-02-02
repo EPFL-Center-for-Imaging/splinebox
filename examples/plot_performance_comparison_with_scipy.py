@@ -170,7 +170,7 @@ for periodicity in ["closed", "open"]:
     plt.show()
 
 # %%
-# Once again, ``splinebox`` outperforms ``scipy``, in all conditions for the spline evaluation task.
+# Evaluating the spline is slower in ``splinebox``.
 #
 # Data Fitting
 # ------------
@@ -253,12 +253,11 @@ for periodicity in ["closed", "open"]:
     plt.show()
 
 # %%
-# In the fitting task ``splinebox`` is outperformed by ``scipy``'s ``splprep``,
-# but is competetive for splines with relatively few knots (i.e. < 20).
+# In the fitting task ``splinebox`` is outperformed by ``scipy``'s ``splprep``.
 
 # %%
 # Results Summary
 # ---------------
 # #. **Spline Creation:** ``splinebox`` consistently outperforms ``scipy`` across all dimensions for both open and closed splines.
-# #. **Spline Evaluation:** Similarly, ``splinebox`` is faster in evaluating splines, especially as the number of parameter values increases.
-# #. **Data Fitting:** While ``scipy`` has an edge in fitting tasks, particularly for splines with more than 20 knots, ``splinebox`` remains competitive for smaller splines.
+# #. **Spline Evaluation:** For spline evaluation ``splinebox`` performs slightly worse than ``scipy``.
+# #. **Data Fitting:** While ``scipy`` has a clear edge in fitting tasks, particularly for splines with more than 20 knots.

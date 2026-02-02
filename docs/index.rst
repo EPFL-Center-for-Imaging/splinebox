@@ -214,7 +214,7 @@ SplineBox
         <li>Evaluation of a spline at a given parameter value</li>
         <li>Data approximation using least-squares fitting</li>
         </ul>
-        Splinebox out performs SciPy by approximately two orders of magnitude on the first two tasks and achieves comparable performance for least-squares fitting of splines with 10 knots.
+        Splinebox out performs SciPy by approximately two orders of magnitude on the first task, achieves comparable performance on the second task, and is out performed for least-squares fitting of splines.
         <a href="./_auto_examples/plot_performance_comparison_with_scipy.html">See detailed comparison →</a>
       </p>
 
