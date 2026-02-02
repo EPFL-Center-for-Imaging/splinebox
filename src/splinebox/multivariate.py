@@ -9,6 +9,17 @@ import splinebox.spline_curves
 EINSUM_INDICES = "abcdefghijklmnopqrstuvwxyz"
 
 
+def tensor_product(vectors):
+    n = len(vectors)
+    vectors = [vector[:, np.newaxis] if vector.ndim == 1 else vector for vector in vectors]
+    einsum_str = ""
+    for index in EINSUM_INDICES[:n]:
+        einsum_str += index + EINSUM_INDICES[n] + ","
+    einsum_str = einsum_str[:-1]
+    einsum_str += "->" + EINSUM_INDICES[: n + 1]
+    return np.einsum(einsum_str, *vectors)
+
+
 class MultivariateSpline:
 
     def __init__(
@@ -50,7 +61,6 @@ class MultivariateSpline:
         else:
             raise ValueError("closed should be a single boolean or an iterable of booleans of the same length as M.")
 
-        self._tensor_product = None
         self.control_points = control_points
 
         if not isinstance(padding_functions, collections.abc.Iterable):
@@ -82,7 +92,7 @@ class MultivariateSpline:
 
     @property
     def ndim(self):
-        return self.control_points[0].shape[-1]
+        return self.control_points.shape[-1]
 
     @property
     def control_points(self):
@@ -100,8 +110,10 @@ class MultivariateSpline:
     @control_points.setter
     def control_points(self, values):
         if values is not None:
+            if values.ndim != self.nvariate and values.ndim != self.nvariate + 1:
+                raise ValueError
             for variate in range(self.nvariate):
-                n = len(values[variate])
+                n = values.shape[variate]
                 if self.closed[variate] and n != self.M[variate]:
                     raise ValueError(
                         f"The number of control points must match M for a closed spline. You provided {n} control points for a spline with M={self.M[variate]}."
@@ -111,26 +123,23 @@ class MultivariateSpline:
                     raise ValueError(
                         f"Non-closed splines are padded at the ends, i.e. the effective number of control points is M + 2 * (ceil(support/2) - 1). You provided {n} control points for a spline with M={self.M[variate]} and a basis function with support={self.basis_functions[variate].support}, expected {padded_M}."
                     )
-                if values[variate].ndim > 2:
-                    raise ValueError(
-                        "The matrix for control points should only have two dimensions. The first to encode the control point and the second for the dimensionality of the space the control points live in."
-                    )
-                elif values[variate].ndim == 1:
-                    values[variate] = values[variate][:, np.newaxis]
-            if len(np.unique(v.shape[1] for v in values)) != 1:
-                raise ValueError("All control points must have the same dimensionality")
-            self._tensor_product = self._compute_tensor_product(values)
-
         self._control_points = values
 
-    def _compute_tensor_product(self, control_points):
-        einsum_str = ""
-        for index in EINSUM_INDICES[: self.nvariate]:
-            einsum_str += index + EINSUM_INDICES[self.nvariate] + ","
-        einsum_str = einsum_str[:-1]
-        einsum_str += "->" + EINSUM_INDICES[: self.nvariate + 1]
-        _tensor_product = np.einsum(einsum_str, *control_points)
-        return _tensor_product
+    @property
+    def knots(self):
+        t = []
+        for variate in range(self.nvariate):
+            if self.padding_functions[variate] is None and not self.closed[variate]:
+                t.append(np.arange(-self.pad[variate], self.M[variate] + self.pad[variate]))
+            else:
+                t.append(np.arange(self.M[variate]))
+        t = np.stack(np.meshgrid(*t, indexing="ij"), axis=-1)
+        return self(t)
+
+    @knots.setter
+    def knots(self, values):
+        knots = np.array(values)
+        self.fit(knots)
 
     def _get_tval(self, t, variate):
         """
@@ -204,13 +213,13 @@ class MultivariateSpline:
             t_vals = self._get_tval(t, variate)
             basis_function_values.append(self.basis_functions[variate](t_vals))
 
-        tensor_product_indices = EINSUM_INDICES[: self.nvariate + 1]
+        control_point_indices = EINSUM_INDICES[: self.nvariate + 1]
         t_indices = EINSUM_INDICES[self.nvariate + 1 : self.nvariate + t.shape[-1] + 1]
-        einsum_str = tensor_product_indices
+        einsum_str = control_point_indices
         for variate in range(self.nvariate):
-            einsum_str += "," + t_indices + tensor_product_indices[variate]
-        einsum_str += "->" + t_indices + tensor_product_indices[-1]
-        return np.einsum(einsum_str, self._tensor_product, *basis_function_values)
+            einsum_str += "," + t_indices + control_point_indices[variate]
+        einsum_str += "->" + t_indices + control_point_indices[-1]
+        return np.einsum(einsum_str, self.control_points, *basis_function_values)
 
     def mesh(self, step_t=0.1):
         """
@@ -237,7 +246,7 @@ class MultivariateSpline:
         points = self(t)
 
         if self.ndim == 1:
-            points = np.concatenate([t, points], axis=-1)
+            points = np.concatenate([points, t], axis=-1)
         points = points.reshape(-1, 3)
 
         xx, yy = np.meshgrid(np.arange(t.shape[0]), np.arange(t.shape[1]), indexing="ij")
@@ -284,3 +293,40 @@ class MultivariateSpline:
         connectivity = connectivity.T
 
         return points, connectivity
+
+    def fit(self, points, t=None):
+        control_points_shape = np.zeros(self.nvariate, dtype=int)
+        for variate in range(self.nvariate):
+            if self.closed[variate]:
+                control_points_shape[variate] = self.M[variate]
+            else:
+                control_points_shape[variate] = self.M[variate] + 2 * self.pad[variate]
+
+        if t is None and points.ndim == self.nvariate:
+            points = points[..., np.newaxis]
+        elif t is None:
+            t = []
+            for variate in range(self.nvariate):
+                t.append(
+                    np.linspace(0, self.M[variate], points.shape[variate] + 1)[:-1]
+                    if self.closed[variate]
+                    else np.linspace(0, self.M[variate] - 1, points.shape[variate])
+                )
+            t = np.stack(np.meshgrid(*t, indexing="ij"), axis=-1)
+        basis_function_values = []
+        for variate in range(self.nvariate):
+            tval = self._get_tval(t, variate)
+            basis_function_values.append(self.basis_functions[variate](tval, derivative=0))
+
+        einsum_str = ""
+        points_indices = EINSUM_INDICES[: points.ndim - 1]
+        control_point_indices = EINSUM_INDICES[points.ndim - 1 : points.ndim - 1 + self.nvariate]
+        for variate in range(self.nvariate):
+            einsum_str += points_indices + control_point_indices[variate] + ","
+        # Remove trailing comma
+        einsum_str = einsum_str[:-1]
+        einsum_str += "->" + points_indices + control_point_indices
+        basis_function_values = np.einsum(einsum_str, *basis_function_values)
+        basis_function_values = basis_function_values.reshape(-1, math.prod(control_points_shape))
+        control_points = np.linalg.lstsq(basis_function_values, points.reshape(-1, points.shape[-1]), rcond=None)[0]
+        self.control_points = control_points.reshape(*control_points_shape, -1)
