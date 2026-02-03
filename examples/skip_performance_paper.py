@@ -1,3 +1,7 @@
+"""
+Code to measure performance for tabel in publication.
+"""
+
 import time
 
 import numpy as np
