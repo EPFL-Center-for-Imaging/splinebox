@@ -680,6 +680,12 @@ class Spline:
         col = indices.flatten()
         data = self.basis_function(tval).flatten()
 
+        if not self.closed:
+            mask = (col >= 0) & (col < n_control_points)
+            row = row[mask]
+            col = col[mask]
+            data = data[mask]
+
         basis_function_values = scipy.sparse.csr_array((data, (row, col)), shape=(n_points, n_control_points))
 
         if points.ndim == 1:
@@ -1238,7 +1244,7 @@ class Spline:
         else:
             # The modulo prevents out of bounds errors and can be savely applied because
             # the basis function values will be zero.
-            indices[:] = ((t - t_mod_1)[:, np.newaxis] + shift[np.newaxis, :] + pad) % (M + 2 * pad)
+            indices[:] = (t - t_mod_1)[:, np.newaxis] + shift[np.newaxis, :] + pad
 
     def __call__(self, t, derivative=0):
         """
@@ -1283,7 +1289,16 @@ class Spline:
         self._compute_tval_and_indices(t, shift, self.closed, self.M, self.pad, tval, indices)
 
         basis_function_values = self.basis_function(tval, derivative=derivative)
-        control_points = self.control_points[indices]
+        control_points = self.control_points
+        if not self.closed:
+            before = -min(np.min(indices), 0)
+            after = max(np.max(indices) - self.M + 1 - self.pad, 0)
+            if self.ndim == 1:
+                control_points = np.pad(control_points, (before, after))
+            else:
+                control_points = np.pad(control_points, ((before, after), (0, 0)))
+            indices += before
+        control_points = control_points[indices]
 
         if self.ndim == 1:
             control_points = control_points[..., np.newaxis]
@@ -1936,6 +1951,12 @@ class HermiteSpline(Spline):
         col[1::2] = col[::2] + n_control_points
         data = self.basis_function(tval).flatten()
 
+        if not self.closed:
+            mask = (col >= 0) & (col < 2 * n_control_points)
+            row = row[mask]
+            col = col[mask]
+            data = data[mask]
+
         basis_function_values = scipy.sparse.csr_array((data, (row, col)), shape=(n_points, 2 * n_control_points))
 
         half = self.M if self.closed else self.M + 2 * self.pad
@@ -1966,8 +1987,20 @@ class HermiteSpline(Spline):
         self._compute_tval_and_indices(t, shift, self.closed, self.M, self.pad, tval, indices)
 
         basis_function_values = self.basis_function(tval, derivative=derivative)
-        control_points = self.control_points[indices]
-        tangents = self.tangents[indices]
+        control_points = self.control_points
+        tangents = self.tangents
+        if not self.closed:
+            before = -min(np.min(indices), 0)
+            after = max(np.max(indices) - self.M + 1 - self.pad, 0)
+            if self.ndim == 1:
+                control_points = np.pad(control_points, (before, after))
+                tangents = np.pad(tangents, (before, after))
+            else:
+                control_points = np.pad(control_points, ((before, after), (0, 0)))
+                tangents = np.pad(tangents, ((before, after), (0, 0)))
+            indices += before
+        control_points = control_points[indices]
+        tangents = tangents[indices]
 
         if self.ndim == 1:
             control_points = control_points[..., np.newaxis]
