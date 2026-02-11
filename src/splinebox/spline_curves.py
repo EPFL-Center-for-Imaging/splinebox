@@ -621,7 +621,7 @@ class Spline:
             return float(results)
         return results
 
-    def fit(self, points, arc_length_parameterization=False):
+    def fit(self, points, boundary_condition="free"):
         """
         Fit the provided points with the spline using least squares.
         For details refer to :ref:`theory/data_approximation:Data approximation`.
@@ -630,10 +630,12 @@ class Spline:
         ----------
         points : numpy.ndarray
             The data points that should be fit.
-        arc_length_parameterization : bool
-            Whether or not to space the knots based on the distance
-            between the provided points. This is usefull when the
-            points are not equally spaced. Default is `False`.
+        boundary_condition : str
+            Specifies how to hand the ends of open splines.
+            Can be one of the following:
+            'free' (default): No restrictions.
+            'clamped': First derivative is zero at the ends.
+            'natural': Second derivative is zero at the ends.
 
         Examples
         --------
@@ -665,10 +667,7 @@ class Spline:
         n_points = len(points)
         n_control_points = self.M if self.closed else self.M + 2 * self.pad
 
-        if arc_length_parameterization:
-            raise NotImplementedError
-        else:
-            t = np.linspace(0, self.M, n_points + 1)[:-1] if self.closed else np.linspace(0, self.M - 1, n_points)
+        t = np.linspace(0, self.M, n_points + 1)[:-1] if self.closed else np.linspace(0, self.M - 1, n_points)
 
         bound = math.ceil(self.half_support)
         shift = np.arange(-bound + 1, bound + 1)
@@ -678,23 +677,66 @@ class Spline:
 
         row = np.repeat(np.arange(indices.shape[0]), indices.shape[1])
         col = indices.flatten()
-        data = self.basis_function(tval).flatten()
+        tval = tval.flatten()
+        data = self.basis_function(tval)
 
-        if not self.closed:
-            mask = (col >= 0) & (col < n_control_points)
+        if self.closed or boundary_condition == "free":
+            if not self.closed:
+                mask = (col >= 0) & (col < n_control_points)
+                row = row[mask]
+                col = col[mask]
+                data = data[mask]
+            basis_function_values = scipy.sparse.csr_array((data, (row, col)), shape=(n_points, n_control_points))
+
+            if points.ndim == 1:
+                self.control_points = scipy.sparse.linalg.lsqr(basis_function_values, points)[0]
+            else:
+                if self.control_points is None:
+                    self.control_points = np.empty((n_control_points, points.shape[1]))
+                for i in range(self.ndim):
+                    self.control_points[:, i] = scipy.sparse.linalg.lsqr(basis_function_values, points[:, i])[0]
+        elif boundary_condition in ("clamped", "natural"):
+            mask = (col >= 1) & (col < n_control_points - 1)
             row = row[mask]
-            col = col[mask]
+            col = col[mask] - 1
+            tval = tval[mask]
             data = data[mask]
 
-        basis_function_values = scipy.sparse.csr_array((data, (row, col)), shape=(n_points, n_control_points))
+            deriv = 1 if boundary_condition == "clamped" else 2
 
-        if points.ndim == 1:
-            self.control_points = scipy.sparse.linalg.lsqr(basis_function_values, points)[0]
-        else:
+            mask = col < 2 * self.pad
+            data[mask] -= (
+                self.basis_function(self.pad - col[mask] - 1, derivative=deriv)
+                / self.basis_function(self.pad, derivative=deriv)
+                * self.basis_function(tval[mask] + col[mask] + self.pad)
+            )
+
+            mask = col >= (n_control_points - 2 - 2 * self.pad)
+            data[mask] -= (
+                self.basis_function(n_control_points - col[mask] - 3, derivative=deriv)
+                / self.basis_function(-self.pad, derivative=deriv)
+                * self.basis_function(tval[mask] - (n_control_points - 2 - col[mask]))
+            )
+
+            basis_function_values = scipy.sparse.csr_array((data, (row, col)), shape=(n_points, n_control_points - 2))
+
             if self.control_points is None:
                 self.control_points = np.empty((n_control_points, points.shape[1]))
             for i in range(self.ndim):
-                self.control_points[:, i] = scipy.sparse.linalg.lsqr(basis_function_values, points[:, i])[0]
+
+                self.control_points[1:-1, i] = scipy.sparse.linalg.lsqr(basis_function_values, points[:, i])[0]
+                self.control_points[0, i] = (
+                    -self.control_points[1 : 2 * self.pad + 1, i]
+                    @ self.basis_function(np.arange(self.pad - 1, -self.pad - 1, -1), derivative=deriv)
+                    / self.basis_function(self.pad, derivative=deriv)
+                )
+                self.control_points[-1, i] = (
+                    -self.control_points[-2 * self.pad - 1 : -1, i]
+                    @ self.basis_function(np.arange(self.pad, -self.pad, -1), derivative=deriv)
+                    / self.basis_function(-self.pad, derivative=deriv)
+                )
+        else:
+            raise ValueError(f"Unknown boundary_conditions {boundary_condition}")
 
     def arc_length(self, stop=None, start=0, epsabs=0, epsrel=1e-3):
         """
