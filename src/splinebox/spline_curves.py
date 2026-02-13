@@ -678,9 +678,9 @@ class Spline:
         row = np.repeat(np.arange(indices.shape[0]), indices.shape[1])
         col = indices.flatten()
         tval = tval.flatten()
-        data = self.basis_function(tval)
 
         if self.closed or boundary_condition == "free":
+            data = self.basis_function(tval)
             if not self.closed:
                 mask = (col >= 0) & (col < n_control_points)
                 row = row[mask]
@@ -700,24 +700,18 @@ class Spline:
             row = row[mask]
             col = col[mask] - 1
             tval = tval[mask]
-            data = data[mask]
 
             deriv = 1 if boundary_condition == "clamped" else 2
 
-            mask = col < 2 * self.pad
-            data[mask] -= (
-                self.basis_function(self.pad - col[mask] - 1, derivative=deriv)
-                / self.basis_function(self.pad, derivative=deriv)
-                * self.basis_function(tval[mask] + col[mask] + self.pad)
+            data = (
+                self.basis_function(tval)
+                - self.basis_function(-col, deriv)
+                / self.basis_function(self.pad, deriv)
+                * self.basis_function(t[row] + self.pad)
+                - self.basis_function(self.M - 1 - col, deriv)
+                / self.basis_function(-self.pad, deriv)
+                * self.basis_function(t[row] - self.M + 1 - self.pad)
             )
-
-            mask = col >= (n_control_points - 2 - 2 * self.pad)
-            data[mask] -= (
-                self.basis_function(n_control_points - col[mask] - 3, derivative=deriv)
-                / self.basis_function(-self.pad, derivative=deriv)
-                * self.basis_function(tval[mask] - (n_control_points - 2 - col[mask]))
-            )
-
             basis_function_values = scipy.sparse.csr_array((data, (row, col)), shape=(n_points, n_control_points - 2))
 
             if self.control_points is None:
