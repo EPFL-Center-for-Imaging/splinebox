@@ -30,8 +30,8 @@ clamped_spline = splinebox.Spline(M, basis_function, closed)
 natural_spline = splinebox.Spline(M, basis_function, closed)
 
 free_spline.fit(data, boundary_condition="free")
-clamped_predicted_points = clamped_spline.fit(data, boundary_condition="clamped")
-natural_predicted_points = natural_spline.fit(data, boundary_condition="natural")
+clamped_spline.fit(data, boundary_condition="clamped")
+natural_spline.fit(data, boundary_condition="natural")
 
 # %%
 # We can verify that the first and second derivative are zero for the clamped
@@ -50,11 +50,8 @@ print(natural_spline(M - 1, derivative=2))
 
 t = np.linspace(0, M - 1, 1000)
 free_points = free_spline(t)
-free_control_points = free_spline.control_points
 clamped_points = clamped_spline(t)
-clamped_control_points = clamped_spline.control_points
 natural_points = natural_spline(t)
-natural_control_points = natural_spline.control_points
 
 plt.scatter(data[:, 0], data[:, 1], color="black")
 plt.plot(free_points[:, 0], free_points[:, 1], label="free", color="blue")
