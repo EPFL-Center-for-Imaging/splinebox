@@ -75,7 +75,7 @@ The spline can be written as:
 .. math::
    :name: approx:eq:7
 
-   r(t) = \sum_{-p}^{M-1+p}c[k]\Phi(t-k),
+   r(t) = \sum_{k=-p}^{M-1+p}c[k]\Phi(t-k),
 
 where :math:`p` is the amount of padding.
 
@@ -84,8 +84,8 @@ The boundary condition allows us to express the first control point as a combina
 .. math::
 
    r'(0) &= 0 \\
-       0 &= \sum_{-p}^{M-1+p}c[k]\Phi'(-k) \\
-   c[-p] &= \sum_{-p+1}^{M-1+p} -c[k] \frac{\Phi'(-k)}{\Phi'(p)}
+       0 &= \sum_{k=-p}^{M-1+p}c[k]\Phi'(-k) \\
+   c[-p] &= \sum_{k=-p+1}^{M-1+p} -c[k] \frac{\Phi'(-k)}{\Phi'(p)}
 
 *Note*: We assume that :math:`\Phi'(p) \neq 0`.
 
@@ -94,7 +94,7 @@ Plugging this into equation :ref:`(7) <approx:eq:7>` and grouping the summand by
 .. math::
    :name: approx:eq:8
 
-   r(t) = \sum_{-p+1}^{M-1+p} c[k] (\Phi(t-k) - \frac{\Phi'(-k)}{\Phi'(p)}\Phi(t+p))
+   r(t) = \sum_{k=-p+1}^{M-1+p} c[k] (\Phi(t-k) - \frac{\Phi'(-k)}{\Phi'(p)}\Phi(t+p))
 
 *Note*: :math:`\Phi(t+p)` will be zero for most :math:`t` since the support of the basis function :math:`\Phi` end in the interval :math:`[p, p+1)`.
 
@@ -103,13 +103,21 @@ We can do the same for the last control point, starting from equation :ref:`(8) 
 .. math::
 
    r'(M-1) &= 0 \\
-         0 &= \sum_{-p+1}^{M-1+p} c[k] (\Phi(M-1-k) - \frac{\Phi'(-k)}{\Phi'(p)}\Phi(M-1+p)) \\
-   c[M-1+p] &= \sum_{-p+1}^{M-2+p} -c[k] \frac{\Phi(M-1-k) - \frac{\Phi'(-k)}{\Phi'(p)}\Phi(M-1+p)}{\Phi(-p) - \frac{\Phi'(-M+1-p)}{\Phi'(p)}\Phi(M-1+p)}
+         0 &= \sum_{k=-p+1}^{M-1+p} c[k] (\Phi'(M-1-k) - \frac{\Phi'(-k)}{\Phi'(p)}\Phi'(M-1+p)) \\
+
+Because of the way we choose :math:`p` and the fact that :math:`M > 1`, we know that is outside the support of :math:`\Phi`
+and :math:`\Phi'(M-1+p)=0`.
+Therefor we get:
+
+.. math::
+
+          0 &= \sum_{k=-p+1}^{M-1+p} c[k] \Phi'(M-1-k) \\
+   c[M-1+p] &= \sum_{k=-p+1}^{M-2+p} -c[k] \frac{\Phi'(M-1-k)}{\Phi'(-p)}
 
 Plugging this into equation :ref:`(8) <approx:eq:8>` yields:
 
 .. math::
 
-   r(t) = \sum_{-p+1}^{M-2+p} c[k] (\Phi(t-k) - \frac{\Phi'(-k)}{\Phi'(p)}\Phi(t+p) - \frac{\Phi(M-1-k) - \frac{\Phi'(-k)}{\Phi'(p)}\Phi(M-1+p)}{\Phi(-p) - \frac{\Phi'(-M+1-p)}{\Phi'(p)}\Phi(M-1+p)}\Phi(t-M+1-p))
+   r(t) = \sum_{k=-p+1}^{M-2+p} c[k] (\Phi(t-k) - \frac{\Phi'(-k)}{\Phi'(p)}\Phi(t+p) - \frac{\Phi'(M-1-k)}{\Phi'(-p)}\Phi(t-M+1-p))
 
 Like equation :ref:`(1) <approx:eq:1>`, this equation can be written as a matrix-vector multiplication and can be solved using least-squares.
