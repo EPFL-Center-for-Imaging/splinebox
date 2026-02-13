@@ -1957,7 +1957,7 @@ class HermiteSpline(Spline):
             )
         self._basis_function = value
 
-    def fit(self, points, arc_length_parameterization=False):
+    def fit(self, points, boundary_condition="free"):
         if len(points) < 2 * (self.M + 2 * self.pad):
             raise RuntimeError(
                 f"You provided too few points. For a unique solution you need to provide at least 2*({self.M}+{2 * self.pad}) points to match the number of control points and tangents (including padding). You provided {len(points)} points. Consider providing more points or reducing the number of knots M."
@@ -1970,10 +1970,7 @@ class HermiteSpline(Spline):
         n_points = len(points)
         n_control_points = self.M if self.closed else self.M + 2 * self.pad
 
-        if arc_length_parameterization:
-            raise NotImplementedError
-        else:
-            t = np.linspace(0, self.M, n_points + 1)[:-1] if self.closed else np.linspace(0, self.M - 1, n_points)
+        t = np.linspace(0, self.M, n_points + 1)[:-1] if self.closed else np.linspace(0, self.M - 1, n_points)
 
         bound = math.ceil(self.half_support)
         shift = np.arange(-bound + 1, bound + 1)
@@ -1993,23 +1990,57 @@ class HermiteSpline(Spline):
             col = col[mask]
             data = data[mask]
 
-        basis_function_values = scipy.sparse.csr_array((data, (row, col)), shape=(n_points, 2 * n_control_points))
+        if self.closed or boundary_condition == "free":
+            basis_function_values = scipy.sparse.csr_array((data, (row, col)), shape=(n_points, 2 * n_control_points))
 
-        half = self.M if self.closed else self.M + 2 * self.pad
+            half = self.M if self.closed else self.M + 2 * self.pad
 
-        if points.ndim == 1:
-            solution = scipy.sparse.linalg.lsqr(basis_function_values, points)[0]
-            self.control_points = solution[:half]
-            self.tangents = solution[half:]
-        else:
+            if points.ndim == 1:
+                solution = scipy.sparse.linalg.lsqr(basis_function_values, points)[0]
+                self.control_points = solution[:half]
+                self.tangents = solution[half:]
+            else:
+                if self.control_points is None:
+                    self.control_points = np.empty((n_control_points, points.shape[1]))
+                if self.tangents is None:
+                    self.tangents = np.empty((n_control_points, points.shape[1]))
+                for i in range(self.ndim):
+                    solution = scipy.sparse.linalg.lsqr(basis_function_values, points[:, i])[0]
+                    self.control_points[:, i] = solution[:half]
+                    self.tangents[:, i] = solution[half:]
+
+        elif boundary_condition == "clamped":
+            mask = (col != n_control_points + self.pad) & (col != 2 * n_control_points - 1 - self.pad)
+            row = row[mask]
+            col = col[mask]
+            data = data[mask]
+
+            col[col > n_control_points + self.pad] -= 1
+            col[col > 2 * n_control_points - 1 - self.pad - 1] -= 1
+
+            basis_function_values = scipy.sparse.csr_array(
+                (data, (row, col)), shape=(n_points, 2 * n_control_points - 2)
+            )
+
             if self.control_points is None:
                 self.control_points = np.empty((n_control_points, points.shape[1]))
             if self.tangents is None:
                 self.tangents = np.empty((n_control_points, points.shape[1]))
             for i in range(self.ndim):
                 solution = scipy.sparse.linalg.lsqr(basis_function_values, points[:, i])[0]
-                self.control_points[:, i] = solution[:half]
-                self.tangents[:, i] = solution[half:]
+                self.control_points[:, i] = solution[:n_control_points]
+
+                self.tangents[: self.pad, i] = solution[n_control_points : n_control_points + self.pad]
+                self.tangents[self.pad, i] = 0
+                self.tangents[self.pad + 1 : n_control_points - 1 - self.pad, i] = solution[
+                    n_control_points + self.pad : 2 * n_control_points - 2 - self.pad
+                ]
+                self.tangents[n_control_points - 1 - self.pad, i] = 0
+                self.tangents[n_control_points - self.pad :, i] = solution[2 * n_control_points - 2 - self.pad :]
+        elif boundary_condition == "natural":
+            raise NotImplementedError("Boundary condition 'natural' is not implemented for Hermite splines.")
+        else:
+            raise ValueError(f"Unknown boundary_conditions {boundary_condition}")
 
     def __call__(self, t, derivative=0):
         self._check_control_points_and_tangents()
