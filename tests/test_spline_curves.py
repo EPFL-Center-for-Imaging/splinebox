@@ -329,7 +329,7 @@ def test_rotate(initialized_spline_curve, rotation_matrix, is_hermite_spline):
         assert np.allclose(spline_copy(t), expected)
 
 
-def test_fit(spline_curve, arc_length_parametrization, points, is_hermite_spline):
+def test_fit(spline_curve, points, is_hermite_spline):
     # Bool indicating whether spline_curve is a hermite spline or not
     hermite = is_hermite_spline(spline_curve)
 
@@ -390,6 +390,59 @@ def test_fit(spline_curve, arc_length_parametrization, points, is_hermite_spline
         assert np.allclose(control_points_expected, control_points_fit)
         if hermite:
             assert np.allclose(tangents_expected, tangents_fit)
+
+
+def test_fit_clamped(open_spline_curve, points, is_hermite_spline):
+    spline = open_spline_curve
+
+    # Bool indicating whether spline is a hermite spline or not
+    hermite = is_hermite_spline(spline)
+
+    n_control_points = spline.M + 2 * spline.pad
+    if hermite and len(points) < 2 * n_control_points or len(points) < n_control_points:
+        # The problem is underdetermined
+        with pytest.raises(RuntimeError):
+            spline.fit(points, "clamped")
+
+    elif spline.basis_function == splinebox.B1():
+        # B1 is not differentiable at the knots
+        with pytest.raises(RuntimeError):
+            spline.fit(points, "clamped")
+    else:
+        spline.fit(points, "clamped")
+
+        # Check that the boundary conditions are fulfilled
+        assert np.allclose(spline(0, derivative=1), 0)
+        assert np.allclose(spline(spline.M - 1, derivative=1), 0)
+
+
+def test_fit_natural(open_spline_curve, points, is_hermite_spline):
+    spline = open_spline_curve
+
+    # Bool indicating whether spline is a hermite spline or not
+    hermite = is_hermite_spline(spline)
+
+    n_control_points = spline.M + 2 * spline.pad
+    if hermite and len(points) < 2 * n_control_points or len(points) < n_control_points:
+        # The problem is underdetermined
+        with pytest.raises(RuntimeError):
+            spline.fit(points, "natrual")
+
+    elif spline.basis_function in (
+        splinebox.B1(),
+        splinebox.CatmullRom(),
+        splinebox.CubicHermite(),
+        splinebox.ExponentialHermite(spline.M),
+    ):
+        # Not twice differentiable at the knots
+        with pytest.raises(RuntimeError):
+            spline.fit(points, "natural")
+    else:
+        spline.fit(points, "natural")
+
+        # Check that the boundary conditions are fulfilled
+        assert np.allclose(spline(0, derivative=2), 0)
+        assert np.allclose(spline(spline.M - 1, derivative=2), 0)
 
 
 def test_knots(spline_curve, knot_gen, is_hermite_spline, request):

@@ -347,8 +347,8 @@ def rotation_matrix(codomain_dimensionality):
     return R
 
 
-@pytest.fixture(params=[False, True])
-def arc_length_parametrization(request):
+@pytest.fixture(params=["free", "clamped", "natural"])
+def boundary_condition(request):
     return request.param
 
 

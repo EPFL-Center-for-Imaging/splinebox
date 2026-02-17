@@ -696,12 +696,17 @@ class Spline:
                 for i in range(self.ndim):
                     self.control_points[:, i] = scipy.sparse.linalg.lsqr(basis_function_values, points[:, i])[0]
         elif boundary_condition in ("clamped", "natural"):
+            deriv = 1 if boundary_condition == "clamped" else 2
+
+            if np.any(np.isnan(self.basis_function(np.arange(-self.pad, self.pad + 1), derivative=deriv))):
+                raise RuntimeError(
+                    f"For boundary condition '{boundary_condition}' the spline has to be C{deriv} at the knots. The {self.basis_function} basis function is not C{deriv}. Consider choosing a different basis function or a different boundary condition."
+                )
+
             mask = (col >= 1) & (col < n_control_points - 1)
             row = row[mask]
             col = col[mask] - 1
             tval = tval[mask]
-
-            deriv = 1 if boundary_condition == "clamped" else 2
 
             data = (
                 self.basis_function(tval)
@@ -715,6 +720,8 @@ class Spline:
             basis_function_values = scipy.sparse.csr_array((data, (row, col)), shape=(n_points, n_control_points - 2))
 
             if self.control_points is None:
+                if points.ndim == 1:
+                    points = points[:, np.newaxis]
                 self.control_points = np.empty((n_control_points, points.shape[1]))
             for i in range(self.ndim):
 
@@ -1317,7 +1324,7 @@ class Spline:
         self._check_control_points()
         t, single_value = self._convert_to_array(t)
         if np.any(np.isnan(t)):
-            raise ValueError("t should not cotain any NaN values.")
+            raise ValueError("t should not contain any NaN values.")
         bound = math.ceil(self.half_support)
         shift = np.arange(-bound + 1, bound + 1)
         tval = np.empty((len(t), len(shift)), dtype=float)
@@ -1325,7 +1332,7 @@ class Spline:
         self._compute_tval_and_indices(t, shift, self.closed, self.M, self.pad, tval, indices)
 
         basis_function_values = self.basis_function(tval, derivative=derivative)
-        control_points = self.control_points
+        control_points = np.squeeze(self.control_points)
         if not self.closed:
             before = -min(np.min(indices), 0)
             after = max(np.max(indices) - self.M + 1 - self.pad, 0)
@@ -2010,6 +2017,11 @@ class HermiteSpline(Spline):
                     self.tangents[:, i] = solution[half:]
 
         elif boundary_condition == "clamped":
+            if np.any(np.isnan(self.basis_function(np.arange(-self.pad, self.pad + 1), derivative=1))):
+                raise RuntimeError(
+                    f"For boundary condition 'clamped' the spline has to be C1 at the knots. The {self.basis_function} basis function is not C1. Consider choosing a different basis function or a different boundary condition."
+                )
+
             mask = (col != n_control_points + self.pad) & (col != 2 * n_control_points - 1 - self.pad)
             row = row[mask]
             col = col[mask]
@@ -2023,6 +2035,8 @@ class HermiteSpline(Spline):
             )
 
             if self.control_points is None:
+                if points.ndim == 1:
+                    points = points[:, np.newaxis]
                 self.control_points = np.empty((n_control_points, points.shape[1]))
             if self.tangents is None:
                 self.tangents = np.empty((n_control_points, points.shape[1]))
@@ -2054,8 +2068,8 @@ class HermiteSpline(Spline):
         self._compute_tval_and_indices(t, shift, self.closed, self.M, self.pad, tval, indices)
 
         basis_function_values = self.basis_function(tval, derivative=derivative)
-        control_points = self.control_points
-        tangents = self.tangents
+        control_points = np.squeeze(self.control_points)
+        tangents = np.squeeze(self.tangents)
         if not self.closed:
             before = -min(np.min(indices), 0)
             after = max(np.max(indices) - self.M + 1 - self.pad, 0)
