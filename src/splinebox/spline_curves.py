@@ -1025,7 +1025,7 @@ class Spline:
             results = results[0]
         return results
 
-    def curvilinear_reparametrization_energy(self, epsabs=1e-6, epsrel=1e-6):
+    def curvilinear_reparametrization_energy(self, atol=1e-6, rtol=1e-6):
         """
         This energy can be used to enforce equal spacing of the knots.
 
@@ -1035,11 +1035,11 @@ class Spline:
 
         Parameters
         ----------
-        epsabs : float
+        atol : float
             The absolute accuracy for the integration.
             Default is 1e-6.
             For details see scipy.integrate.quad_.
-        epsrel : float
+        rtol : float
             The relative accuracy for the integration.
             Default is 1e-6.
             For details see scipy.integrate.quad_.
@@ -1058,8 +1058,8 @@ class Spline:
             lambda t: (np.linalg.norm(np.nan_to_num(self(t, derivative=1))) ** 2 - c) ** 2,
             0,
             upper_limit,
-            epsabs=epsabs,
-            epsrel=epsrel,
+            epsabs=atol,
+            epsrel=rtol,
             maxp1=50,
             limit=100,
         )
