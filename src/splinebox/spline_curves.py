@@ -14,6 +14,23 @@ import scipy.integrate
 
 import splinebox.basis_functions
 
+GAUSS_LEGENDRE_QUADRATURE_POINTS = np.array(
+    [
+        -np.sqrt(3 / 7 + 2 / 7 * np.sqrt(6 / 5)),
+        -np.sqrt(3 / 7 - 2 / 7 * np.sqrt(6 / 5)),
+        np.sqrt(3 / 7 - 2 / 7 * np.sqrt(6 / 5)),
+        np.sqrt(3 / 7 + 2 / 7 * np.sqrt(6 / 5)),
+    ]
+)
+GAUSS_LEGENDRE_QUADRATURE_WEIGHTS = np.array(
+    [
+        (18 - np.sqrt(30)) / 36,
+        (18 + np.sqrt(30)) / 36,
+        (18 + np.sqrt(30)) / 36,
+        (18 - np.sqrt(30)) / 36,
+    ]
+)
+
 
 def padding_function(knots, pad_length):
     """
@@ -87,6 +104,9 @@ class Spline:
         the padding size as the second argument. It should return a padded array.
         If `None`, a padded array has to be supplied when setting the `knots`.
         The default is constant padding with the edge values (see :func:`splinebox.spline_curves.padding_function`).
+    integration_segment_size : float
+        A positive float number in (0, 1]. Default is 0.1.
+        For details see :meth:`splinebox.spline_curves.Spline.arc_length`.
 
     Raises
     ------
@@ -138,7 +158,15 @@ class Spline:
     _no_control_points_msg = "This spline object doesn't have any control points yet."
     _unimplemented_msg = "This function is not implemented."
 
-    def __init__(self, M, basis_function, closed=False, control_points=None, padding_function=padding_function):
+    def __init__(
+        self,
+        M,
+        basis_function,
+        closed=False,
+        control_points=None,
+        padding_function=padding_function,
+        integration_segment_size=0.1,
+    ):
         if basis_function.support <= M:
             self.M = M
         else:
@@ -152,6 +180,10 @@ class Spline:
         self.closed = closed
         self.control_points = control_points
         self.padding_function = padding_function
+
+        self.integration_segment_size = integration_segment_size
+        self._cached_segments = None
+        self._cached_segment_lengths = None
 
     def _check_control_points(self):
         """
@@ -206,6 +238,8 @@ class Spline:
                 raise ValueError(
                     f"Non-closed splines are padded at the ends, i.e. the effective number of control points is M + 2 * (ceil(support/2) - 1). You provided {n} control points for a spline with M={self.M} and a basis function with support={self.basis_function.support}, expected {padded_M}."
                 )
+        # Invalidate cached lengths
+        self._cached_segment_lengths = None
         self._control_points = values
 
     @property
@@ -334,6 +368,57 @@ class Spline:
             return 1
         else:
             return self.control_points.shape[-1]
+
+    @property
+    def integration_segment_size(self):
+        """
+        Size of the segments for the Gauss-Legendre quadrature.
+        For details see :meth:`splinebox.spline_curves.Spline.arc_length`.
+        """
+        return self._integration_segment_size
+
+    @integration_segment_size.setter
+    def integration_segment_size(self, value):
+        if value <= 0:
+            raise ValueError("integration_segment_size has to be larger than 0.")
+        if value > 1:
+            raise ValueError(
+                "The integration_segment_size  has to be <= 1 to guarantee the smoothness of the spline in the integration window."
+            )
+        self._integration_segment_size = value
+
+    @property
+    def _segments(self):
+        if self._cached_segments is None:
+            if self.closed:
+                self._cached_segments = np.arange(
+                    0, self.M + self.integration_segment_size / 10, self.integration_segment_size
+                )
+            else:
+                self._cached_segments = (
+                    np.arange(
+                        0,
+                        self.M - 1 + 2 * (self.pad + self.half_support) + self.integration_segment_size / 10,
+                        self.integration_segment_size,
+                    )
+                    - self.pad
+                    - self.half_support
+                )
+        return self._cached_segments
+
+    @property
+    def _segment_lengths(self):
+        if self._cached_segment_lengths is None:
+            tvals = np.add.outer(
+                (self._segments[:-1] + self._segments[1:]) / 2,
+                GAUSS_LEGENDRE_QUADRATURE_POINTS / (2 / self.integration_segment_size),
+            )
+            function_values = self(tvals.flatten(), derivative=1).reshape(*tvals.shape, -1)
+            function_values = np.linalg.norm(function_values, axis=-1)
+            self._cached_segment_lengths = (
+                function_values @ GAUSS_LEGENDRE_QUADRATURE_WEIGHTS / (2 / self.integration_segment_size)
+            )
+        return self._cached_segment_lengths
 
     def copy(self):
         """
@@ -739,11 +824,20 @@ class Spline:
         else:
             raise ValueError(f"Unknown boundary_conditions {boundary_condition}")
 
-    def arc_length(self, stop=None, start=0, epsabs=0, epsrel=1e-3):
+    def _gauss_legendre_quadrature(self, a, b):
+        tvals = np.outer((b - a) / 2, GAUSS_LEGENDRE_QUADRATURE_POINTS) + (a + b)[:, np.newaxis] / 2
+        function_values = self(tvals.flatten(), derivative=1)
+        function_values = function_values.reshape(*tvals.shape, -1)
+        function_values = np.linalg.norm(function_values, axis=-1)
+        result = function_values @ GAUSS_LEGENDRE_QUADRATURE_WEIGHTS * (b - a) / 2
+        result[a == b] = 0
+        return result
+
+    def arc_length(self, stop=None, start=0):
         """
         Compute the arc length of the spline between
         the two parameter values specified. If no value for start is give,
-        start from the begining of the spline.
+        start from the beginning of the spline.
         If no value for stop is give, go until the end of the spline.
         When arrays with multiple values are given for start and/or stop,
         an array with all of the arc lengths is returned.
@@ -754,12 +848,6 @@ class Spline:
             Stop point(s) in parameter space.
         start : np.array / float (optional)
             Start point(s) in parameter space.
-        epsabs : float (optional)
-            Absolute error tolerance. Default is 0, which means only the
-            relative error is used.
-        epsrel : float (optional)
-            Relative error tolerance. Default is 0.001, which corresponds
-            to a 0.1% error.
 
         Returns
         -------
@@ -790,49 +878,45 @@ class Spline:
         """
         self._check_control_points()
 
-        if isinstance(stop, collections.abc.Iterable):
-            results = np.zeros(len(stop))
-            if isinstance(start, collections.abc.Iterable):
+        if stop is None:
+            stop = self.M if self.closed else self.M - 1
+
+        start, start_single_value = self._convert_to_array(start)
+        stop, stop_single_value = self._convert_to_array(stop)
+
+        single_value = start_single_value and stop_single_value
+
+        if not single_value:
+            if start_single_value:
+                start = np.repeat(start, len(stop))
+            elif stop_single_value:
+                stop = np.repeat(stop, len(start))
+            else:
                 if len(stop) != len(start):
                     raise ValueError(
                         "If you provide array like objects for start and stop, they need to have the same length."
                     )
-                for i in range(len(stop)):
-                    results[i] = self.arc_length(stop[i], start[i], epsabs=epsabs, epsrel=epsrel)
+        bounds = np.stack([start, stop], axis=-1)
+        bounds = np.sort(bounds, axis=-1)
+
+        start_segment_indices = np.searchsorted(self._segments, bounds[:, 0], side="left")
+        stop_segment_indices = np.searchsorted(self._segments, bounds[:, 1], side="right") - 1
+        initial_segment_lengths = self._gauss_legendre_quadrature(bounds[:, 0], self._segments[start_segment_indices])
+        final_segment_lengths = self._gauss_legendre_quadrature(self._segments[stop_segment_indices], bounds[:, 1])
+
+        arc_lengths = np.empty(len(bounds))
+        for i, (initial_segment_length, final_segment_length) in enumerate(
+            zip(initial_segment_lengths, final_segment_lengths)
+        ):
+            if start_segment_indices[i] > stop_segment_indices[i]:
+                arc_lengths[i] = self._gauss_legendre_quadrature(bounds[i, 0], bounds[:, 1])
             else:
-                sort_indices = np.argsort(stop)
-                sorted_stop = stop[sort_indices]
-                for i in range(len(stop)):
-                    if i == 0:
-                        results[i] = self.arc_length(sorted_stop[i], start, epsabs=epsabs, epsrel=epsrel)
-                    else:
-                        results[i] = results[i - 1] + self.arc_length(
-                            sorted_stop[i], sorted_stop[i - 1], epsabs=epsabs, epsrel=epsrel
-                        )
-                # Undo the sorting
-                results = results[np.argsort(sort_indices)]
-            return results
+                segment_sum = math.fsum(self._segment_lengths[start_segment_indices[i] : stop_segment_indices[i]])
+                arc_lengths[i] = segment_sum + initial_segment_length + final_segment_length
 
-        if stop is None:
-            stop = self.M if self.closed else self.M - 1
-
-        if start == stop:
-            return 0
-
-        if start > stop:
-            start, stop = stop, start
-
-        integral = scipy.integrate.quad(
-            lambda t: np.linalg.norm(np.nan_to_num(self(t, derivative=1))),
-            start,
-            stop,
-            epsabs=epsabs,
-            epsrel=epsrel,
-            maxp1=50,
-            limit=100,
-        )
-
-        return integral[0]
+        if single_value:
+            arc_lengths = arc_lengths[0]
+        return arc_lengths
 
     def _length_to_parameter_recursion(
         self, s, current_value, lower_bound, upper_bound, intermediate_results=None, atol=1e-4
@@ -863,9 +947,8 @@ class Spline:
         t : float
             The paramters value for the given length `s`.
         """
-        self._check_control_points()
         midpoint = lower_bound + (upper_bound - lower_bound) / 2
-        midpoint_length = current_value + self.arc_length(lower_bound, midpoint, epsabs=atol, epsrel=0)
+        midpoint_length = current_value + self.arc_length(lower_bound, midpoint)
         if intermediate_results is not None:
             intermediate_results.append((midpoint, midpoint_length))
 
@@ -968,7 +1051,7 @@ class Spline:
 
         .. _scipy.integrate.quad: https://docs.scipy.org/doc/scipy-1.14.0/reference/generated/scipy.integrate.quad.html
         """
-        arc_length = self.arc_length(epsabs=epsabs, epsrel=epsrel)
+        arc_length = self.arc_length()
         c = (arc_length / self.M) ** 2
         upper_limit = self.M if self.closed else self.M - 1
         integral = scipy.integrate.quad(
