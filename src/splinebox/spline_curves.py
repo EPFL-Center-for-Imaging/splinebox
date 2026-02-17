@@ -415,7 +415,6 @@ class Spline:
             )
             function_values = self(tvals.flatten(), derivative=1).reshape(*tvals.shape, -1)
             function_values = np.linalg.norm(function_values, axis=-1)
-            # function_values = function_values.reshape(-1, len(GAUSS_LEGENDRE_QUADRATURE_POINTS))
             self._cached_segment_lengths = (
                 function_values @ GAUSS_LEGENDRE_QUADRATURE_WEIGHTS / (2 / self.integration_segment_size)
             )
