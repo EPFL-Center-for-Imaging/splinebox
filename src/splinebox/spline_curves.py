@@ -1196,24 +1196,35 @@ class Spline:
         t = t[sort_indices]
 
         first_derivative = self(t, derivative=1)
+        if np.any(np.isnan(first_derivative)):
+            raise RuntimeError(
+                f"The frame cannot be compute for t={t[np.any(np.isnan(first_derivative), axis=-1)]} because the spline is not differentiable at those positions."
+            )
 
         frame = np.zeros((len(t), 3, 3))
         frame[:, 0] = first_derivative / np.linalg.norm(first_derivative, axis=-1)[:, np.newaxis]
 
         if method == "frenet":
             second_derivative = self(t, derivative=2)
+            if np.any(np.isnan(second_derivative)):
+                raise RuntimeError(
+                    f"The Frenet frame cannot be compute for t={t[np.any(np.isnan(second_derivative), axis=-1)]} because the spline is not twice differentiable at those positions."
+                )
             frame[:, 2] = np.cross(first_derivative, second_derivative)
             norm_binormal = np.linalg.norm(frame[:, 2], axis=-1)[:, np.newaxis]
+
+            if np.isclose(norm_binormal[0], 0) or np.isclose(norm_binormal[-1], 0):
+                raise RuntimeError(
+                    "The Frenet frame cannot be computed at one or both ends of the spline. This is often due to edge padding of the knots. Try to skip t=0 and t=M-1 or change the padding."
+                )
             if np.any(np.isclose(norm_binormal, 0)):
-                if np.isclose(norm_binormal[0], 0) or np.isclose(norm_binormal[-1], 0):
-                    raise RuntimeError(
-                        "The Frenet frame cannot be computed at one or both ends of the spline. This is often due to edge padding of the knots. Try to skip t=0 and t=M-1 or change the padding."
-                    )
                 raise RuntimeError(
                     "The Frenet frame is not defined for splines with inflection points or straight segments, try the Bishop frame instead."
                 )
+
             frame[:, 2] /= norm_binormal
             frame[:, 1] = np.cross(frame[:, 2], frame[:, 0])
+
         elif method == "bishop":
             if initial_vector is None:
                 tangent = frame[0, 0]

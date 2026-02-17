@@ -327,13 +327,13 @@ class B1(BasisFunction):
         elif t > 0 and t < 1:
             val = -1
         elif t == 0 or t == -1 or t == 1:
-            # This is the gradient you'll get at exactly 0
             val = np.nan
         return val
 
     @staticmethod
+    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
     def _derivative_2(t):
-        raise RuntimeError("B1 isn't twice differentiable.")
+        return np.nan if t in (-1, 0, 1) else 0
 
     @staticmethod
     def filter_symmetric(s):
