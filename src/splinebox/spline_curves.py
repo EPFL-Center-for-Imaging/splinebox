@@ -395,10 +395,14 @@ class Spline:
                     0, self.M + self.integration_segment_size / 10, self.integration_segment_size
                 )
             else:
-                self._cached_segments = np.arange(
-                    -self.pad - self.half_support,
-                    self.M - 1 + self.pad + self.half_support + self.integration_segment_size / 10,
-                    self.integration_segment_size,
+                self._cached_segments = (
+                    np.arange(
+                        0,
+                        self.M - 1 + 2 * (self.pad + self.half_support) + self.integration_segment_size / 10,
+                        self.integration_segment_size,
+                    )
+                    - self.pad
+                    - self.half_support
                 )
         return self._cached_segments
 
@@ -826,7 +830,9 @@ class Spline:
         function_values = self(tvals.flatten(), derivative=1)
         function_values = function_values.reshape(*tvals.shape, -1)
         function_values = np.linalg.norm(function_values, axis=-1)
-        return function_values @ GAUSS_LEGENDRE_QUADRATURE_WEIGHTS * (b - a) / 2
+        result = function_values @ GAUSS_LEGENDRE_QUADRATURE_WEIGHTS * (b - a) / 2
+        result[a == b] = 0
+        return result
 
     def arc_length(self, stop=None, start=0):
         """
@@ -899,7 +905,7 @@ class Spline:
         initial_segment_lengths = self._gauss_legendre_quadrature(bounds[:, 0], self._segments[start_segment_indices])
         final_segment_lengths = self._gauss_legendre_quadrature(self._segments[stop_segment_indices], bounds[:, 1])
 
-        arc_lengths = np.empty(len(start))
+        arc_lengths = np.empty(len(bounds))
         for i, (initial_segment_length, final_segment_length) in enumerate(
             zip(initial_segment_lengths, final_segment_lengths)
         ):
@@ -942,7 +948,6 @@ class Spline:
         t : float
             The paramters value for the given length `s`.
         """
-        self._check_control_points()
         midpoint = lower_bound + (upper_bound - lower_bound) / 2
         midpoint_length = current_value + self.arc_length(lower_bound, midpoint)
         if intermediate_results is not None:
