@@ -621,7 +621,7 @@ class Spline:
             return float(results)
         return results
 
-    def fit(self, points, arc_length_parameterization=False):
+    def fit(self, points, boundary_condition="free"):
         """
         Fit the provided points with the spline using least squares.
         For details refer to :ref:`theory/data_approximation:Data approximation`.
@@ -630,10 +630,12 @@ class Spline:
         ----------
         points : numpy.ndarray
             The data points that should be fit.
-        arc_length_parameterization : bool
-            Whether or not to space the knots based on the distance
-            between the provided points. This is usefull when the
-            points are not equally spaced. Default is `False`.
+        boundary_condition : str
+            Specifies how to hand the ends of open splines.
+            Can be one of the following:
+            'free' (default): No restrictions.
+            'clamped': First derivative is zero at the ends.
+            'natural': Second derivative is zero at the ends.
 
         Examples
         --------
@@ -665,10 +667,7 @@ class Spline:
         n_points = len(points)
         n_control_points = self.M if self.closed else self.M + 2 * self.pad
 
-        if arc_length_parameterization:
-            raise NotImplementedError
-        else:
-            t = np.linspace(0, self.M, n_points + 1)[:-1] if self.closed else np.linspace(0, self.M - 1, n_points)
+        t = np.linspace(0, self.M, n_points + 1)[:-1] if self.closed else np.linspace(0, self.M - 1, n_points)
 
         bound = math.ceil(self.half_support)
         shift = np.arange(-bound + 1, bound + 1)
@@ -678,23 +677,67 @@ class Spline:
 
         row = np.repeat(np.arange(indices.shape[0]), indices.shape[1])
         col = indices.flatten()
-        data = self.basis_function(tval).flatten()
+        tval = tval.flatten()
 
-        if not self.closed:
-            mask = (col >= 0) & (col < n_control_points)
+        if self.closed or boundary_condition == "free":
+            data = self.basis_function(tval)
+            if not self.closed:
+                mask = (col >= 0) & (col < n_control_points)
+                row = row[mask]
+                col = col[mask]
+                data = data[mask]
+            basis_function_values = scipy.sparse.csr_array((data, (row, col)), shape=(n_points, n_control_points))
+
+            if points.ndim == 1:
+                self.control_points = scipy.sparse.linalg.lsqr(basis_function_values, points)[0]
+            else:
+                if self.control_points is None:
+                    self.control_points = np.empty((n_control_points, points.shape[1]))
+                for i in range(self.ndim):
+                    self.control_points[:, i] = scipy.sparse.linalg.lsqr(basis_function_values, points[:, i])[0]
+        elif boundary_condition in ("clamped", "natural"):
+            deriv = 1 if boundary_condition == "clamped" else 2
+
+            if np.any(np.isnan(self.basis_function(np.arange(-self.pad, self.pad + 1), derivative=deriv))):
+                raise RuntimeError(
+                    f"For boundary condition '{boundary_condition}' the spline has to be C{deriv} at the knots. The {self.basis_function} basis function is not C{deriv}. Consider choosing a different basis function or a different boundary condition."
+                )
+
+            mask = (col >= 1) & (col < n_control_points - 1)
             row = row[mask]
-            col = col[mask]
-            data = data[mask]
+            col = col[mask] - 1
+            tval = tval[mask]
 
-        basis_function_values = scipy.sparse.csr_array((data, (row, col)), shape=(n_points, n_control_points))
+            data = (
+                self.basis_function(tval)
+                - self.basis_function(-col, deriv)
+                / self.basis_function(self.pad, deriv)
+                * self.basis_function(t[row] + self.pad)
+                - self.basis_function(self.M - 1 - col, deriv)
+                / self.basis_function(-self.pad, deriv)
+                * self.basis_function(t[row] - self.M + 1 - self.pad)
+            )
+            basis_function_values = scipy.sparse.csr_array((data, (row, col)), shape=(n_points, n_control_points - 2))
 
-        if points.ndim == 1:
-            self.control_points = scipy.sparse.linalg.lsqr(basis_function_values, points)[0]
-        else:
             if self.control_points is None:
+                if points.ndim == 1:
+                    points = points[:, np.newaxis]
                 self.control_points = np.empty((n_control_points, points.shape[1]))
             for i in range(self.ndim):
-                self.control_points[:, i] = scipy.sparse.linalg.lsqr(basis_function_values, points[:, i])[0]
+
+                self.control_points[1:-1, i] = scipy.sparse.linalg.lsqr(basis_function_values, points[:, i])[0]
+                self.control_points[0, i] = (
+                    -self.control_points[1 : 2 * self.pad + 1, i]
+                    @ self.basis_function(np.arange(self.pad - 1, -self.pad - 1, -1), derivative=deriv)
+                    / self.basis_function(self.pad, derivative=deriv)
+                )
+                self.control_points[-1, i] = (
+                    -self.control_points[-2 * self.pad - 1 : -1, i]
+                    @ self.basis_function(np.arange(self.pad, -self.pad, -1), derivative=deriv)
+                    / self.basis_function(-self.pad, derivative=deriv)
+                )
+        else:
+            raise ValueError(f"Unknown boundary_conditions {boundary_condition}")
 
     def arc_length(self, stop=None, start=0, epsabs=0, epsrel=1e-3):
         """
@@ -1153,24 +1196,35 @@ class Spline:
         t = t[sort_indices]
 
         first_derivative = self(t, derivative=1)
+        if np.any(np.isnan(first_derivative)):
+            raise RuntimeError(
+                f"The frame cannot be compute for t={t[np.any(np.isnan(first_derivative), axis=-1)]} because the spline is not differentiable at those positions."
+            )
 
         frame = np.zeros((len(t), 3, 3))
         frame[:, 0] = first_derivative / np.linalg.norm(first_derivative, axis=-1)[:, np.newaxis]
 
         if method == "frenet":
             second_derivative = self(t, derivative=2)
+            if np.any(np.isnan(second_derivative)):
+                raise RuntimeError(
+                    f"The Frenet frame cannot be compute for t={t[np.any(np.isnan(second_derivative), axis=-1)]} because the spline is not twice differentiable at those positions."
+                )
             frame[:, 2] = np.cross(first_derivative, second_derivative)
             norm_binormal = np.linalg.norm(frame[:, 2], axis=-1)[:, np.newaxis]
+
+            if np.isclose(norm_binormal[0], 0) or np.isclose(norm_binormal[-1], 0):
+                raise RuntimeError(
+                    "The Frenet frame cannot be computed at one or both ends of the spline. This is often due to edge padding of the knots. Try to skip t=0 and t=M-1 or change the padding."
+                )
             if np.any(np.isclose(norm_binormal, 0)):
-                if np.isclose(norm_binormal[0], 0) or np.isclose(norm_binormal[-1], 0):
-                    raise RuntimeError(
-                        "The Frenet frame cannot be computed at one or both ends of the spline. This is often due to edge padding of the knots. Try to skip t=0 and t=M-1 or change the padding."
-                    )
                 raise RuntimeError(
                     "The Frenet frame is not defined for splines with inflection points or straight segments, try the Bishop frame instead."
                 )
+
             frame[:, 2] /= norm_binormal
             frame[:, 1] = np.cross(frame[:, 2], frame[:, 0])
+
         elif method == "bishop":
             if initial_vector is None:
                 tangent = frame[0, 0]
@@ -1281,7 +1335,7 @@ class Spline:
         self._check_control_points()
         t, single_value = self._convert_to_array(t)
         if np.any(np.isnan(t)):
-            raise ValueError("t should not cotain any NaN values.")
+            raise ValueError("t should not contain any NaN values.")
         bound = math.ceil(self.half_support)
         shift = np.arange(-bound + 1, bound + 1)
         tval = np.empty((len(t), len(shift)), dtype=float)
@@ -1289,7 +1343,7 @@ class Spline:
         self._compute_tval_and_indices(t, shift, self.closed, self.M, self.pad, tval, indices)
 
         basis_function_values = self.basis_function(tval, derivative=derivative)
-        control_points = self.control_points
+        control_points = np.squeeze(self.control_points)
         if not self.closed:
             before = -min(np.min(indices), 0)
             after = max(np.max(indices) - self.M + 1 - self.pad, 0)
@@ -1921,7 +1975,7 @@ class HermiteSpline(Spline):
             )
         self._basis_function = value
 
-    def fit(self, points, arc_length_parameterization=False):
+    def fit(self, points, boundary_condition="free"):
         if len(points) < 2 * (self.M + 2 * self.pad):
             raise RuntimeError(
                 f"You provided too few points. For a unique solution you need to provide at least 2*({self.M}+{2 * self.pad}) points to match the number of control points and tangents (including padding). You provided {len(points)} points. Consider providing more points or reducing the number of knots M."
@@ -1934,10 +1988,7 @@ class HermiteSpline(Spline):
         n_points = len(points)
         n_control_points = self.M if self.closed else self.M + 2 * self.pad
 
-        if arc_length_parameterization:
-            raise NotImplementedError
-        else:
-            t = np.linspace(0, self.M, n_points + 1)[:-1] if self.closed else np.linspace(0, self.M - 1, n_points)
+        t = np.linspace(0, self.M, n_points + 1)[:-1] if self.closed else np.linspace(0, self.M - 1, n_points)
 
         bound = math.ceil(self.half_support)
         shift = np.arange(-bound + 1, bound + 1)
@@ -1957,23 +2008,64 @@ class HermiteSpline(Spline):
             col = col[mask]
             data = data[mask]
 
-        basis_function_values = scipy.sparse.csr_array((data, (row, col)), shape=(n_points, 2 * n_control_points))
+        if self.closed or boundary_condition == "free":
+            basis_function_values = scipy.sparse.csr_array((data, (row, col)), shape=(n_points, 2 * n_control_points))
 
-        half = self.M if self.closed else self.M + 2 * self.pad
+            half = self.M if self.closed else self.M + 2 * self.pad
 
-        if points.ndim == 1:
-            solution = scipy.sparse.linalg.lsqr(basis_function_values, points)[0]
-            self.control_points = solution[:half]
-            self.tangents = solution[half:]
-        else:
+            if points.ndim == 1:
+                solution = scipy.sparse.linalg.lsqr(basis_function_values, points)[0]
+                self.control_points = solution[:half]
+                self.tangents = solution[half:]
+            else:
+                if self.control_points is None:
+                    self.control_points = np.empty((n_control_points, points.shape[1]))
+                if self.tangents is None:
+                    self.tangents = np.empty((n_control_points, points.shape[1]))
+                for i in range(self.ndim):
+                    solution = scipy.sparse.linalg.lsqr(basis_function_values, points[:, i])[0]
+                    self.control_points[:, i] = solution[:half]
+                    self.tangents[:, i] = solution[half:]
+
+        elif boundary_condition == "clamped":
+            if np.any(np.isnan(self.basis_function(np.arange(-self.pad, self.pad + 1), derivative=1))):
+                raise RuntimeError(
+                    f"For boundary condition 'clamped' the spline has to be C1 at the knots. The {self.basis_function} basis function is not C1. Consider choosing a different basis function or a different boundary condition."
+                )
+
+            mask = (col != n_control_points + self.pad) & (col != 2 * n_control_points - 1 - self.pad)
+            row = row[mask]
+            col = col[mask]
+            data = data[mask]
+
+            col[col > n_control_points + self.pad] -= 1
+            col[col > 2 * n_control_points - 1 - self.pad - 1] -= 1
+
+            basis_function_values = scipy.sparse.csr_array(
+                (data, (row, col)), shape=(n_points, 2 * n_control_points - 2)
+            )
+
             if self.control_points is None:
+                if points.ndim == 1:
+                    points = points[:, np.newaxis]
                 self.control_points = np.empty((n_control_points, points.shape[1]))
             if self.tangents is None:
                 self.tangents = np.empty((n_control_points, points.shape[1]))
             for i in range(self.ndim):
                 solution = scipy.sparse.linalg.lsqr(basis_function_values, points[:, i])[0]
-                self.control_points[:, i] = solution[:half]
-                self.tangents[:, i] = solution[half:]
+                self.control_points[:, i] = solution[:n_control_points]
+
+                self.tangents[: self.pad, i] = solution[n_control_points : n_control_points + self.pad]
+                self.tangents[self.pad, i] = 0
+                self.tangents[self.pad + 1 : n_control_points - 1 - self.pad, i] = solution[
+                    n_control_points + self.pad : 2 * n_control_points - 2 - self.pad
+                ]
+                self.tangents[n_control_points - 1 - self.pad, i] = 0
+                self.tangents[n_control_points - self.pad :, i] = solution[2 * n_control_points - 2 - self.pad :]
+        elif boundary_condition == "natural":
+            raise NotImplementedError("Boundary condition 'natural' is not implemented for Hermite splines.")
+        else:
+            raise ValueError(f"Unknown boundary_conditions {boundary_condition}")
 
     def __call__(self, t, derivative=0):
         self._check_control_points_and_tangents()
@@ -1987,8 +2079,8 @@ class HermiteSpline(Spline):
         self._compute_tval_and_indices(t, shift, self.closed, self.M, self.pad, tval, indices)
 
         basis_function_values = self.basis_function(tval, derivative=derivative)
-        control_points = self.control_points
-        tangents = self.tangents
+        control_points = np.squeeze(self.control_points)
+        tangents = np.squeeze(self.tangents)
         if not self.closed:
             before = -min(np.min(indices), 0)
             after = max(np.max(indices) - self.M + 1 - self.pad, 0)

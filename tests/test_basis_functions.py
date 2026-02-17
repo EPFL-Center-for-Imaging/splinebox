@@ -70,14 +70,11 @@ def test_refinement_mask(basis_function, is_locally_refinable, request):
             basis_function.refinement_mask()
 
 
-def test_call_output_type(basis_function, derivative, not_differentiable_twice, is_hermite_basis_function):
+def test_call_output_type(basis_function, derivative, is_hermite_basis_function):
     """
     If a single value is provided, a single value should be returned.
     Otherwise, a numpy array should be returned.
     """
-    if derivative == 2 and not_differentiable_twice(basis_function):
-        return
-
     for t in [
         0.5,
         np.array([0.5]),
@@ -119,18 +116,16 @@ def test_filter_output_type(basis_function, request):
         assert np.all(output.shape == s.shape)
 
 
-def test_call_derivative_argument(basis_function, not_differentiable_twice):
+def test_call_derivative_argument(basis_function):
     t = np.linspace(-1, 1, 20)
     # Check that 0, 1, 2 don't raise errors
     for derivative in range(3):
-        if derivative == 2 and not_differentiable_twice(basis_function):
-            continue
         basis_function(t, derivative=derivative)
     with pytest.raises(ValueError):
         basis_function(t, derivative=4)
 
 
-def test_derivatives(basis_function, derivative, not_differentiable_twice, is_hermite_basis_function):
+def test_derivatives(basis_function, derivative, is_hermite_basis_function):
     if derivative == 0:
         return
 
@@ -142,31 +137,26 @@ def test_derivatives(basis_function, derivative, not_differentiable_twice, is_he
     dy = np.diff(y, axis=0)
     estimated_derivative = dy / dx[:, np.newaxis] if is_hermite_basis_function(basis_function) else dy / dx
 
-    if not_differentiable_twice(basis_function) and derivative == 2:
-        # B1, CubicHermite, and ExponentialHermite basis functions are not differentiable twice.
-        with pytest.raises(RuntimeError):
-            basis_function(x[:-1] + dx / 2, derivative=2)
+    # Check where the estimated derivative is close to the
+    # derivative value returned by the method
+    close = np.isclose(
+        estimated_derivative,
+        basis_function(x[:-1] + dx / 2, derivative=derivative),
+    )
+
+    # Since the basis functions are not continously differentiable, the
+    # estimated_derivative is inaccurate whenever there is a kink in the
+    # basis function. These should be isolated values since there are never
+    # two kinks right next to each other.
+    kernel = np.ones(2)
+    if is_hermite_basis_function(basis_function):
+        # the output of CubicHermite and ExponentialHermite basis functions is 2D
+        for i in range(2):
+            close[:, i] = np.convolve(close[:, i], kernel, mode="same")
     else:
-        # Check where the estimated derivative is close to the
-        # derivative value returned by the method
-        close = np.isclose(
-            estimated_derivative,
-            basis_function(x[:-1] + dx / 2, derivative=derivative),
-        )
+        close = np.convolve(close, kernel, mode="same")
 
-        # Since the basis functions are not continously differentiable, the
-        # estimated_derivative is inaccurate whenever there is a kink in the
-        # basis function. These should be isolated values since there are never
-        # two kinks right next to each other.
-        kernel = np.ones(2)
-        if is_hermite_basis_function(basis_function):
-            # the output of CubicHermite and ExponentialHermite basis functions is 2D
-            for i in range(2):
-                close[:, i] = np.convolve(close[:, i], kernel, mode="same")
-        else:
-            close = np.convolve(close, kernel, mode="same")
-
-        assert np.all(close > 0)
+    assert np.all(close > 0)
 
 
 def test_partition_of_unity(basis_function, is_hermite_basis_function):

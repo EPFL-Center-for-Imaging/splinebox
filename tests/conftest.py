@@ -71,14 +71,11 @@ def hermite_basis_function(request):
 
 @pytest.fixture(
     params=[
-        (splinebox.basis_functions.B2, {}),
         (splinebox.basis_functions.B3, {}),
-        (splinebox.basis_functions.Exponential, {"M": 5}),
-        (splinebox.basis_functions.CatmullRom, {}),
-        (splinebox.basis_functions.CubicHermite, {}),
-        (splinebox.basis_functions.ExponentialHermite, {"M": 5}),
     ],
-    ids=["B2", "B3", "Exponential-M5", "CatmullRom", "CubicHermite", "ExponentialHermite-M5"],
+    ids=[
+        "B3",
+    ],
 )
 def twice_differentiable_basis_function(request):
     basis_function, params = request.param
@@ -240,18 +237,6 @@ def is_interpolating(is_spline):
     return _is_interpolating
 
 
-@pytest.fixture
-def not_differentiable_twice(is_spline):
-    def _not_differentiable_twice(obj):
-        basis_function = obj.basis_function if is_spline(obj) else obj
-        return isinstance(
-            basis_function,
-            (splinebox.basis_functions.B1,),
-        )
-
-    return _not_differentiable_twice
-
-
 def _is_hermite_spline(spline_curve):
     return isinstance(
         spline_curve,
@@ -347,8 +332,8 @@ def rotation_matrix(codomain_dimensionality):
     return R
 
 
-@pytest.fixture(params=[False, True])
-def arc_length_parametrization(request):
+@pytest.fixture(params=["free", "clamped", "natural"])
+def boundary_condition(request):
     return request.param
 
 

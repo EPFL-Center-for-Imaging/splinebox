@@ -327,13 +327,13 @@ class B1(BasisFunction):
         elif t > 0 and t < 1:
             val = -1
         elif t == 0 or t == -1 or t == 1:
-            # This is the gradient you'll get at exactly 0
             val = np.nan
         return val
 
     @staticmethod
+    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
     def _derivative_2(t):
-        raise RuntimeError("B1 isn't twice differentiable.")
+        return np.nan if t in (-1, 0, 1) else 0
 
     @staticmethod
     def filter_symmetric(s):
@@ -428,13 +428,17 @@ class B2(BasisFunction):
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
     def _derivative_2(t):  # pragma: no cover
-        val = 0
-        if t >= -1.5 and t <= -0.5:
+        val = np.nan
+        if t < -1.5:
+            val = 0
+        elif t > -1.5 and t < -0.5:
             val = 1
-        elif t > -0.5 and t <= 0.5:
+        elif t > -0.5 and t < 0.5:
             val = -2
-        elif t > 0.5 and t <= 1.5:
+        elif t > 0.5 and t < 1.5:
             val = 1
+        elif t > 1.5:
+            val = 0
         return val
 
     def refinement_mask(self):
@@ -726,13 +730,17 @@ class Exponential(BasisFunction):
         alpha = np.pi / M
         L = 1 / (4 * np.sin(alpha) ** 2)
 
-        val = 0
-        if t >= 0 and t <= 1:
+        val = np.nan
+        if t < 0:
+            val = 0
+        elif t > 0 and t < 1:
             val = 4 * alpha**2 * (np.cos(alpha * t) ** 2 - np.sin(alpha * t) ** 2)
-        elif t > 1 and t <= 2:
+        elif t > 1 and t < 2:
             val = -4 * alpha**2 * (np.cos(2 * alpha * (2 - t)) + np.cos(2 * alpha * (1 - t)))
-        elif t > 2 and t <= 3:
+        elif t > 2 and t < 3:
             val = 4 * alpha**2 * (np.cos(alpha * (t - 3)) ** 2 - np.sin(alpha * (t - 3)) ** 2)
+        elif t > 3:
+            val = 0
 
         return L * val
 
@@ -921,14 +929,16 @@ class CatmullRom(BasisFunction):
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
     def _derivative_2(t):  # pragma: no cover
         val = 0
-        if t >= 0 and t <= 1:
+        if t >= 0 and t < 1:
             val = 9 * t - 5
-        elif t >= -1 and t < 0:
+        elif t > -1 and t < 0:
             val = -9 * t - 5
-        elif t > 1 and t <= 2:
+        elif t > 1 and t < 2:
             val = -3 * t + 5
-        elif t >= -2 and t < -1:
+        elif t > -2 and t < -1:
             val = 3 * t + 5
+        elif np.abs(t) in (1, 2):
+            val = np.nan
         return val
 
     @staticmethod

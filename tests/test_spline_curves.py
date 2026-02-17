@@ -33,9 +33,7 @@ def test_minimum_number_of_knots(basis_function):
         splinebox.spline_curves.Spline(M, basis_function)
 
 
-def test_call(
-    spline_curve, coeff_gen, derivative, call_positions, is_hermite_spline, not_differentiable_twice, is_interpolating
-):
+def test_call(spline_curve, coeff_gen, derivative, call_positions, is_hermite_spline, is_interpolating):
     support = spline_curve.basis_function.support
     half_support = support / 2
     closed = spline_curve.closed
@@ -53,10 +51,6 @@ def test_call(
             if pad != 0:
                 expected = expected[pad:-pad]
         assert np.allclose(values, expected)
-
-    elif derivative == 2 and not_differentiable_twice(spline_curve):
-        with pytest.raises(RuntimeError):
-            spline_curve(call_positions, derivative=derivative)
 
     else:
         spline_curve(call_positions, derivative=derivative)
@@ -109,14 +103,12 @@ def test_hermite_spline_with_normal_basis(non_hermite_basis_function, M):
         splinebox.spline_curves.HermiteSpline(M, non_hermite_basis_function)
 
 
-def test_closed_splines(closed_spline_curve, derivative, coeff_gen, is_hermite_spline, not_differentiable_twice):
+def test_closed_splines(closed_spline_curve, derivative, coeff_gen, is_hermite_spline):
     M = closed_spline_curve.M
     support = closed_spline_curve.basis_function.support
     closed_spline_curve.control_points = coeff_gen(M, support, closed=True)
     if is_hermite_spline(closed_spline_curve):
         closed_spline_curve.tangents = coeff_gen(M, support, closed=True)
-    if not_differentiable_twice(closed_spline_curve) and derivative == 2:
-        return
     assert np.allclose(
         closed_spline_curve(0, derivative=derivative),
         closed_spline_curve(M, derivative=derivative),
@@ -329,7 +321,7 @@ def test_rotate(initialized_spline_curve, rotation_matrix, is_hermite_spline):
         assert np.allclose(spline_copy(t), expected)
 
 
-def test_fit(spline_curve, arc_length_parametrization, points, is_hermite_spline):
+def test_fit(spline_curve, points, is_hermite_spline):
     # Bool indicating whether spline_curve is a hermite spline or not
     hermite = is_hermite_spline(spline_curve)
 
@@ -390,6 +382,59 @@ def test_fit(spline_curve, arc_length_parametrization, points, is_hermite_spline
         assert np.allclose(control_points_expected, control_points_fit)
         if hermite:
             assert np.allclose(tangents_expected, tangents_fit)
+
+
+def test_fit_clamped(open_spline_curve, points, is_hermite_spline):
+    spline = open_spline_curve
+
+    # Bool indicating whether spline is a hermite spline or not
+    hermite = is_hermite_spline(spline)
+
+    n_control_points = spline.M + 2 * spline.pad
+    if hermite and len(points) < 2 * n_control_points or len(points) < n_control_points:
+        # The problem is underdetermined
+        with pytest.raises(RuntimeError):
+            spline.fit(points, "clamped")
+
+    elif spline.basis_function == splinebox.B1():
+        # B1 is not differentiable at the knots
+        with pytest.raises(RuntimeError):
+            spline.fit(points, "clamped")
+    else:
+        spline.fit(points, "clamped")
+
+        # Check that the boundary conditions are fulfilled
+        assert np.allclose(spline(0, derivative=1), 0)
+        assert np.allclose(spline(spline.M - 1, derivative=1), 0)
+
+
+def test_fit_natural(open_spline_curve, points, is_hermite_spline):
+    spline = open_spline_curve
+
+    # Bool indicating whether spline is a hermite spline or not
+    hermite = is_hermite_spline(spline)
+
+    n_control_points = spline.M + 2 * spline.pad
+    if hermite and len(points) < 2 * n_control_points or len(points) < n_control_points:
+        # The problem is underdetermined
+        with pytest.raises(RuntimeError):
+            spline.fit(points, "natrual")
+
+    elif spline.basis_function in (
+        splinebox.B1(),
+        splinebox.CatmullRom(),
+        splinebox.CubicHermite(),
+        splinebox.ExponentialHermite(spline.M),
+    ):
+        # Not twice differentiable at the knots
+        with pytest.raises(RuntimeError):
+            spline.fit(points, "natural")
+    else:
+        spline.fit(points, "natural")
+
+        # Check that the boundary conditions are fulfilled
+        assert np.allclose(spline(0, derivative=2), 0)
+        assert np.allclose(spline(spline.M - 1, derivative=2), 0)
 
 
 def test_knots(spline_curve, knot_gen, is_hermite_spline, request):
@@ -781,27 +826,30 @@ def test_distance_multiple_points(initialized_spline_curve):
     assert np.allclose(distances, np.linalg.norm(points - points_on_spline, axis=1))
 
 
-def test_moving_frame(initialized_spline_curve, not_differentiable_twice):
+def test_moving_frame(initialized_spline_curve):
     spline = initialized_spline_curve
     t = np.linspace(0, spline.M if spline.closed else spline.M - 1, spline.M * 10)
-
-    if isinstance(spline.basis_function, splinebox.basis_functions.B1):
-        # The derivative of B1 splines at the knots is not defined so we
-        # remove all of the integers from t
-        t = t[(t % 1) != 0]
 
     if spline.ndim != 3:
         with pytest.raises(RuntimeError):
             frame = spline.moving_frame(t)
     else:
-        if not_differentiable_twice(spline):
+        ########
+        # Frenet
+        ########
+        if isinstance(spline.basis_function, splinebox.basis_functions.B1):
+            # The Frenet frame is not defined for splines with straight segments
             with pytest.raises(RuntimeError):
                 frame = spline.moving_frame(t, method="frenet")
         else:
-            frame = spline.moving_frame(t, method="frenet")
+            # The second derivative of B1 splines at the knots is not defined so we
+            # remove all of the integers from t
+            t_frenet = t[(t % 1) != 0] if isinstance(spline.basis_function, splinebox.basis_functions.CatmullRom) else t
+
+            frame = spline.moving_frame(t_frenet, method="frenet")
 
             # Check that you can pass a float value
-            assert np.allclose(frame[5], spline.moving_frame(t[5], method="frenet"))
+            assert np.allclose(frame[5], spline.moving_frame(t_frenet[5], method="frenet"))
 
             # Check that they are unit vectors
             assert np.allclose(np.linalg.norm(frame, axis=-1), 1)
@@ -812,30 +860,38 @@ def test_moving_frame(initialized_spline_curve, not_differentiable_twice):
             assert np.allclose(np.sum(frame[:, 1] * frame[:, 2], axis=-1), 0)
 
             # Check that T is parallel to the first derivative
-            assert np.allclose(np.cross(frame[:, 0], spline(t, derivative=1)), 0)
+            assert np.allclose(np.cross(frame[:, 0], spline(t_frenet, derivative=1)), 0)
 
             # N = dT/ds and T = dr/ds so N should be parallel to d^2r/ds^2 - proj_T(d^2/ds^2)
             # Removing the projection on T is equivalent to removing the part of the
             # derivative that changes the length of the first derivative.
             # This part should not be present in N since it is the derivative of the
             # unit vector T, which has constant length.
-            deriv2 = spline(t, derivative=2)
+            deriv2 = spline(t_frenet, derivative=2)
             # use Gram Schmidt to remove the scaling component
             deriv2 -= np.sum(deriv2 * frame[:, 0], axis=-1)[:, np.newaxis] * frame[:, 0]
             assert np.allclose(np.cross(frame[:, 1], deriv2), 0)
 
+        ########
+        # Bishop
+        ########
+        if isinstance(spline.basis_function, splinebox.basis_functions.B1):
+            # The derivative of B1 splines at the knots is not defined so we
+            # remove all of the integers from t
+            t = t[(t % 1) != 0]
+
         with pytest.raises(ValueError):
             # Non-orthogonal initial vector
             frame = spline.moving_frame(t, method="bishop", initial_vector=np.ones(3))
-
-            # Check that you can pass a float value
-            assert np.allclose(frame[5], spline.moving_frame(t[5], method="bishop", initial_vector=np.ones(3)))
 
         initial_vector = np.zeros(3)
         tangent = spline(t[0], derivative=1)
         initial_vector[1] = -tangent[2]
         initial_vector[2] = tangent[1]
         frame = spline.moving_frame(t, method="bishop", initial_vector=initial_vector)
+
+        # Check that you can pass a float value
+        assert np.allclose(frame[5], spline.moving_frame(t[5], method="bishop", initial_vector=frame[5, 1]))
 
         # Check that they are unit vectors
         assert np.allclose(np.linalg.norm(frame, axis=-1), 1)
@@ -877,7 +933,6 @@ def test_moving_frame_unsorted(frame):
     spline.knots = np.random.rand(7, 3)
 
     t = np.random.rand(100) * (spline.M - 1)
-    # t = np.linspace(spline.M - 1, 0, 100)[1:-1]
 
     sort_indices = np.argsort(t)
     sorted_t = t[sort_indices]
@@ -890,9 +945,7 @@ def test_moving_frame_unsorted(frame):
     assert np.allclose(sorted_frame[np.argsort(sort_indices)], unsorted_frame)
 
 
-def test_mesh(
-    initialized_spline_curve, radius, step_t, step_angle, mesh_type, cap_ends, frame, not_differentiable_twice
-):
+def test_mesh(initialized_spline_curve, radius, step_t, step_angle, mesh_type, cap_ends, frame):
     spline = initialized_spline_curve
 
     if spline.ndim != 3:
@@ -901,7 +954,29 @@ def test_mesh(
             spline.mesh(
                 radius=radius, step_t=step_t, step_angle=step_angle, mesh_type=mesh_type, cap_ends=cap_ends, frame=frame
             )
-    elif not_differentiable_twice(spline) and radius is not None:
+    elif radius is not None and isinstance(spline.basis_function, splinebox.basis_functions.B1):
+        # B1 is not differentiable at the knots
+        with pytest.raises(RuntimeError):
+            spline.mesh(
+                radius=radius, step_t=step_t, step_angle=step_angle, mesh_type=mesh_type, cap_ends=cap_ends, frame=frame
+            )
+    elif (
+        radius is not None
+        and isinstance(spline.basis_function, splinebox.basis_functions.CatmullRom)
+        and frame == "frenet"
+    ):
+        # Catmull Rom is not twice differentiable at the knots
+        with pytest.raises(RuntimeError):
+            spline.mesh(
+                radius=radius, step_t=step_t, step_angle=step_angle, mesh_type=mesh_type, cap_ends=cap_ends, frame=frame
+            )
+    elif (
+        radius is not None
+        and spline.basis_function in (splinebox.basis_functions.B2(), splinebox.basis_functions.Exponential(spline.M))
+        and frame == "frenet"
+        and np.any(np.arange(0, spline.M if spline.closed else spline.M - 1 + step_t, step_t) % 1 == 0.5)
+    ):
+        # B2 is not twice differentiable at 0.5, 1.5, ...
         with pytest.raises(RuntimeError):
             spline.mesh(
                 radius=radius, step_t=step_t, step_angle=step_angle, mesh_type=mesh_type, cap_ends=cap_ends, frame=frame
@@ -1034,7 +1109,7 @@ def test_single_value_input_curvature(initialized_twice_differentiable_spline_cu
     assert isinstance(curvature, float)
 
 
-def test_array_input_curvature(initialized_twice_differentiable_spline_curve, array_t, not_differentiable_twice):
+def test_array_input_curvature(initialized_twice_differentiable_spline_curve, array_t):
     spline = initialized_twice_differentiable_spline_curve
 
     curvatures = spline.curvature(array_t)
