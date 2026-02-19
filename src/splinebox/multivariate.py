@@ -211,7 +211,7 @@ class MultivariateSpline:
         basis_function_values = []
         for variate in range(self.nvariate):
             t_vals = self._get_tval(t, variate)
-            basis_function_values.append(self.basis_functions[variate](t_vals))
+            basis_function_values.append(self.basis_functions[variate](t_vals, derivative=derivatives[variate]))
 
         control_point_indices = EINSUM_INDICES[: self.nvariate + 1]
         t_indices = EINSUM_INDICES[self.nvariate + 1 : self.nvariate + t.shape[-1] + 1]
