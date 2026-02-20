@@ -27,7 +27,7 @@ M = 8
 basis_function = splinebox.Exponential(M)
 spline = splinebox.Spline(M, basis_function, closed=False)
 
-spline.fit(values)
+spline.fit(values[:, np.newaxis])
 
 # %%
 # To plot the spline we evaluate it at finely spaced parameter values.

@@ -188,8 +188,7 @@ def _control_point_gen(M, support, closed, ndim, rng=None):
     if rng is None:
         rng = np.random.default_rng(seed=42)
     points = rng.random((M, ndim)) * 100 if closed else rng.random((M + 2 * (math.ceil(support / 2) - 1), ndim)) * 100
-    # remove superfluos dimension if codomain_dimensionlity is 1
-    return np.squeeze(points)
+    return points
 
 
 @pytest.fixture
@@ -215,7 +214,7 @@ def knot_gen(codomain_dimensionality):
     rng = np.random.default_rng(seed=2657)
 
     def _knot_gen(M=100):
-        return np.squeeze(rng.random((M, codomain_dimensionality)))
+        return rng.random((M, codomain_dimensionality))
 
     return _knot_gen
 
@@ -345,7 +344,7 @@ def n_points(request):
 @pytest.fixture
 def points(codomain_dimensionality, n_points):
     rng = np.random.default_rng(seed=5544)
-    return np.squeeze(rng.random((n_points, codomain_dimensionality)))
+    return rng.random((n_points, codomain_dimensionality))
 
 
 @pytest.fixture(params=[False, True])

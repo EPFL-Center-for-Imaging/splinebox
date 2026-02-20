@@ -71,8 +71,23 @@ def test_set_control_points(spline_curve, is_hermite_spline):
     else:
         expected = spline_curve.M + 2 * (math.ceil(spline_curve.basis_function.support / 2) - 1)
 
+    # Array has to be 2D
+    with pytest.raises(ValueError):
+        # 1D
+        spline_curve.control_points = np.arange(expected)
+    with pytest.raises(ValueError):
+        # 3D
+        spline_curve.control_points = np.zeros((expected, 3, 3))
+    if is_hermite_spline(spline_curve):
+        with pytest.raises(ValueError):
+            # 1D
+            spline_curve.tangents = np.arange(expected)
+        with pytest.raises(ValueError):
+            # 3D
+            spline_curve.tangents = np.zeros((expected, 3, 3))
+
     for i in range(expected - 2, expected + 2):
-        control_points = np.arange(i)
+        control_points = np.arange(i)[:, np.newaxis]
         if len(control_points) != expected:
             with pytest.raises(ValueError):
                 spline_curve.control_points = control_points
@@ -352,19 +367,16 @@ def test_fit(spline_curve, points, is_hermite_spline):
         # Define the objective function for the minimization problem
         def difference_func(x, i):
             if hermite:
-                spline_curve.control_points = x[:half]
-                spline_curve.tangents = x[half:]
+                spline_curve.control_points[:, i] = x[:half]
+                spline_curve.tangents[:, i] = x[half:]
             else:
-                spline_curve.control_points = x
+                spline_curve.control_points[:, i] = x
             spline_vals = spline_curve(t)
-            loss = np.linalg.norm(points[:, i] - spline_vals)
+            loss = np.linalg.norm(points[:, i] - spline_vals[:, i])
             return loss
 
         # prepare the initial value for the minimization
         x0 = np.concatenate([control_points_fit, tangents_fit], axis=0) if hermite else control_points_fit
-
-        if x0.ndim == 1:
-            x0 = x0[:, np.newaxis]
 
         # Minimize for each codomain dimension separately
         x = []
@@ -374,10 +386,10 @@ def test_fit(spline_curve, points, is_hermite_spline):
         # Turn minimization result into control_points and tangents for the spline
         x = np.stack(x, axis=-1)
         if hermite:
-            control_points_expected = np.squeeze(x[:half])
-            tangents_expected = np.squeeze(x[half:])
+            control_points_expected = x[:half]
+            tangents_expected = x[half:]
         else:
-            control_points_expected = np.squeeze(x)
+            control_points_expected = x
 
         assert np.allclose(control_points_expected, control_points_fit)
         if hermite:
@@ -446,7 +458,6 @@ def test_knots(spline_curve, knot_gen, is_hermite_spline, request):
     pad = math.ceil(spline_curve.basis_function.support / 2) - 1
     if spline_curve.padding_function is None and not spline_curve.closed:
         knots = splinebox.spline_curves.padding_function(knots, pad)
-        knots = np.squeeze(knots)
     spline_curve.knots = knots
 
     if is_hermite_spline(spline_curve):
@@ -464,7 +475,6 @@ def test_knots(spline_curve, knot_gen, is_hermite_spline, request):
                 diff = diff[:, np.newaxis]
             diff = np.pad(diff, ((pad + 1, pad + 1), (0, 0)), mode="constant", constant_values=(0,))
             tangents = (diff[:-1] + diff[1:]) / 2
-            tangents = np.squeeze(tangents)
         spline_curve.tangents = tangents
     # This assert makes sense because the knots are not saved in
     # the spline class but are converted to coefficients which are saved.
@@ -613,8 +623,9 @@ def test_curvature():
 
     # 1D
     spline = splinebox.spline_curves.Spline(M=M, basis_function=splinebox.basis_functions.B3(), closed=False)
-    spline.knots = np.array([1, 5, 4, 2])
+    spline.knots = np.array([[1], [5], [4], [2]])
     expected = spline(t, derivative=2) / (1 + spline(t, derivative=1) ** 2) ** (3 / 2)
+    expected = np.squeeze(expected)
     result = spline.curvature(t)
     assert np.allclose(result, expected)
 
@@ -1059,12 +1070,9 @@ def test_single_value_input_call(initialized_spline_curve, single_value_t):
     spline = initialized_spline_curve
 
     output = spline(single_value_t)
-    if spline.ndim == 1:
-        assert isinstance(output, float)
-    else:
-        assert isinstance(output, np.ndarray)
-        assert np.issubdtype(output.dtype, np.floating)
-        assert np.all(output.shape == (spline.ndim,))
+    assert isinstance(output, np.ndarray)
+    assert np.issubdtype(output.dtype, np.floating)
+    assert np.all(output.shape == (spline.ndim,))
 
 
 def test_array_input_call(initialized_spline_curve, array_t):
@@ -1072,10 +1080,7 @@ def test_array_input_call(initialized_spline_curve, array_t):
     output = spline(array_t)
     assert isinstance(output, np.ndarray)
     assert np.issubdtype(output.dtype, np.floating)
-    if spline.ndim == 1:
-        assert np.all(output.shape == (len(array_t),))
-    else:
-        assert np.all(output.shape == (len(array_t), spline.ndim))
+    assert np.all(output.shape == (len(array_t), spline.ndim))
 
 
 def test_single_value_input_arc_length(initialized_spline_curve, single_value_t):

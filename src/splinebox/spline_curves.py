@@ -80,8 +80,6 @@ def padding_function(knots, pad_length):
            [3, 3]])
     """
     # Add constant padding to the ends
-    if knots.ndim == 1:
-        knots = knots[:, np.newaxis]
     return np.pad(knots, ((pad_length, pad_length), (0, 0)), mode="edge")
 
 
@@ -129,7 +127,7 @@ class Spline:
 
     >>> spline.knots = np.array([[1, 1], [2, 2], [3, 3], [4, 4], [5, 5]])
 
-    Define a set of parameter value where we want to evalute the spline
+    Define a set of parameter value where we want to evaluate the spline
 
     >>> t = np.linspace(0, 5, 11)
     >>> t
@@ -228,6 +226,11 @@ class Spline:
     @control_points.setter
     def control_points(self, values):
         if values is not None:
+            values = np.array(values)
+            if values.ndim != 2:
+                raise ValueError(
+                    "The control point array has to be 2D. The first dimension encodes the control points and the second corresponds to the dimensionality of the codomain of the spline."
+                )
             n = len(values)
             if self.closed and n != self.M:
                 raise ValueError(
@@ -262,6 +265,10 @@ class Spline:
     @knots.setter
     def knots(self, values):
         knots = np.array(values)
+        if knots.ndim != 2:
+            raise ValueError(
+                "The knots array has to be 2D. The first dimension encodes the knots and the second corresponds to the dimensionality of the codomain of the spline."
+            )
         n = len(knots)
         if self.closed:
             if n != self.M:
@@ -284,8 +291,6 @@ class Spline:
                     raise ValueError(
                         f"Incorrect padding. Expected padded to have length {padded_M} instead of {len(knots)}."
                     )
-
-            knots = np.squeeze(knots)
 
             self.control_points = self.basis_function.filter_symmetric(knots)
 
@@ -364,10 +369,7 @@ class Spline:
             raise RuntimeError(
                 "The spline does not have a dimensionality yet because it has not been initialized. Set the control_points or knots or use the fit method."
             )
-        elif self.control_points.ndim == 1:
-            return 1
-        else:
-            return self.control_points.shape[-1]
+        return self.control_points.shape[-1]
 
     @property
     def integration_segment_size(self):
@@ -748,6 +750,10 @@ class Spline:
             raise RuntimeError(
                 f"You provided too few points. For the fit to have a unique solution you need to provide at least as many points as your spline has control points (including padding). This spline has {self.M}+{2 * self.pad}(padding) control points but you provided {len(points)} points. Consider providing more points or reducing the number of knots M. If the number of points is equal to M, consider using `spline.knots = points` instead of fitting."
             )
+        if points.ndim != 2:
+            raise ValueError(
+                "The points should be provided as a 2D array, with the first dimension encoding the different data points and the second dimension encoding the dimensionality of the data points."
+            )
 
         n_points = len(points)
         n_control_points = self.M if self.closed else self.M + 2 * self.pad
@@ -773,13 +779,10 @@ class Spline:
                 data = data[mask]
             basis_function_values = scipy.sparse.csr_array((data, (row, col)), shape=(n_points, n_control_points))
 
-            if points.ndim == 1:
-                self.control_points = scipy.sparse.linalg.lsqr(basis_function_values, points)[0]
-            else:
-                if self.control_points is None:
-                    self.control_points = np.empty((n_control_points, points.shape[1]))
-                for i in range(self.ndim):
-                    self.control_points[:, i] = scipy.sparse.linalg.lsqr(basis_function_values, points[:, i])[0]
+            if self.control_points is None:
+                self.control_points = np.empty((n_control_points, points.shape[1]))
+            for i in range(self.ndim):
+                self.control_points[:, i] = scipy.sparse.linalg.lsqr(basis_function_values, points[:, i])[0]
         elif boundary_condition in ("clamped", "natural"):
             deriv = 1 if boundary_condition == "clamped" else 2
 
@@ -983,7 +986,7 @@ class Spline:
         Examples
         --------
         >>> spline = splinebox.Spline(M=4, basis_function=splinebox.B3(), closed=False)
-        >>> spline.control_points=np.array([2, 3, 2, 6, 1, 2])
+        >>> spline.control_points=np.array([[2], [3], [2], [6], [1], [2]])
 
         >>> spline.arc_length_to_parameter(2.2)  # doctest: +NUMBER
         2.12
@@ -1094,14 +1097,14 @@ class Spline:
         t, single_value = self._convert_to_array(t)
         first_deriv = self(t, derivative=1)
         second_deriv = self(t, derivative=2)
-        if first_deriv.ndim == 1:
+        if first_deriv.shape[1] == 1:
             # This assumes a uniform spline, i.e. the derivative of t is constant.
-            first_deriv = np.stack([first_deriv, np.ones(len(t))], axis=-1)
-            second_deriv = np.stack([second_deriv, np.zeros(len(t))], axis=-1)
+            first_deriv = np.stack([first_deriv[:, 0], np.ones(len(t))], axis=-1)
+            second_deriv = np.stack([second_deriv[:, 0], np.zeros(len(t))], axis=-1)
         norm_first_deriv = np.linalg.norm(first_deriv, axis=1)
         norm_second_deriv = np.linalg.norm(second_deriv, axis=1)
         if first_deriv.shape[1] == 2:
-            # We use a different formular for the 2D case to get the signed curvature instead of the
+            # We use a different formula for the 2D case to get the signed curvature instead of
             # the unsigned curvature. This is useful when plotting curvature combs.
             nominator = first_deriv[:, 1] * second_deriv[:, 0] - first_deriv[:, 0] * second_deriv[:, 1]
         else:
@@ -1113,7 +1116,7 @@ class Spline:
             k = k[0]
         return k
 
-    def normal(self, t, frame="bishop", initial_vector=None):
+    def normal(self, t, frame="bishop", initial_vector=None, shift=None):
         """
         Returns the normal vector(s) for 2D and 3D splines.
         For 3D splines this is equivalent to :meth:`splinebox.spline_curves.Spline.moving_frame`.
@@ -1128,6 +1131,10 @@ class Spline:
         initial_vector : numpy array
             Fixes the initial orientation of the normals at
             position t[0].
+        shift : float or None
+            Not all splines are C2 or C1. If any of the t values are at non-differentiable
+            locations, the shift will be applied to them. If shift is None an error will be raised.
+            Usually, a very small shift is sufficient.
 
         Returns
         -------
@@ -1167,10 +1174,21 @@ class Spline:
             )
         if self.ndim == 2:
             first_deriv = self(t, derivative=1)
+
+            nan_mask = np.isnan(first_deriv)
+            if np.any(nan_mask) and shift is not None:
+                t_mask = np.any(nan_mask, axis=-1)
+                first_deriv[t_mask] = self(t[t_mask] + shift, derivative=1)
+            nan_mask = np.isnan(first_deriv)
+            if np.any(nan_mask):
+                raise RuntimeError(
+                    f"The normals cannot be compute for t={t[np.any(nan_mask, axis=-1)]} because the spline is not differentiable at those positions. Consider using the `shift` to avoid this problem."
+                )
+
             normals = (np.array([[0, -1], [1, 0]]) @ first_deriv.T).T
             normals /= np.linalg.norm(normals, axis=1)[:, np.newaxis]
         elif self.ndim == 3:
-            frame = self.moving_frame(t, method=frame, initial_vector=initial_vector)
+            frame = self.moving_frame(t, method=frame, initial_vector=initial_vector, shift=shift)
             normals = frame[:, 1:]
         else:
             raise RuntimeError(
@@ -1180,7 +1198,7 @@ class Spline:
             normals = normals[0]
         return normals
 
-    def moving_frame(self, t, method="frenet", initial_vector=None):
+    def moving_frame(self, t, method="frenet", initial_vector=None, shift=None):
         """
         Compute a moving frame (local orthonormal coordinate system) along the spline.
 
@@ -1207,6 +1225,10 @@ class Spline:
             basis, which is propagated along the curve without twisting. If None,
             the method computes a suitable initial vector automatically. This
             parameter is ignored when :code:`method="frenet"`.
+        shift : float or None
+            Not all splines are C2 or C1. If any of the t values are at non-differentiable
+            locations, the shift will be applied to them. If shift is None an error will be raised.
+            Usually, a very small shift is sufficient.
 
         Returns
         -------
@@ -1279,9 +1301,15 @@ class Spline:
         t = t[sort_indices]
 
         first_derivative = self(t, derivative=1)
-        if np.any(np.isnan(first_derivative)):
+
+        nan_mask = np.isnan(first_derivative)
+        if np.any(nan_mask) and shift is not None:
+            t_mask = np.any(nan_mask, axis=-1)
+            first_derivative[t_mask] = self(t[t_mask] + shift, derivative=1)
+        nan_mask = np.isnan(first_derivative)
+        if np.any(nan_mask):
             raise RuntimeError(
-                f"The frame cannot be compute for t={t[np.any(np.isnan(first_derivative), axis=-1)]} because the spline is not differentiable at those positions."
+                f"The frame cannot be compute for t={t[np.any(nan_mask, axis=-1)]} because the spline is not differentiable at those positions. Consider using the `shift` to avoid this problem."
             )
 
         frame = np.zeros((len(t), 3, 3))
@@ -1289,10 +1317,17 @@ class Spline:
 
         if method == "frenet":
             second_derivative = self(t, derivative=2)
-            if np.any(np.isnan(second_derivative)):
+
+            nan_mask = np.isnan(second_derivative)
+            if np.any(nan_mask) and shift is not None:
+                t_mask = np.any(nan_mask, axis=-1)
+                second_derivative[t_mask] = self(t[t_mask] + shift, derivative=2)
+            nan_mask = np.isnan(second_derivative)
+            if np.any(nan_mask):
                 raise RuntimeError(
-                    f"The Frenet frame cannot be compute for t={t[np.any(np.isnan(second_derivative), axis=-1)]} because the spline is not twice differentiable at those positions."
+                    f"The Frenet frame cannot be compute for t={t[np.any(nan_mask, axis=-1)]} because the spline is not twice differentiable at those positions. Consider using `shift` or the Bishop frame."
                 )
+
             frame[:, 2] = np.cross(first_derivative, second_derivative)
             norm_binormal = np.linalg.norm(frame[:, 2], axis=-1)[:, np.newaxis]
 
@@ -1379,7 +1414,7 @@ class Spline:
         if closed:
             indices[:] = ((t - t_mod_1)[:, np.newaxis] + shift[np.newaxis, :]) % M
         else:
-            # The modulo prevents out of bounds errors and can be savely applied because
+            # The modulo prevents out of bounds errors and can be safely applied because
             # the basis function values will be zero.
             indices[:] = (t - t_mod_1)[:, np.newaxis] + shift[np.newaxis, :] + pad
 
@@ -1426,22 +1461,15 @@ class Spline:
         self._compute_tval_and_indices(t, shift, self.closed, self.M, self.pad, tval, indices)
 
         basis_function_values = self.basis_function(tval, derivative=derivative)
-        control_points = np.squeeze(self.control_points)
+        control_points = self.control_points
         if not self.closed:
             before = -min(np.min(indices), 0)
             after = max(np.max(indices) - self.M + 1 - self.pad, 0)
-            if self.ndim == 1:
-                control_points = np.pad(control_points, (before, after))
-            else:
-                control_points = np.pad(control_points, ((before, after), (0, 0)))
+            control_points = np.pad(control_points, ((before, after), (0, 0)))
             indices += before
         control_points = control_points[indices]
 
-        if self.ndim == 1:
-            control_points = control_points[..., np.newaxis]
         values = np.einsum("ij,ijl->il", basis_function_values, control_points)
-        if self.ndim == 1:
-            values = values[..., 0]
         if single_value:
             values = values[0]
 
@@ -1711,6 +1739,7 @@ class Spline:
         cap_ends=False,
         frame="bishop",
         initial_vector=None,
+        shift=1e-10,
     ):
         """
         Create a 3D mesh around the spline curve.
@@ -1757,6 +1786,9 @@ class Spline:
             the frame at the start of the spline (`t[0]`). This vector must be
             orthogonal to the tangent at `t[0]`. Ignored for the Frenet frame. If
             None, a suitable initial vector is computed automatically. Default is None.
+        shift : float or None
+            The shift applied to any t value that fall on non-differentiable positions.
+            Default is 1e-10.
 
         Returns
         -------
@@ -1870,7 +1902,7 @@ class Spline:
                 phiphi = phiphi.flatten()
                 centers = self(tt.flatten())
                 rr = _radius(tt, phiphi)
-                normals = self.normal(t, frame=frame, initial_vector=initial_vector)
+                normals = self.normal(t, frame=frame, initial_vector=initial_vector, shift=shift)
 
                 n_angles = len(phi)
                 n_t = len(t)
@@ -1906,7 +1938,7 @@ class Spline:
                 rr = rr.flatten()
 
                 centers = self(tt.flatten())
-                normals = self.normal(t, frame=frame, initial_vector=initial_vector)
+                normals = self.normal(t, frame=frame, initial_vector=initial_vector, shift=shift)
 
                 n_angles = len(phi)
                 n_t = len(t)
@@ -2034,6 +2066,10 @@ class HermiteSpline(Spline):
     @tangents.setter
     def tangents(self, values):
         if values is not None:
+            if values.ndim != 2:
+                raise ValueError(
+                    "The tangents array has to be 2D. The first dimension encodes the tangents and the second corresponds to the dimensionality of the codomain of the spline."
+                )
             n = len(values)
             if self.closed and n != self.M:
                 raise ValueError(
@@ -2154,7 +2190,7 @@ class HermiteSpline(Spline):
         self._check_control_points_and_tangents()
         t, single_value = self._convert_to_array(t)
         if np.any(np.isnan(t)):
-            raise ValueError("t should not cotain any NaN values.")
+            raise ValueError("t should not contain any NaN values.")
         bound = math.ceil(self.half_support)
         shift = np.arange(-bound + 1, bound + 1)
         tval = np.empty((len(t), len(shift)), dtype=float)
@@ -2162,31 +2198,20 @@ class HermiteSpline(Spline):
         self._compute_tval_and_indices(t, shift, self.closed, self.M, self.pad, tval, indices)
 
         basis_function_values = self.basis_function(tval, derivative=derivative)
-        control_points = np.squeeze(self.control_points)
-        tangents = np.squeeze(self.tangents)
+        control_points = self.control_points
+        tangents = self.tangents
         if not self.closed:
             before = -min(np.min(indices), 0)
             after = max(np.max(indices) - self.M + 1 - self.pad, 0)
-            if self.ndim == 1:
-                control_points = np.pad(control_points, (before, after))
-                tangents = np.pad(tangents, (before, after))
-            else:
-                control_points = np.pad(control_points, ((before, after), (0, 0)))
-                tangents = np.pad(tangents, ((before, after), (0, 0)))
+            control_points = np.pad(control_points, ((before, after), (0, 0)))
+            tangents = np.pad(tangents, ((before, after), (0, 0)))
             indices += before
         control_points = control_points[indices]
         tangents = tangents[indices]
 
-        if self.ndim == 1:
-            control_points = control_points[..., np.newaxis]
-            tangents = tangents[..., np.newaxis]
-
         values = np.einsum("ij,ijl->il", basis_function_values[..., 0], control_points) + np.einsum(
             "ij,ijl->il", basis_function_values[..., 1], tangents
         )
-
-        if self.ndim == 1:
-            values = values[..., 0]
 
         if single_value:
             values = values[0]
