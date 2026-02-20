@@ -108,7 +108,6 @@ def test_filter_output_type(basis_function, request):
         output = basis_function.filter_periodic(s)
         assert isinstance(output, np.ndarray)
         assert np.issubdtype(output.dtype, np.floating)
-        print(output.shape, s.shape)
         assert np.all(output.shape == s.shape)
         output = basis_function.filter_symmetric(s)
         assert isinstance(output, np.ndarray)

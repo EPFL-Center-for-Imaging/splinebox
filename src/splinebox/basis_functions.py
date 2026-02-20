@@ -539,7 +539,10 @@ class B3(BasisFunction):
 
     def filter_symmetric(self, s):
         # This is necessary for the docs to build correctly
-        return np.squeeze(self._filter_symmetric(s.astype(float)))
+        result = self._filter_symmetric(s.astype(float))
+        if s.ndim == 1:
+            return np.squeeze(result)
+        return result
 
     @staticmethod
     @numba.jit(nopython=True, nogil=True, cache=True)
@@ -578,7 +581,10 @@ class B3(BasisFunction):
 
     def filter_periodic(self, s):
         # This is necessary for the docs to build correctly
-        return np.squeeze(self._filter_periodic(s.astype(float)))
+        result = self._filter_periodic(s.astype(float))
+        if s.ndim == 1:
+            return np.squeeze(result)
+        return result
 
     @staticmethod
     @numba.jit(nopython=True, nogil=True, cache=True)
@@ -750,7 +756,10 @@ class Exponential(BasisFunction):
         b0 = self._func(0)
         b1 = self._func(1)
 
-        return np.squeeze(self._filter_symmetric(s.astype(float), self.M, b0, b1))
+        result = self._filter_symmetric(s.astype(float), self.M, b0, b1)
+        if s.ndim == 1:
+            return np.squeeze(result)
+        return result
 
     @staticmethod
     @numba.jit(nopython=True, nogil=True, cache=True)
@@ -792,7 +801,10 @@ class Exponential(BasisFunction):
     def filter_periodic(self, s):
         self.M = len(s)
         b0 = self._func(0)
-        return np.squeeze(self._filter_periodic(s.astype(float), self.M, b0))
+        result = self._filter_periodic(s.astype(float), self.M, b0)
+        if s.ndim == 1:
+            return np.squeeze(result)
+        return result
 
     @staticmethod
     @numba.jit(nopython=True, nogil=True, cache=True)
