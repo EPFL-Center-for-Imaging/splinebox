@@ -912,7 +912,11 @@ class Spline:
             zip(initial_segment_lengths, final_segment_lengths)
         ):
             if start_segment_indices[i] > stop_segment_indices[i]:
-                arc_lengths[i] = self._gauss_legendre_quadrature(bounds[i, 0], bounds[:, 1])
+                # Happens when both bounds are within the same segment
+                arc_lengths[i] = self._gauss_legendre_quadrature(
+                    np.array([bounds[i, 0]]),
+                    np.array([bounds[i, 1]]),
+                )
             else:
                 segment_sum = math.fsum(self._segment_lengths[start_segment_indices[i] : stop_segment_indices[i]])
                 arc_lengths[i] = segment_sum + initial_segment_length + final_segment_length
