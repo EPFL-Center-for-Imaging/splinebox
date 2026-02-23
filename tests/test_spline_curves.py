@@ -971,29 +971,8 @@ def test_mesh(initialized_spline_curve, radius, step_t, step_angle, mesh_type, c
             spline.mesh(
                 radius=radius, step_t=step_t, step_angle=step_angle, mesh_type=mesh_type, cap_ends=cap_ends, frame=frame
             )
-    elif radius is not None and isinstance(spline.basis_function, splinebox.basis_functions.B1):
-        # B1 is not differentiable at the knots
-        with pytest.raises(RuntimeError):
-            spline.mesh(
-                radius=radius, step_t=step_t, step_angle=step_angle, mesh_type=mesh_type, cap_ends=cap_ends, frame=frame
-            )
-    elif (
-        radius is not None
-        and isinstance(spline.basis_function, splinebox.basis_functions.CatmullRom)
-        and frame == "frenet"
-    ):
-        # Catmull Rom is not twice differentiable at the knots
-        with pytest.raises(RuntimeError):
-            spline.mesh(
-                radius=radius, step_t=step_t, step_angle=step_angle, mesh_type=mesh_type, cap_ends=cap_ends, frame=frame
-            )
-    elif (
-        radius is not None
-        and spline.basis_function in (splinebox.basis_functions.B2(), splinebox.basis_functions.Exponential(spline.M))
-        and frame == "frenet"
-        and np.any(np.arange(0, spline.M if spline.closed else spline.M - 1 + step_t, step_t) % 1 == 0.5)
-    ):
-        # B2 is not twice differentiable at 0.5, 1.5, ...
+    elif radius is not None and frame == "frenet" and isinstance(spline.basis_function, splinebox.basis_functions.B1):
+        # The Frenet frame is not defined because the second derivative of B1 is zero everywhere.
         with pytest.raises(RuntimeError):
             spline.mesh(
                 radius=radius, step_t=step_t, step_angle=step_angle, mesh_type=mesh_type, cap_ends=cap_ends, frame=frame
