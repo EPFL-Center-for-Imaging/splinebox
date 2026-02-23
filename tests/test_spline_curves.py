@@ -1125,7 +1125,7 @@ def test_array_input_dtheta(initialized_twice_differentiable_2D_spline_curve, ar
 
 def test_single_value_input_normal_2D(initialized_2D_spline_curve, single_value_t):
     spline = initialized_2D_spline_curve
-    output = spline.normal(single_value_t)
+    output = spline.normal(single_value_t, shift=1e-10)
     assert isinstance(output, np.ndarray)
     assert np.issubdtype(output.dtype, np.floating)
     assert np.all(output.shape == (2,))
@@ -1133,7 +1133,7 @@ def test_single_value_input_normal_2D(initialized_2D_spline_curve, single_value_
 
 def test_array_input_normal_2D(initialized_2D_spline_curve, array_t):
     spline = initialized_2D_spline_curve
-    output = spline.normal(array_t)
+    output = spline.normal(array_t, shift=1e-10)
     assert isinstance(output, np.ndarray)
     assert np.issubdtype(output.dtype, np.floating)
     assert np.all(output.shape == (len(array_t), 2))
@@ -1141,7 +1141,7 @@ def test_array_input_normal_2D(initialized_2D_spline_curve, array_t):
 
 def test_single_value_input_normal_3D(initialized_twice_differentiable_3D_spline_curve, single_value_t, frame):
     spline = initialized_twice_differentiable_3D_spline_curve
-    output = spline.normal(single_value_t, frame=frame)
+    output = spline.normal(single_value_t, frame=frame, shift=1e-10)
     assert isinstance(output, np.ndarray)
     assert np.issubdtype(output.dtype, np.floating)
     assert np.all(output.shape == (2, 3))
@@ -1149,7 +1149,7 @@ def test_single_value_input_normal_3D(initialized_twice_differentiable_3D_spline
 
 def test_array_input_normal_3D(initialized_twice_differentiable_3D_spline_curve, array_t, frame):
     spline = initialized_twice_differentiable_3D_spline_curve
-    output = spline.normal(array_t, frame=frame)
+    output = spline.normal(array_t, frame=frame, shift=1e-10)
     assert isinstance(output, np.ndarray)
     assert np.issubdtype(output.dtype, np.floating)
     assert np.all(output.shape == (len(array_t), 2, 3))
@@ -1157,7 +1157,7 @@ def test_array_input_normal_3D(initialized_twice_differentiable_3D_spline_curve,
 
 def test_single_value_input_moving_frame_3D(initialized_twice_differentiable_3D_spline_curve, single_value_t, frame):
     spline = initialized_twice_differentiable_3D_spline_curve
-    output = spline.moving_frame(single_value_t, method=frame)
+    output = spline.moving_frame(single_value_t, method=frame, shift=1e-10)
     assert isinstance(output, np.ndarray)
     assert np.issubdtype(output.dtype, np.floating)
     assert np.all(output.shape == (3, 3))
@@ -1165,7 +1165,7 @@ def test_single_value_input_moving_frame_3D(initialized_twice_differentiable_3D_
 
 def test_array_input_moving_frame_3D(initialized_twice_differentiable_3D_spline_curve, array_t, frame):
     spline = initialized_twice_differentiable_3D_spline_curve
-    output = spline.moving_frame(array_t, method=frame)
+    output = spline.moving_frame(array_t, method=frame, shift=1e-10)
     assert isinstance(output, np.ndarray)
     assert np.issubdtype(output.dtype, np.floating)
     assert np.all(output.shape == (len(array_t), 3, 3))
