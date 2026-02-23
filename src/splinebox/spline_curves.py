@@ -1004,14 +1004,19 @@ class Spline:
         upper_bound = self.M if self.closed else self.M - 1
         intermediate_results = []
 
+        total_length = self.arc_length()
+
         def upper_bound_key_func(x):
             diff = x[1] - s[i]
-            if diff >= 0:
-                return diff
-            else:
+            if diff < 0:
                 return np.inf
+            return diff
 
         for i in sort_indices:
+            if s[i] < 0:
+                raise ValueError("The arc length s cannot be negative.")
+            if s[i] > total_length:
+                raise ValueError("The arc length s cannot be larger than the length of the spline.")
             if len(intermediate_results) > 0:
                 upper_bound, upper_bound_len = min(intermediate_results, key=upper_bound_key_func)
                 if s[i] > upper_bound_len:

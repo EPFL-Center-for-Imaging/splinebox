@@ -293,6 +293,12 @@ def test_arc_length_to_parameter():
     result = spline.arc_length_to_parameter(ls[10], atol=atol)
     assert np.isclose(result, expected, atol=atol)
 
+    # Check that length smaller than 0 and larger than the total length of the spline raise and error
+    with pytest.raises(ValueError):
+        spline.arc_length_to_parameter(-0.1)
+    with pytest.raises(ValueError):
+        spline.arc_length_to_parameter(total_length + 0.01)
+
 
 def test_translate(initialized_spline_curve, translation_vector):
     spline = initialized_spline_curve
