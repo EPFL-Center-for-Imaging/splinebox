@@ -1406,7 +1406,7 @@ class Spline:
             (
                 numba.float64[:],
                 numba.int64[:],
-                numba.bool,
+                numba.boolean,
                 numba.int64,
                 numba.int64,
                 numba.float64[:, :],
