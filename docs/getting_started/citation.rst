@@ -1,14 +1,7 @@
 Citing splinebox
 ================
 
-If you use splinebox in the context of scientific publication, please cite it as follows.
-Note, that you will have to fill in the version yourself. If you are unsure what version you are running,
-you can find out by running
-
-.. code-block:: python
-
-   import splinebox
-   print(splinbox.__version__)
+If you use SplineBox in the context of scientific publication, please cite it as follows.
 
 BibTeX:
 
@@ -22,3 +15,11 @@ BibTeX:
      note = {{V}ersion V.V.Vb1},
      year = 2024,
    }
+
+Note: You will need to fill in the version number yourself. If you are unsure what version you are using,
+you can find out by running:
+
+.. code-block:: python
+
+   import splinebox
+   print(splinbox.__version__)
