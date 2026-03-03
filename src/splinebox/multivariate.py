@@ -3,6 +3,7 @@ import math
 
 import numba
 import numpy as np
+import scipy
 
 import splinebox.spline_curves
 
@@ -327,6 +328,14 @@ class MultivariateSpline:
         einsum_str = einsum_str[:-1]
         einsum_str += "->" + points_indices + control_point_indices
         basis_function_values = np.einsum(einsum_str, *basis_function_values)
+
+        # Run least squares
         basis_function_values = basis_function_values.reshape(-1, math.prod(control_points_shape))
-        control_points = np.linalg.lstsq(basis_function_values, points.reshape(-1, points.shape[-1]), rcond=None)[0]
+        basis_function_values = scipy.sparse.csr_array(basis_function_values)
+        points = points.reshape(-1, points.shape[-1])
+        control_points = []
+        for i in range(points.shape[-1]):
+            control_points.append(scipy.sparse.linalg.lsqr(basis_function_values, points[:, i])[0])
+
+        control_points = np.stack(control_points, axis=-1)
         self.control_points = control_points.reshape(*control_points_shape, -1)
