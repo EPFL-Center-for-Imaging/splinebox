@@ -325,7 +325,7 @@ def mesh_type(request):
     return request.param
 
 
-@pytest.fixture(params=[False, True])
+@pytest.fixture(params=[None, "flat", "sphere"])
 def cap_ends(request):
     return request.param
 
