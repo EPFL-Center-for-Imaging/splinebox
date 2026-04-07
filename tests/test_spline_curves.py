@@ -957,6 +957,16 @@ def test_spherical_caps_add_more_geometry_than_flat_caps():
     assert len(sphere_connectivity) > len(flat_connectivity)
 
 
+def test_flat_caps_use_exact_open_spline_endpoints_when_step_t_does_not_divide_range():
+    spline = splinebox.spline_curves.Spline(M=4, basis_function=splinebox.basis_functions.B3(), closed=False)
+    spline.knots = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.5, 0.0], [3.0, 0.5, 0.5]])
+
+    points, _ = spline.mesh(radius=0.2, step_t=0.4, step_angle=30, cap_ends="flat")
+
+    assert np.allclose(points[-2], spline(0))
+    assert np.allclose(points[-1], spline(spline.M - 1))
+
+
 def test_protected_spline_attributes(spline_curve, coeff_gen, basis_function):
     # spline = splinebox.spline_curves.Spline(M=4, basis_function=splinebox.basis_functions.B1(), closed=True)
     spline = spline_curve

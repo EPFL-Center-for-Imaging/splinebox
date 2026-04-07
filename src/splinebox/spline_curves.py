@@ -1147,7 +1147,10 @@ class Spline:
         if self.control_points.ndim != 2 or self.control_points.shape[1] != 3:
             raise NotImplementedError("Meshes are only implemented for splines in 3D.")
         cap_ends = self._normalize_cap_ends(cap_ends)
-        t = np.arange(0, self.M if self.closed else self.M - 1 + step_t, step_t)
+        end_t = self.M if self.closed else self.M - 1
+        t = np.arange(0, end_t, step_t)
+        if len(t) == 0 or not np.isclose(t[-1], end_t):
+            t = np.append(t, end_t)
         if radius is None or radius == 0:
             points = self(t)
             connectivity = np.stack((np.arange(len(points)), np.arange(len(points)) + 1), axis=-1)
