@@ -1124,9 +1124,9 @@ class Spline:
         -----
         - Surface meshes are useful for visualization, while volume meshes are
           typically used in simulations and finite element analysis.
-                - For open splines, capping the ends (`cap_ends="flat"` or
-                    `cap_ends="sphere"`) creates closed surfaces, which may be useful for
-                    some applications.
+        - For open splines, capping the ends (`cap_ends="flat"` or
+          `cap_ends="sphere"`) creates closed surfaces, which may be useful for
+          some applications.
         - The Bishop frame is recommended for curves with inflection points or
           straight segments where the Frenet frame is undefined.
         - When radius is callable, the Bishop frame is recommend to avoid "drift" of the
