@@ -1146,7 +1146,10 @@ class Spline:
         """
         if self.control_points.ndim != 2 or self.control_points.shape[1] != 3:
             raise NotImplementedError("Meshes are only implemented for splines in 3D.")
-        cap_ends = self._normalize_cap_ends(cap_ends)
+        if mesh_type == "surface" and not self.closed:
+            cap_ends = self._normalize_cap_ends(cap_ends)
+        else:
+            cap_ends = None
         end_t = self.M if self.closed else self.M - 1
         t = np.arange(0, end_t, step_t)
         if len(t) == 0 or not np.isclose(t[-1], end_t):
