@@ -10,6 +10,7 @@ import numpy as np
 import pyvista
 import splinebox
 
+
 # %%
 # 1. Constructing a Spline
 # ------------------------
@@ -51,7 +52,7 @@ mesh = pyvista.PolyData(points, faces=connectivity)
 mesh.plot(show_edges=True)
 
 # %%
-# 3. Mesh with an Elliptical Cross-Section
+# 4. Mesh with an Elliptical Cross-Section
 # ----------------------------------------
 # You can define a custom cross-section shape by specifying the radius as a function of the spline parameter (:code:`t`) and the polar angle (:code:`phi`).
 # Example 1: Elliptical Cross-Section
@@ -165,8 +166,40 @@ mesh.plot(show_edges=True)
 mesh.explode(factor=0.5).plot(show_edges=True)
 
 # %%
+# 7. Mesh with Capped Ends
+# ------------------------
+# To create a closed surface mesh for an open spline, the ends can be capped.
+M = 4
+spline = splinebox.Spline(M=M, basis_function=splinebox.B3(), closed=False)
+spline.knots = np.array([[0, 0, 0], [0, 0, 1], [0, 0, 2], [0, 0, 3]])
+
+# %%
+# SplineBox offers two different options to cap the end:
+# 1. With an orthogonal flat plane
+# 2. With a hemisphere
+points_open, connectivity_open = spline.mesh(radius=1, cap_ends=None)
+points_flat, connectivity_flat = spline.mesh(radius=1, cap_ends="flat")
+points_sphe, connectivity_sphe = spline.mesh(radius=1, cap_ends="sphere")
+
+connectivity_open = np.hstack((np.full((connectivity_open.shape[0], 1), 3), connectivity_open))
+connectivity_flat = np.hstack((np.full((connectivity_flat.shape[0], 1), 3), connectivity_flat))
+connectivity_sphe = np.hstack((np.full((connectivity_sphe.shape[0], 1), 3), connectivity_sphe))
+
+mesh_open = pyvista.PolyData(points_open, faces=connectivity_open)
+mesh_flat = pyvista.PolyData(points_flat, faces=connectivity_flat)
+mesh_sphe = pyvista.PolyData(points_sphe, faces=connectivity_sphe)
+
+plotter = pyvista.Plotter(shape=(1, 3), border=False)
+plotter.subplot(0, 0)
+plotter.add_mesh(mesh_open)
+plotter.subplot(0, 1)
+plotter.add_mesh(mesh_flat)
+plotter.subplot(0, 2)
+plotter.add_mesh(mesh_sphe)
+plotter.link_views()
+plotter.show()
+
+# %%
 # Tips
 # ----
 # * Save meshes for visualization in ParaView using :code:`mesh.save("mesh.vtk")`.
-# * Surface meshes are open by default. Use :code:`cap_ends="flat"` for planar end caps or
-#   :code:`cap_ends="sphere"` for hemispherical end caps in :meth:`splinebox.spline_curves.Spline.mesh()`.
