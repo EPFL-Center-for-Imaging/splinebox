@@ -1048,7 +1048,7 @@ class Spline:
         step_t=0.1,
         step_angle=5,
         mesh_type="surface",
-        cap_ends=False,
+        cap_ends=None,
         frame="bishop",
         initial_vector=None,
     ):
@@ -1084,9 +1084,15 @@ class Spline:
             - "volume": A volume mesh with tetrahedral cells.
 
             Default is "surface".
-        cap_ends : bool, optional
-            If True, the ends of an open surface mesh are capped with orthogonal
-            planes. Ignored for closed splines or volume meshes. Default is False.
+        cap_ends : {None, "flat", "sphere"}, optional
+            Controls how the ends of an open surface mesh are capped:
+
+            - None leaves the ends open.
+            - "flat" creates orthogonal planar caps.
+            - "sphere" creates hemispherical caps.
+
+            Closed splines and volume meshes ignore this parameter. `False` is
+            accepted as a deprecated alias for `None`.
         frame : str, optional
             The frame to use for orientation of the mesh:
             - "frenet": Uses the Frenet-Serret frame.
@@ -1118,8 +1124,9 @@ class Spline:
         -----
         - Surface meshes are useful for visualization, while volume meshes are
           typically used in simulations and finite element analysis.
-        - For open splines, capping the ends (`cap_ends=True`) creates closed surfaces,
-          which may be useful for some applications.
+        - For open splines, capping the ends (`cap_ends="flat"` or
+          `cap_ends="sphere"`) creates closed surfaces, which may be useful for
+          some applications.
         - The Bishop frame is recommended for curves with inflection points or
           straight segments where the Frenet frame is undefined.
         - When radius is callable, the Bishop frame is recommend to avoid "drift" of the
@@ -1139,7 +1146,14 @@ class Spline:
         """
         if self.control_points.ndim != 2 or self.control_points.shape[1] != 3:
             raise NotImplementedError("Meshes are only implemented for splines in 3D.")
-        t = np.arange(0, self.M if self.closed else self.M - 1 + step_t, step_t)
+        if mesh_type == "surface" and not self.closed:
+            cap_ends = self._normalize_cap_ends(cap_ends)
+        else:
+            cap_ends = None
+        end_t = self.M if self.closed else self.M - 1
+        t = np.arange(0, end_t, step_t)
+        if len(t) == 0 or not np.isclose(t[-1], end_t):
+            t = np.append(t, end_t)
         if radius is None or radius == 0:
             points = self(t)
             connectivity = np.stack((np.arange(len(points)), np.arange(len(points)) + 1), axis=-1)
@@ -1159,28 +1173,56 @@ class Spline:
                 phiphi = phiphi.flatten()
                 centers = self(tt.flatten())
                 rr = _radius(tt, phiphi)
-                normals = self.normal(t, frame=frame, initial_vector=initial_vector)
+                frame_vectors = self.moving_frame(t, method=frame, initial_vector=initial_vector)
+                tangents = frame_vectors[:, 0]
+                normals = frame_vectors[:, 1:]
 
                 n_angles = len(phi)
                 n_t = len(t)
-                normals = (
+                normal_vectors = (
                     np.repeat(normals[:, 0], n_angles, axis=0) * np.sin(np.deg2rad(phiphi))[:, np.newaxis]
                     + np.repeat(normals[:, 1], n_angles, axis=0) * np.cos(np.deg2rad(phiphi))[:, np.newaxis]
                 )
 
-                points = centers + rr[:, np.newaxis] * normals
+                points = centers + rr[:, np.newaxis] * normal_vectors
                 n_points = len(points)
                 connectivity = self._surface_mesh_connectivity(self.closed, n_angles, n_t, n_points)
-                if cap_ends and not self.closed:
-                    points = np.concatenate((centers[0].reshape((1, -1)), points, centers[-1].reshape((1, -1))), axis=0)
-                    start_connectivity = np.zeros((n_angles, 3), dtype=int)
-                    start_connectivity[:, 1] = np.arange(1, n_angles + 1)
-                    start_connectivity[:, 2] = np.roll(start_connectivity[:, 1], -1)
-                    end_connectivity = np.zeros((n_angles, 3), dtype=int)
-                    end_connectivity[:, 0] = n_points + 1
-                    end_connectivity[:, 1] = np.arange(n_points, n_points - n_angles, -1)
-                    end_connectivity[:, 2] = np.roll(end_connectivity[:, 1], -1)
-                    connectivity = np.concatenate((start_connectivity, connectivity + 1, end_connectivity))
+                if cap_ends is not None and not self.closed:
+                    body_points = points
+                    start_ring = np.arange(n_angles)
+                    end_ring = np.arange(n_points - n_angles, n_points)
+
+                    if cap_ends == "flat":
+                        start_center_index = n_points
+                        end_center_index = n_points + 1
+                        cap_points = np.stack((centers[0], centers[-1]), axis=0)
+                        start_connectivity = self._surface_cap_pole_connectivity(
+                            start_ring, start_center_index, reverse=False
+                        )
+                        end_connectivity = self._surface_cap_pole_connectivity(end_ring, end_center_index, reverse=True)
+                        points = np.concatenate((points, cap_points), axis=0)
+                        connectivity = np.concatenate((connectivity, start_connectivity, end_connectivity), axis=0)
+                    elif cap_ends == "sphere":
+                        start_points, start_connectivity = self._surface_cap_sphere(
+                            center=centers[0],
+                            axis=-tangents[0],
+                            equator_points=body_points[start_ring],
+                            equator_indices=start_ring,
+                            step_angle=step_angle,
+                            start_index=n_points,
+                            reverse=False,
+                        )
+                        end_points, end_connectivity = self._surface_cap_sphere(
+                            center=centers[-1],
+                            axis=tangents[-1],
+                            equator_points=body_points[end_ring],
+                            equator_indices=end_ring,
+                            step_angle=step_angle,
+                            start_index=n_points + len(start_points),
+                            reverse=True,
+                        )
+                        points = np.concatenate((points, start_points, end_points), axis=0)
+                        connectivity = np.concatenate((connectivity, start_connectivity, end_connectivity), axis=0)
 
             elif mesh_type == "volume":
                 phiphi, tt = np.meshgrid(phi, t)
@@ -1209,6 +1251,79 @@ class Spline:
                 connectivity = self._volume_mesh_connectivity(self.closed, n_angles, n_t, n_points)
 
         return points, connectivity
+
+    @staticmethod
+    def _normalize_cap_ends(cap_ends):
+        if cap_ends is None:
+            return None
+        if isinstance(cap_ends, (bool, np.bool_)):
+            if not cap_ends:
+                warnings.warn(
+                    "`cap_ends=False` is deprecated, use `cap_ends=None` instead.",
+                    DeprecationWarning,
+                    stacklevel=3,
+                )
+                return None
+            raise ValueError("`cap_ends=True` is no longer supported, use `cap_ends='flat'` instead.")
+        if cap_ends in ("flat", "sphere"):
+            return cap_ends
+        raise ValueError("cap_ends must be None, 'flat', or 'sphere'.")
+
+    @staticmethod
+    def _surface_cap_ring_connectivity(ring_a, ring_b, reverse=False):
+        connectivity = np.zeros((2 * len(ring_a), 3), dtype=int)
+        face = 0
+        for j in range(len(ring_a)):
+            next_j = (j + 1) % len(ring_a)
+            if reverse:
+                connectivity[face] = [ring_a[j], ring_b[next_j], ring_b[j]]
+                face += 1
+                connectivity[face] = [ring_a[j], ring_a[next_j], ring_b[next_j]]
+            else:
+                connectivity[face] = [ring_a[j], ring_b[j], ring_b[next_j]]
+                face += 1
+                connectivity[face] = [ring_a[j], ring_b[next_j], ring_a[next_j]]
+            face += 1
+        return connectivity
+
+    @staticmethod
+    def _surface_cap_pole_connectivity(ring, pole_index, reverse=False):
+        connectivity = np.zeros((len(ring), 3), dtype=int)
+        connectivity[:, 0] = pole_index
+        if reverse:
+            connectivity[:, 1] = np.roll(ring, -1)
+            connectivity[:, 2] = ring
+        else:
+            connectivity[:, 1] = ring
+            connectivity[:, 2] = np.roll(ring, -1)
+        return connectivity
+
+    @classmethod
+    def _surface_cap_sphere(cls, center, axis, equator_points, equator_indices, step_angle, start_index, reverse=False):
+        equator_vectors = equator_points - center[np.newaxis, :]
+        radius = np.mean(np.linalg.norm(equator_vectors, axis=1))
+        latitude_angles = np.arange(step_angle, 90, step_angle)
+
+        points = []
+        connectivity = []
+        previous_ring = equator_indices
+        next_index = start_index
+
+        for angle in latitude_angles:
+            angle = np.deg2rad(angle)
+            ring_points = center + np.cos(angle) * equator_vectors + np.sin(angle) * radius * axis[np.newaxis, :]
+            ring_indices = np.arange(next_index, next_index + len(equator_indices))
+            points.append(ring_points)
+            connectivity.append(cls._surface_cap_ring_connectivity(previous_ring, ring_indices, reverse=reverse))
+            previous_ring = ring_indices
+            next_index += len(equator_indices)
+
+        pole_index = next_index
+        pole_point = center + radius * axis
+        points.append(pole_point[np.newaxis, :])
+        connectivity.append(cls._surface_cap_pole_connectivity(previous_ring, pole_index, reverse=reverse))
+
+        return np.concatenate(points, axis=0), np.concatenate(connectivity, axis=0)
 
     @staticmethod
     @numba.jit(nopython=True, nogil=True, cache=True)

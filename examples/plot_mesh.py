@@ -168,4 +168,5 @@ mesh.explode(factor=0.5).plot(show_edges=True)
 # Tips
 # ----
 # * Save meshes for visualization in ParaView using :code:`mesh.save("mesh.vtk")`.
-# * Surface meshes are open by default. Use the :code:`cap_ends` keyword in :meth:`splinebox.spline_curves.Spline.mesh()` to close them.
+# * Surface meshes are open by default. Use :code:`cap_ends="flat"` for planar end caps or
+#   :code:`cap_ends="sphere"` for hemispherical end caps in :meth:`splinebox.spline_curves.Spline.mesh()`.

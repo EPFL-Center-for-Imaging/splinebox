@@ -899,7 +899,7 @@ def test_mesh(
         # Check that all points are part of at least one element
         assert np.all(np.arange(len(points)) == np.sort(np.unique(connectivity)))
 
-        if mesh_type == "surface" and (cap_ends or spline.closed):
+        if mesh_type == "surface" and (cap_ends is not None or spline.closed):
             # Compute the Euler characteristic to check that the mesh is closed
 
             # Number of verices
@@ -921,9 +921,50 @@ def test_mesh(
             elif spline.closed:
                 # toroidal polyhedra have Euler characteristic 0
                 assert V + F - E == 0
-            elif cap_ends:
+            elif cap_ends is not None:
                 # spherical polyhedra have Euler characteristic 2
                 assert V + F - E == 2
+
+
+def test_mesh_cap_ends_false_alias_matches_none():
+    spline = splinebox.spline_curves.Spline(M=4, basis_function=splinebox.basis_functions.B3(), closed=False)
+    spline.knots = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.5, 0.0], [3.0, 0.5, 0.5]])
+
+    points_none, connectivity_none = spline.mesh(radius=0.2, step_t=0.5, step_angle=30, cap_ends=None)
+    with pytest.warns(DeprecationWarning, match="cap_ends=False"):
+        points_false, connectivity_false = spline.mesh(radius=0.2, step_t=0.5, step_angle=30, cap_ends=False)
+
+    assert np.allclose(points_none, points_false)
+    assert np.array_equal(connectivity_none, connectivity_false)
+
+
+def test_mesh_cap_ends_true_raises_value_error():
+    spline = splinebox.spline_curves.Spline(M=4, basis_function=splinebox.basis_functions.B3(), closed=False)
+    spline.knots = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.5, 0.0], [3.0, 0.5, 0.5]])
+
+    with pytest.raises(ValueError, match="cap_ends='flat'"):
+        spline.mesh(radius=0.2, step_t=0.5, step_angle=30, cap_ends=True)
+
+
+def test_spherical_caps_add_more_geometry_than_flat_caps():
+    spline = splinebox.spline_curves.Spline(M=4, basis_function=splinebox.basis_functions.B3(), closed=False)
+    spline.knots = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.5, 0.0], [3.0, 0.5, 0.5]])
+
+    flat_points, flat_connectivity = spline.mesh(radius=0.2, step_t=0.5, step_angle=30, cap_ends="flat")
+    sphere_points, sphere_connectivity = spline.mesh(radius=0.2, step_t=0.5, step_angle=30, cap_ends="sphere")
+
+    assert len(sphere_points) > len(flat_points)
+    assert len(sphere_connectivity) > len(flat_connectivity)
+
+
+def test_flat_caps_use_exact_open_spline_endpoints_when_step_t_does_not_divide_range():
+    spline = splinebox.spline_curves.Spline(M=4, basis_function=splinebox.basis_functions.B3(), closed=False)
+    spline.knots = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.5, 0.0], [3.0, 0.5, 0.5]])
+
+    points, _ = spline.mesh(radius=0.2, step_t=0.4, step_angle=30, cap_ends="flat")
+
+    assert np.allclose(points[-2], spline(0))
+    assert np.allclose(points[-1], spline(spline.M - 1))
 
 
 def test_protected_spline_attributes(spline_curve, coeff_gen, basis_function):
