@@ -31,7 +31,7 @@ class MultivariateSpline:
         control_points=None,
         padding_functions=splinebox.spline_curves.padding_function,
     ):
-        if not isinstance(M, collections.abc.Iterable) or any(not isinstance(m, int) for m in M):
+        if not isinstance(M, collections.abc.Iterable) or any(not isinstance(m, (int, np.integer)) for m in M):
             raise ValueError("M should be an iterable of integers.")
         self.M = M
 
