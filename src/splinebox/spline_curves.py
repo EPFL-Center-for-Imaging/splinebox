@@ -168,7 +168,7 @@ class Spline:
         if basis_function.support <= M:
             self.M = M
         else:
-            raise RuntimeError("M must be greater or equal than the spline generator support size.")
+            raise RuntimeError("M must be greater than or equal to the basis function support size.")
 
         self.basis_function = basis_function
         self._half_support = self.basis_function.support / 2
@@ -1486,7 +1486,7 @@ class Spline:
 
     def _convert_to_array(self, t):
         """
-        Helper function that converts the a function input
+        Helper function that converts a function input
         to an array. This allows functions to accept int and float
         values in addition to arrays.
 
