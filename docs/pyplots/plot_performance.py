@@ -47,7 +47,7 @@ for repetition in range(n_repetitions + 1):
                 M,
                 "closed" if closed else "open",
                 "Evaluation",
-                stop - start,
+                stop_eval - start_eval,
             ]
         )
 
@@ -87,7 +87,7 @@ for repetition in range(n_repetitions + 1):
                 M,
                 "closed" if closed else "open",
                 "Evaluation",
-                stop - start,
+                stop_eval - start_eval,
             ]
         )
 

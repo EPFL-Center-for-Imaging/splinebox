@@ -31,6 +31,7 @@ Linear (:math:`1^{\text{st}}` order) polynomial basis
    \end{cases}
 
 .. plot:: pyplots/plot_b1.py
+   :include-source: false
 
 Quadratic (:math:`2^{\text{nd}}` order) polynomial basis
 
@@ -45,6 +46,7 @@ Quadratic (:math:`2^{\text{nd}}` order) polynomial basis
    \end{cases}
 
 .. plot:: pyplots/plot_b2.py
+   :include-source: false
 
 Cubic (:math:`3^{\text{rd}}` order) polynomial basis
 
@@ -58,3 +60,4 @@ Cubic (:math:`3^{\text{rd}}` order) polynomial basis
    \end{cases}
 
 .. plot:: pyplots/plot_b3.py
+   :include-source: false

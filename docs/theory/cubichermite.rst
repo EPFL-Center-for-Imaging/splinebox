@@ -20,3 +20,4 @@ See [Uhlmann2016]_.
    \end{cases}
 
 .. plot:: pyplots/plot_cubichermite.py
+   :include-source: false

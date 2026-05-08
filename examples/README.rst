@@ -1,5 +1,5 @@
 Example gallery
 ===============
 
-The examples below show some common use cases for SplineBox.
-Feel free to submit example use cases via `GitHub Issues <https://github.com/EPFL-Center-for-Imaging/splinebox/issues/new>`_ or a pull request if you'd like them to be featured on our documentation website!
+The examples below demonstrate some common use cases for SplineBox.
+If you would like to have your own examples featured on our documentation website, feel free to submit them via a `GitHub Issues <https://github.com/EPFL-Center-for-Imaging/splinebox/issues/new>`_ or a pull request!
