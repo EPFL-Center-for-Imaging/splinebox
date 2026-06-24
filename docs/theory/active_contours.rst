@@ -32,8 +32,7 @@ In practice, the continuous integral is approximated with a Riemann sum by sampl
 .. math::
     :name: active_contour_model:eq:3
 
-    E_{image} &=\int_\mathcal{C} \mathrm{img} ds \\
-              &=\int_0^{M-1} \text{img}[\mathbf{r}(t)] dt \\
+    E_{image} &= \int_0^{M-1}\text{img}[\mathbf{r}(t)]dt \\
               &\approx \sum_{i=0}^{N-1} \text{img}[\mathbf{r}(t_i)] \Delta t_i
 
 To optimise the spline, we need the derivatives of the image energy with respect to the control points. Applying the chain rule yields an expression involving the image gradient and the derivative of the spline with respect to a control point.
