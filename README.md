@@ -14,7 +14,7 @@ Developed by the [EPFL Center for Imaging](https://imaging.epfl.ch/) as part of 
 
 ## Features
 * Flexible spline fitting for various applications.
-* Support for many spline types in any dimesnionality.
+* Support for many spline types in any dimensionality.
 * High-perfomance implementation in Python
 * Extensive [documentation](https://splinebox.readthedocs.io/en/latest/?badge=latest) with [examples](https://splinebox.readthedocs.io/en/latest/_auto_examples/index.html)
 
