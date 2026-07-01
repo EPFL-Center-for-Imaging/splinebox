@@ -309,6 +309,7 @@ def test_translate(initialized_spline_curve, translation_vector):
     spline_copy._check_control_points.assert_called()
     t = np.linspace(0, spline.M, 100) if spline.closed else np.linspace(0, spline.M - 1, 100)
     expected = spline(t) + translation_vector
+
     assert np.allclose(spline_copy(t), expected)
 
 
@@ -486,7 +487,7 @@ def test_knots(spline_curve, knot_gen, is_hermite_spline, request):
     # the spline class but are converted to coefficients which are saved.
     if spline_curve.padding_function is None and not spline_curve.closed and pad != 0:
         # We only compare the actual knots because padded knots will not
-        # be the same because the of the filtering to find the control points.
+        # be the same because of the filtering to find the control points.
         assert np.allclose(knots[pad:-pad], spline_curve.knots[pad:-pad])
     else:
         assert np.allclose(knots, spline_curve.knots)
