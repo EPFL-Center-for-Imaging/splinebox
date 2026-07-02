@@ -1555,9 +1555,20 @@ class Spline:
         return values
 
     def control_points_derivatives(self, t, derivative=0):
+        r"""
+        Computes the partial derivatives of the spline with respect to the control points.
+
+        Returns the following matrix: :math:`A_{txly}=\frac{\partial r_x(t)}{\partial c[l]_y}`.
+        See also :ref:`(1) <active_contours:eq:4>`.
+        """
         return self.basis_matrix(t, derivative=derivative)
 
     def control_points_derivatives_of_norm_squared(self, t, derivative=0):
+        r"""
+        Computes the partial derivatives of the squared norm with respect to the control points.
+
+        Returns the following matrix: :math:`A_{tly}=\frac{\partial |r(t)|^2}{\partial c[l]_y}`.
+        """
         bm = self.basis_matrix(t, derivative=derivative)
         return 2 * bm.todense()[:, :, np.newaxis] * self(t, derivative=derivative)[:, np.newaxis, :]
 
