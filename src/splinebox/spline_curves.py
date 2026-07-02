@@ -1554,6 +1554,13 @@ class Spline:
 
         return values
 
+    def control_points_derivatives(self, t, derivative=0):
+        return self.basis_matrix(t, derivative=derivative)
+
+    def control_points_derivatives_of_norm_squared(self, t, derivative=0):
+        bm = self.basis_matrix(t, derivative=derivative)
+        return 2 * bm.todense()[:, :, np.newaxis] * self(t, derivative=derivative)[:, np.newaxis, :]
+
     def _convert_to_array(self, t):
         """
         Helper function that converts a function input
