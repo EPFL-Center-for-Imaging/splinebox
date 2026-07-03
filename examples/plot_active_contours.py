@@ -84,7 +84,7 @@ contours = []
 
 t = np.linspace(0, spline.M, 3000)[:-1]
 
-for _ in range(1000):
+for _ in range(5000):
     contour = spline(t)
     contours.append(contour.copy())
 
@@ -102,6 +102,11 @@ for _ in range(1000):
 
     # Take a step toward minimizing the energy
     spline.control_points = spline.control_points - gradients
+
+    # They process has converged when the step size is small
+    gradient_norm = np.sum(np.linalg.norm(gradients, axis=1))
+    if gradient_norm < 0.5:
+        break
 
 # %%
 # In order to plot the spline as a smooth line, we have to evaluate it
