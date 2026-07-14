@@ -14,3 +14,4 @@ For instance, you can improve the readability of your code by using :code:`splin
 
    splinebox.basis_functions
    splinebox.spline_curves
+   splinebox.multivariate

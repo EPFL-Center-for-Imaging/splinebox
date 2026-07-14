@@ -1,3 +1,10 @@
+"""
+Multivariate splines.
+
+.. warning::
+    The multivariate spline API is preliminary and may change in future releases.
+"""
+
 import collections.abc
 import math
 
@@ -11,6 +18,33 @@ EINSUM_INDICES = "abcdefghijklmnopqrstuvwxyz"
 
 
 def tensor_product(vectors):
+    """
+    Compute the tensor product of a list of vectors.
+
+    Parameters
+    ----------
+    vectors : list of numpy arrays
+        The vectors to combine. One-dimensional arrays are treated as column
+        vectors.
+
+    Returns
+    -------
+    numpy array
+        The tensor product of the input vectors.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import splinebox
+    >>> a = np.array([1.0, 2.0])
+    >>> b = np.array([3.0, 4.0])
+    >>> splinebox.multivariate.tensor_product([a, b])
+    array([[[3.],
+            [4.]],
+    <BLANKLINE>
+           [[6.],
+            [8.]]])
+    """
     n = len(vectors)
     vectors = [vector[:, np.newaxis] if vector.ndim == 1 else vector for vector in vectors]
     einsum_str = ""
@@ -22,6 +56,67 @@ def tensor_product(vectors):
 
 
 class MultivariateSpline:
+    """
+    Spline in multiple independent variables.
+
+    A multivariate spline is defined as a tensor product of univariate splines,
+    one for each variable. It can be evaluated, fitted to data, and used to
+    generate meshes for bivariate splines.
+
+    Parameters
+    ----------
+    M : iterable of int
+        Number of knots for each variable.
+    basis_functions : :class:`splinebox.basis_functions.BasisFunction` or iterable
+        The basis function(s) used to construct the spline. A single basis
+        function is applied to all variables; otherwise an iterable with one
+        basis function per variable must be provided.
+    closed : bool or iterable of bool
+        Whether each variable is closed. A single boolean is broadcast to all
+        variables.
+    control_points : numpy array, optional
+        The control points of the spline. The first ``nvariate`` axes correspond
+        to the control point grid, and the last axis is the codomain dimension.
+        If ``None``, the spline must be initialized later via ``knots`` or
+        ``fit``.
+    padding_functions : callable or iterable of callables
+        Function(s) used to pad knots for open splines. The default is
+        :func:`splinebox.spline_curves.padding_function`.
+
+    Raises
+    ------
+    ValueError
+        If ``M`` is not an iterable of integers, if ``basis_functions`` or
+        ``closed`` do not have the expected length, or if ``padding_functions``
+        does not match the number of variables.
+    RuntimeError
+        If any entry of ``M`` is smaller than the support of the corresponding
+        basis function.
+
+    Examples
+    --------
+    Create a bivariate B-spline:
+
+    >>> import numpy as np
+    >>> import splinebox
+    >>> spline = splinebox.multivariate.MultivariateSpline(
+    ...     M=(4, 5),
+    ...     basis_functions=splinebox.B3(),
+    ...     closed=(False, False),
+    ... )
+
+    Set the control points. For open splines the control points have to be
+    padded along each open dimension (one extra point on each side for B3):
+
+    >>> spline.control_points = np.random.rand(6, 7, 3)
+
+    Evaluate the spline on a grid of parameter values:
+
+    >>> t0 = np.linspace(0, 4, 5)
+    >>> t1 = np.linspace(0, 5, 6)
+    >>> t = np.stack(np.meshgrid(t0, t1, indexing="ij"), axis=-1)
+    >>> values = spline(t)
+    """
 
     def __init__(
         self,
@@ -70,11 +165,19 @@ class MultivariateSpline:
             self.padding_functions = padding_functions
         else:
             raise ValueError(
-                "pading_functions should be a single function or an iterable of functions of the same length as M."
+                "padding_functions should be a single function or an iterable of functions of the same length as M."
             )
 
     @property
     def half_support(self):
+        """
+        Half the support of each basis function.
+
+        Raises
+        ------
+        RuntimeError
+            If the user tries to set this property directly.
+        """
         return self._half_support
 
     @half_support.setter
@@ -83,6 +186,14 @@ class MultivariateSpline:
 
     @property
     def pad(self):
+        """
+        Number of additional control points used for padding each open end.
+
+        Raises
+        ------
+        RuntimeError
+            If the user tries to set this property directly.
+        """
         return self._pad
 
     @pad.setter
@@ -93,6 +204,15 @@ class MultivariateSpline:
 
     @property
     def ndim(self):
+        """
+        Dimensionality of the codomain, i.e. the number of values produced per
+        spline evaluation.
+
+        Returns
+        -------
+        int
+            The size of the last axis of :attr:`control_points`.
+        """
         return self.control_points.shape[-1]
 
     @property
@@ -201,6 +321,44 @@ class MultivariateSpline:
                     wrapped_tval[j, i] = t - k
 
     def __call__(self, t, derivatives=0):
+        """
+        Evaluate the multivariate spline at the parameter values ``t``.
+
+        Parameters
+        ----------
+        t : numpy array
+            Array of shape ``(..., nvariate)`` containing one parameter value
+            per variable.
+        derivatives : int or iterable of int
+            Derivative order for each variable. A single integer is broadcast to
+            all variables.
+
+        Returns
+        -------
+        numpy array
+            Spline values of shape ``(..., ndim)``.
+
+        Raises
+        ------
+        ValueError
+            If ``t.shape[-1]`` does not match ``nvariate`` or if the length of
+            ``derivatives`` does not match ``nvariate``.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import splinebox
+        >>> spline = splinebox.multivariate.MultivariateSpline(
+        ...     M=(4, 4),
+        ...     basis_functions=splinebox.B3(),
+        ...     closed=(True, True),
+        ... )
+        >>> spline.control_points = np.random.rand(4, 4, 2)
+        >>> t0 = np.linspace(0, 4, 5)
+        >>> t1 = np.linspace(0, 4, 5)
+        >>> t = np.stack(np.meshgrid(t0, t1, indexing="ij"), axis=-1)
+        >>> values = spline(t)
+        """
         if not isinstance(derivatives, collections.abc.Iterable):
             derivatives = [derivatives] * self.nvariate
         elif len(derivatives) != self.nvariate:
@@ -296,6 +454,34 @@ class MultivariateSpline:
         return points, connectivity
 
     def fit(self, points, t=None):
+        """
+        Fit the multivariate spline to a set of points by least squares.
+
+        Parameters
+        ----------
+        points : numpy array
+            Data to fit. If ``t`` is ``None`` and ``points`` has
+            ``nvariate`` dimensions, it is interpreted as a scalar field and the
+            codomain dimension is 1. Otherwise ``points`` must have
+            ``nvariate + 1`` dimensions, where the last axis contains the
+            codomain values.
+        t : numpy array, optional
+            Parameter values corresponding to ``points`` with shape
+            ``points.shape[:nvariate] + (nvariate,)``. If ``None``, parameter
+            values are generated automatically from the shape of ``points``.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import splinebox
+        >>> spline = splinebox.multivariate.MultivariateSpline(
+        ...     M=(4, 4),
+        ...     basis_functions=splinebox.B3(),
+        ...     closed=(False, False),
+        ... )
+        >>> points = np.random.rand(10, 10, 2)
+        >>> spline.fit(points)
+        """
         control_points_shape = np.zeros(self.nvariate, dtype=int)
         for variate in range(self.nvariate):
             if self.closed[variate]:
