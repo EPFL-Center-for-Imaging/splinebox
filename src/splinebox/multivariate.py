@@ -83,8 +83,10 @@ class MultivariateSpline:
     control_points : numpy array, optional
         The control points of the spline. The first ``nvariate`` axes correspond
         to the control point grid, and the last axis is the codomain dimension.
-        If ``None``, the spline must be initialized later via ``knots`` or
-        ``fit``.
+        Control points can be supplied directly as a NumPy array, or built with
+        helpers such as :func:`splinebox.multivariate.tensor_product` for
+        separable geometries. If ``None``, the spline must be initialized later
+        via ``knots`` or ``fit``.
     padding_functions : callable or iterable of callables
         Function(s) used to pad knots for open splines. The default is
         :func:`splinebox.spline_curves.padding_function`.
@@ -111,10 +113,19 @@ class MultivariateSpline:
     ...     closed=(False, False),
     ... )
 
-    Set the control points. For open splines the control points have to be
-    padded along each open dimension (one extra point on each side for B3):
+    Set the control points directly. For open splines the control points have
+    to be padded along each open dimension (one extra point on each side for
+    B3):
 
     >>> spline.control_points = np.random.rand(6, 7, 3)
+
+    Alternatively, a separable control-point grid can be built with
+    :func:`splinebox.multivariate.tensor_product`:
+
+    >>> control_points = splinebox.multivariate.tensor_product(
+    ...     [np.sin(np.linspace(0, np.pi, m + 2)) for m in (4, 5)]
+    ... )
+    >>> spline.control_points = control_points
 
     Evaluate the spline on a grid of parameter values:
 
@@ -466,11 +477,10 @@ class MultivariateSpline:
         Parameters
         ----------
         points : numpy array
-            Data to fit. If ``t`` is ``None`` and ``points`` has
-            ``nvariate`` dimensions, it is interpreted as a scalar field and the
-            codomain dimension is 1. Otherwise ``points`` must have
-            ``nvariate + 1`` dimensions, where the last axis contains the
-            codomain values.
+            Data to fit. If ``points`` has ``nvariate`` dimensions it is
+            interpreted as a scalar field and the codomain dimension is set to
+            1. Otherwise ``points`` must have ``nvariate + 1`` dimensions,
+            where the last axis contains the codomain values.
         t : numpy array, optional
             Parameter values corresponding to ``points`` with shape
             ``points.shape[:nvariate] + (nvariate,)``. If ``None``, parameter
@@ -478,6 +488,8 @@ class MultivariateSpline:
 
         Examples
         --------
+        Fit a vector field:
+
         >>> import numpy as np
         >>> import splinebox
         >>> spline = splinebox.multivariate.MultivariateSpline(
@@ -487,6 +499,16 @@ class MultivariateSpline:
         ... )
         >>> points = np.random.rand(10, 10, 2)
         >>> spline.fit(points)
+
+        Fit a scalar field:
+
+        >>> spline2 = splinebox.multivariate.MultivariateSpline(
+        ...     M=(4, 4),
+        ...     basis_functions=splinebox.B3(),
+        ...     closed=(False, False),
+        ... )
+        >>> scalar = np.random.rand(10, 10)
+        >>> spline2.fit(scalar)
         """
         control_points_shape = np.zeros(self.nvariate, dtype=int)
         for variate in range(self.nvariate):
@@ -495,9 +517,12 @@ class MultivariateSpline:
             else:
                 control_points_shape[variate] = self.M[variate] + 2 * self.pad[variate]
 
-        if t is None and points.ndim == self.nvariate:
+        # Scalar fields have no codomain axis; add one so the rest of the
+        # pipeline can treat all inputs uniformly.
+        if points.ndim == self.nvariate:
             points = points[..., np.newaxis]
-        elif t is None:
+
+        if t is None:
             t = []
             for variate in range(self.nvariate):
                 t.append(

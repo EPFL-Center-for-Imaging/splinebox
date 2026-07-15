@@ -415,16 +415,42 @@ def test_fit_with_explicit_t():
     assert spline.control_points.shape == (6, 6, 1)
 
 
-@pytest.mark.xfail(reason="fit does not assign t for scalar fields (points.ndim == nvariate)")
 def test_fit_scalar_field():
+    M = (8, 8)
+    spline = splinebox.multivariate.MultivariateSpline(
+        M=M,
+        basis_functions=splinebox.B1(),
+        closed=(True, True),
+    )
+    points = np.random.rand(*M)
+    spline.fit(points)
+    assert spline.control_points.shape == (*M, 1)
+
+    t = np.stack(
+        np.meshgrid(
+            np.linspace(0, M[0], M[0], endpoint=False),
+            np.linspace(0, M[1], M[1], endpoint=False),
+            indexing="ij",
+        ),
+        axis=-1,
+    )
+    assert np.allclose(spline(t).squeeze(), points)
+
+
+def test_fit_scalar_field_with_explicit_t():
     M = (4, 4)
     spline = splinebox.multivariate.MultivariateSpline(
         M=M,
-        basis_functions=splinebox.basis_functions.B3(),
-        closed=(True, True),
+        basis_functions=splinebox.B3(),
+        closed=(False, False),
     )
     points = np.random.rand(10, 10)
-    spline.fit(points)
+    t = np.stack(
+        np.meshgrid(np.linspace(0, M[0] - 1, 10), np.linspace(0, M[1] - 1, 10), indexing="ij"),
+        axis=-1,
+    )
+    spline.fit(points, t=t)
+    assert spline.control_points.shape == (6, 6, 1)
 
 
 def test_mesh_closed():
