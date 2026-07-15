@@ -17,20 +17,22 @@ import splinebox.spline_curves
 EINSUM_INDICES = "abcdefghijklmnopqrstuvwxyz"
 
 
-def tensor_product(vectors):
+def tensor_product(arrays):
     """
-    Compute the tensor product of a list of vectors.
+    Compute the tensor product of a list of arrays.
 
     Parameters
     ----------
-    vectors : list of numpy arrays
-        The vectors to combine. One-dimensional arrays are treated as column
-        vectors.
+    arrays : list of numpy arrays
+        The arrays to combine. Each array must be one or two dimensional.
+        One-dimensional arrays are treated as column vectors; two-dimensional
+        arrays are used as-is, allowing each factor to have an arbitrary
+        codomain dimension.
 
     Returns
     -------
     numpy array
-        The tensor product of the input vectors.
+        The tensor product of the input arrays.
 
     Examples
     --------
@@ -45,14 +47,18 @@ def tensor_product(vectors):
            [[6.],
             [8.]]])
     """
-    n = len(vectors)
-    vectors = [vector[:, np.newaxis] if vector.ndim == 1 else vector for vector in vectors]
+    for i, array in enumerate(arrays):
+        if array.ndim > 2:
+            raise ValueError(f"Each array must be one or two dimensional. Array {i} has shape {array.shape}.")
+        if array.ndim == 1:
+            arrays[i] = array[:, np.newaxis]
+    n = len(arrays)
     einsum_str = ""
     for index in EINSUM_INDICES[:n]:
         einsum_str += index + EINSUM_INDICES[n] + ","
     einsum_str = einsum_str[:-1]
     einsum_str += "->" + EINSUM_INDICES[: n + 1]
-    return np.einsum(einsum_str, *vectors)
+    return np.einsum(einsum_str, *arrays)
 
 
 class MultivariateSpline:
