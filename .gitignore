@@ -175,6 +175,9 @@ venv_splinebox
 # example gallery files
 docs/_auto_examples
 docs/sg_execution_times.rst
+**spline.json
+**splines.json
 
 # Generated API docs
 docs/api/_generated
+docs/api/_backreferences
