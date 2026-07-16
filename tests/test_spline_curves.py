@@ -5,6 +5,7 @@ import unittest.mock
 import numpy as np
 import pytest
 import scipy
+
 import splinebox
 
 
@@ -309,6 +310,7 @@ def test_translate(initialized_spline_curve, translation_vector):
     spline_copy._check_control_points.assert_called()
     t = np.linspace(0, spline.M, 100) if spline.closed else np.linspace(0, spline.M - 1, 100)
     expected = spline(t) + translation_vector
+
     assert np.allclose(spline_copy(t), expected)
 
 
@@ -486,7 +488,7 @@ def test_knots(spline_curve, knot_gen, is_hermite_spline, request):
     # the spline class but are converted to coefficients which are saved.
     if spline_curve.padding_function is None and not spline_curve.closed and pad != 0:
         # We only compare the actual knots because padded knots will not
-        # be the same because the of the filtering to find the control points.
+        # be the same because of the filtering to find the control points.
         assert np.allclose(knots[pad:-pad], spline_curve.knots[pad:-pad])
     else:
         assert np.allclose(knots, spline_curve.knots)
@@ -1216,3 +1218,96 @@ def test_ndim(initialized_spline_curve):
     spline = initialized_spline_curve
     expected = spline(np.array([0.5])).shape[-1]
     assert spline.ndim == expected
+
+
+def _test_t(spline, n=20):
+    return np.linspace(0, spline.M, n, endpoint=False) if spline.closed else np.linspace(0, spline.M - 1, n)
+
+
+def _basis_matrix_control_point_component(spline, t, derivative=0):
+    """Return the control-point component of the basis matrix for any spline type."""
+    bm = spline.basis_matrix(t, derivative=derivative)
+    return bm[0] if isinstance(bm, tuple) else bm
+
+
+def test_derivative_wrt_control_points_matches_basis_matrix(initialized_spline_curve):
+    spline = initialized_spline_curve
+    t = _test_t(spline)
+    expected = _basis_matrix_control_point_component(spline, t).toarray()
+    result = spline.derivative_wrt_control_points(t).toarray()
+    assert np.allclose(result, expected, equal_nan=True)
+
+
+def test_derivative_wrt_control_points_finite_difference(initialized_spline_curve):
+    spline = initialized_spline_curve
+    t = _test_t(spline)
+
+    delta = np.random.randn(*spline.control_points.shape) * 1e-7
+    spline_perturbed = spline.copy()
+    spline_perturbed.control_points = spline.control_points + delta
+
+    jacobian = spline.derivative_wrt_control_points(t).toarray()
+    predicted = jacobian @ delta
+    actual = spline_perturbed(t) - spline(t)
+    assert np.allclose(predicted, actual, atol=1e-5)
+
+
+def test_derivative_of_norm_squared_wrt_control_points_shape(initialized_spline_curve):
+    spline = initialized_spline_curve
+    n_control_points = spline.M if spline.closed else spline.M + 2 * spline.pad
+    t = _test_t(spline)
+    result = spline.derivative_of_norm_squared_wrt_control_points(t)
+    assert result.shape == (len(t), n_control_points, spline.ndim)
+
+
+def test_derivative_of_norm_squared_wrt_control_points_finite_difference(initialized_spline_curve):
+    spline = initialized_spline_curve
+    t = _test_t(spline)
+
+    delta = np.random.randn(*spline.control_points.shape) * 1e-7
+    spline_perturbed = spline.copy()
+    spline_perturbed.control_points = spline.control_points + delta
+
+    def total_norm_squared(s):
+        vals = s(t)
+        return np.sum(vals * vals)
+
+    gradient = np.sum(spline.derivative_of_norm_squared_wrt_control_points(t), axis=0)
+    predicted = np.sum(gradient * delta)
+    actual = total_norm_squared(spline_perturbed) - total_norm_squared(spline)
+    assert np.isclose(predicted, actual, atol=1e-5)
+
+
+def test_derivative_wrt_control_points_derivative_argument(initialized_spline_curve):
+    spline = initialized_spline_curve
+    t = _test_t(spline)
+    for derivative in [0, 1, 2]:
+        expected = _basis_matrix_control_point_component(spline, t, derivative=derivative).toarray()
+        result = spline.derivative_wrt_control_points(t, derivative=derivative).toarray()
+        assert np.allclose(result, expected, equal_nan=True)
+
+
+def test_derivative_wrt_tangents_matches_basis_matrix(hermite_spline_curve, coeff_gen):
+    spline = hermite_spline_curve
+    spline.control_points = coeff_gen(spline.M, spline.basis_function.support, spline.closed)
+    spline.tangents = coeff_gen(spline.M, spline.basis_function.support, spline.closed)
+    t = _test_t(spline)
+    expected = spline.basis_matrix(t)[1].toarray()
+    result = spline.derivative_wrt_tangents(t).toarray()
+    assert np.allclose(result, expected, equal_nan=True)
+
+
+def test_derivative_wrt_tangents_finite_difference(hermite_spline_curve, coeff_gen):
+    spline = hermite_spline_curve
+    spline.control_points = coeff_gen(spline.M, spline.basis_function.support, spline.closed)
+    spline.tangents = coeff_gen(spline.M, spline.basis_function.support, spline.closed)
+    t = _test_t(spline)
+
+    delta = np.random.randn(*spline.tangents.shape) * 1e-7
+    spline_perturbed = spline.copy()
+    spline_perturbed.tangents = spline.tangents + delta
+
+    jacobian = spline.derivative_wrt_tangents(t).toarray()
+    predicted = jacobian @ delta
+    actual = spline_perturbed(t) - spline(t)
+    assert np.allclose(predicted, actual, atol=1e-5)
