@@ -184,6 +184,10 @@ class Spline:
         self._cached_segments = None
         self._cached_segment_lengths = None
 
+        self._cached_h1 = None
+        self._cached_h2 = None
+        self._cached_h3 = None
+
     def _check_control_points(self):
         """
         Most methods require control points to be set before they
@@ -422,6 +426,58 @@ class Spline:
                 function_values @ GAUSS_LEGENDRE_QUADRATURE_WEIGHTS / (2 / self.integration_segment_size)
             )
         return self._cached_segment_lengths
+
+    @property
+    def _h1(self):
+        """
+        See :ref:`theory/active_contours:Active contour model`.
+        """
+        if self._cached_h1 is None:
+            n_control_points = len(self.control_points)
+            self._cached_h1 = np.zeros((n_control_points, n_control_points, n_control_points, n_control_points))
+            for i0, l in enumerate(np.arange(-self.pad, self.M + self.pad)):
+                for i1, k in enumerate(np.arange(-self.pad, self.M + self.pad)):
+                    for i2, m in enumerate(np.arange(-self.pad, self.M + self.pad)):
+                        for i3, n in enumerate(np.arange(-self.pad, self.M + self.pad)):
+                            func = (
+                                lambda t: self.basis_function(t - l, derivative=1)
+                                * self.basis_function(t - k, derivative=1)
+                                * self.basis_function(t - m, derivative=1)
+                                * self.basis_function(t - n, derivative=1)
+                            )
+                            res = scipy.integrate.quad(func, 0, self.M - 1)
+                            self._cached_h1[i0, i1, i2, i3] = res[0]
+        return self._cached_h1
+
+    @property
+    def _h2(self):
+        """
+        See :ref:`theory/active_contours:Active contour model`.
+        """
+        if self._cached_h2 is None:
+            n_control_points = len(self.control_points)
+            self._cached_h2 = np.zeros((n_control_points, n_control_points))
+            for i, l in enumerate(np.arange(-self.pad, self.M + self.pad)):
+                for j, k in enumerate(np.arange(-self.pad, self.M + self.pad)):
+                    func = lambda t: self.basis_function(t - l, derivative=1) * self.basis_function(t - k, derivative=1)
+                    res = scipy.integrate.quad(func, 0, self.M - 1)
+                    self._cached_h2[i, j] = res[0]
+        return self._cached_h2
+
+    @property
+    def _h3(self):
+        """
+        See :ref:`theory/active_contours:Active contour model`.
+        """
+        if self._cached_h3 is None:
+            n_control_points = len(self.control_points)
+            self._cached_h3 = np.zeros((n_control_points, n_control_points))
+            for i, l in enumerate(np.arange(-self.pad, self.M + self.pad)):
+                for j, k in enumerate(np.arange(-self.pad, self.M + self.pad)):
+                    func = lambda t: self.basis_function(t - l, derivative=2) * self.basis_function(t - k, derivative=2)
+                    res = scipy.integrate.quad(func, 0, self.M - 1)
+                    self._cached_h3[i, j] = res[0]
+        return self._cached_h3
 
     def copy(self):
         """
@@ -1574,6 +1630,22 @@ class Spline:
         """
         bm = self.basis_matrix(t, derivative=derivative)
         return 2 * bm.todense()[:, :, np.newaxis] * self(t, derivative=derivative)[:, np.newaxis, :]
+
+    def derivative_of_curvilinear_reparametrisation_energy_wrt_control_points(self, c):
+        """
+        The curvilinear reparametrisation energy is defined in equation 25 of [Jacob2004]_.
+        The parameter :math:`c = (\frac{\text{desired arc length}}{M-1})^2` represents the desired squared speed of the spline.
+        """
+        return 4 * np.einsum(
+            "ky,my,nx,lkmn->lx", self.control_points, self.control_points, self.control_points, self._h1
+        ) - 4 * c * np.einsum("mx,lm->lx", self.control_points, self._h2)
+
+    def derivative_of_curvature_wrt_control_points(self):
+        """
+        Computes the partial derivatives of the spline curvature
+        with respect to the control points.
+        """
+        return np.einsum("mx,lm->lx", self.control_points, self._h3)
 
     def _convert_to_array(self, t):
         """
