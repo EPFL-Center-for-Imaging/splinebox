@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy
 import skimage
+
 import splinebox.basis_functions
 import splinebox.spline_curves
 
@@ -92,11 +93,11 @@ for _ in range(5000):
     dx = scipy.ndimage.map_coordinates(edge_gx, contour.T, order=1)
     img_gradients = np.stack([dy, dx], axis=-1)
 
-    partial_derivs = spline.control_points_derivatives(t)
+    partial_derivs = spline.derivative_wrt_control_points(t)
 
     image_energy_gradients = partial_derivs.T @ img_gradients
 
-    internal_energy_gradients = np.mean(spline.control_points_derivatives_of_norm_squared(t, derivative=2), axis=0)
+    internal_energy_gradients = np.mean(spline.derivative_of_norm_squared_wrt_control_points(t, derivative=2), axis=0)
 
     gradients = -image_energy_gradients + internal_energy_gradients / 2
 

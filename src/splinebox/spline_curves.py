@@ -14,6 +14,7 @@ import scipy.integrate
 
 import splinebox.basis_functions
 
+
 GAUSS_LEGENDRE_QUADRATURE_POINTS = np.array(
     [
         -np.sqrt(3 / 7 + 2 / 7 * np.sqrt(6 / 5)),
@@ -1451,7 +1452,7 @@ class Spline:
     def basis_matrix(self, t, derivative=0):
         r"""
         Computes the basis matrix :math:`\mathbf{\Phi}` as defined in :ref:`theory/data_approximation:Data approximation`.
-        In some contexts this matrix is reffered to as a collocation matrix.
+        In some contexts this matrix is referred to as a collocation matrix.
 
         Parameters
         ----------
@@ -1554,18 +1555,20 @@ class Spline:
 
         return values
 
-    def control_points_derivatives(self, t, derivative=0):
+    def derivative_wrt_control_points(self, t, derivative=0):
         r"""
-        Computes the partial derivatives of the spline with respect to the control points.
+        Computes the partial derivatives of the spline or one of it's derivatives with respect to the control points.
 
-        Returns the following matrix: :math:`A_{txly}=\frac{\partial r_x(t)}{\partial c[l]_y}`.
-        See also :ref:`(1) <active_contours:eq:4>`.
+        This is just a wrapper around the :meth:`splinebox.spline_curves.Spline.basis_matrix` since it can analytically be shown that
+        the derivatives with respect to the control points are equal to the basis matrix.
+        For details see :ref:`theory/active_contours:Active contour model`.
         """
         return self.basis_matrix(t, derivative=derivative)
 
-    def control_points_derivatives_of_norm_squared(self, t, derivative=0):
+    def derivative_of_norm_squared_wrt_control_points(self, t, derivative=0):
         r"""
         Computes the partial derivatives of the squared norm with respect to the control points.
+        For an analytical derivation see :ref:`theory/active_contours:Active contour model`.
 
         Returns the following matrix: :math:`A_{tly}=\frac{\partial |r(t)|^2}{\partial c[l]_y}`.
         """
@@ -1883,7 +1886,7 @@ class Spline:
             The frame to use for orientation of the mesh:
             - "frenet": Uses the Frenet-Serret frame.
             - "bishop": Uses the Bishop frame, requiring an `initial_vector`.
-            See :meth:`splinebox.spline_curves.moving_frame`. Default is "bishop".
+            See :meth:`splinebox.spline_curves.Spline.moving_frame`. Default is "bishop".
         initial_vector : numpy array or None, optional
             For the Bishop frame, an initial vector that defines the orientation of
             the frame at the start of the spline (`t[0]`). This vector must be
@@ -2459,6 +2462,44 @@ class HermiteSpline(Spline):
             values = values[0]
 
         return values
+
+    def derivative_wrt_control_points(self, t, derivative=0):
+        r"""
+        Computes the partial derivatives of the spline or one of its derivatives
+        with respect to the control points.
+
+        For a Hermite spline this returns the basis matrix for the control-point
+        component only (the tangent component is handled separately by
+        :meth:`splinebox.spline_curves.HermiteSpline.derivative_wrt_tangents`).
+        """
+        return self.basis_matrix(t, derivative=derivative)[0]
+
+    def derivative_wrt_tangents(self, t, derivative=0):
+        r"""
+        Computes the partial derivatives of the spline or one of its derivatives
+        with respect to the tangents.
+
+        Returns the basis matrix for the tangent component of a Hermite spline.
+        """
+        return self.basis_matrix(t, derivative=derivative)[1]
+
+    def derivative_of_norm_squared_wrt_control_points(self, t, derivative=0):
+        r"""
+        Computes the partial derivatives of the squared norm with respect to the
+        control points.
+
+        For an analytical derivation see :ref:`theory/active_contours:Active contour model`.
+        """
+        bm = self.derivative_wrt_control_points(t, derivative=derivative)
+        return 2 * bm.todense()[:, :, np.newaxis] * self(t, derivative=derivative)[:, np.newaxis, :]
+
+    def derivative_of_norm_squared_wrt_tangents(self, t, derivative=0):
+        r"""
+        Computes the partial derivatives of the squared norm with respect to the
+        tangents.
+        """
+        bm = self.derivative_wrt_tangents(t, derivative=derivative)
+        return 2 * bm.todense()[:, :, np.newaxis] * self(t, derivative=derivative)[:, np.newaxis, :]
 
     def scale(self, scaling_factor):
         self._check_control_points_and_tangents()
