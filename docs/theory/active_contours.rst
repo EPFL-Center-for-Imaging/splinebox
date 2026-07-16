@@ -51,10 +51,10 @@ The remaining term is the derivative of the spline itself, which can be derived 
 .. math::
     :name: active_contour_model:eq:5
 
-    \frac{\partial r_y}{\partial c[l]_x}(t) &= \frac{\partial}{\partial c[l]_x} \sum_{k=0}^{M-1} c[k]_y \Phi(t-k) \\
-                                            &= \sum_{k=0}^{M-1}\frac{\partial}{\partial c[l]_x} c[k]_y \Phi(t-k) \\
-                                            &= \sum_{k=0}^{M-1}\delta_{xy}\delta_{kl}\Phi(t-k) \\
-                                            &= \delta_{xy}\Phi(t-l)
+    \frac{\partial r_y}{\partial c[l]_x}(t) &= \frac{\partial}{\partial c[l]_x} \sum_{k=0}^{M-1} c[k]_y \varphi(t-k) \\
+                                            &= \sum_{k=0}^{M-1}\frac{\partial}{\partial c[l]_x} c[k]_y \varphi(t-k) \\
+                                            &= \sum_{k=0}^{M-1}\delta_{xy}\delta_{kl}\varphi(t-k) \\
+                                            &= \delta_{xy}\varphi(t-l)
 
 Substituting this result into the expression above gives the gradient of the image energy with respect to each control point.
 
@@ -62,7 +62,7 @@ Substituting this result into the expression above gives the gradient of the ima
     :name: active_contour_model:eq:6
 
     \frac{\partial E_{image}}{\partial c[l]_x} &= \sum_{i=0}^{N-1} \Delta t_i \nabla \text{img}[\mathbf{r}(t_i)] \frac{\partial \mathbf{r}}{\partial c[l]_x}(t_i) \\
-                                               &= \sum_{i=0}^{N-1} \Delta t_i \nabla \text{img}[\mathbf{r}(t_i)] \Phi(t_i-l)
+                                               &= \sum_{i=0}^{N-1} \Delta t_i \nabla \text{img}[\mathbf{r}(t_i)] \varphi(t_i-l)
 
 This can be written more compactly using matrices assuming :math:`\Delta t_i` is the same for all :math:`i`.
 
@@ -81,10 +81,10 @@ This can be written more compactly using matrices assuming :math:`\Delta t_i` is
      \frac{\partial r}{\partial c[0]}(t_{N-1}) & \frac{\partial r}{\partial c[1]}(t_{N-1}) & \dots & \ \frac{\partial r}{\partial c[M - 1]}(t_{N-1}) \\
     \end{bmatrix} \\
     &= \begin{bmatrix}
-     \Phi(t_0) & \Phi(t_0-1) & \dots & \ \Phi(t_0-(M-1)) \\
-     \Phi(t_1) & \Phi(t_1 - 1) & \dots & \ \Phi(t_1 - (M-1)) \\
+     \varphi(t_0) & \varphi(t_0-1) & \dots & \ \varphi(t_0-(M-1)) \\
+     \varphi(t_1) & \varphi(t_1 - 1) & \dots & \ \varphi(t_1 - (M-1)) \\
      \vdots & \vdots & \ddots & \vdots \\
-     \Phi(t_{N-1}) & \Phi(t_{N-1} - 1) & \dots & \ \Phi(t_{N-1} - (M - 1)) \\
+     \varphi(t_{N-1}) & \varphi(t_{N-1} - 1) & \dots & \ \varphi(t_{N-1} - (M - 1)) \\
     \end{bmatrix}
 
 .. math::
@@ -132,20 +132,20 @@ This representation allows the derivatives to be evaluated analytically.
     :name: active_contour_model:eq:12
 
     |\mathbf{r}'(t)|^2 &= \sum_x r'(t)_x^2 \\
-              &= \sum_x (\sum_{k=0}^{M-1} c[k]_x \Phi'(t-k))^2 \\
-              &= \sum_x \sum_{k=0}^{M-1}\sum_{m=0}^{M-1} c[k]_x c[m]_x \Phi'(t-k) \Phi'(t-m) \\
-              &= \sum_{k=0}^{M-1}\sum_{m=0}^{M-1} \langle c[k], c[m] \rangle \Phi'(t-k) \Phi'(t-m)
+              &= \sum_x (\sum_{k=0}^{M-1} c[k]_x \varphi'(t-k))^2 \\
+              &= \sum_x \sum_{k=0}^{M-1}\sum_{m=0}^{M-1} c[k]_x c[m]_x \varphi'(t-k) \varphi'(t-m) \\
+              &= \sum_{k=0}^{M-1}\sum_{m=0}^{M-1} \langle c[k], c[m] \rangle \varphi'(t-k) \varphi'(t-m)
 
 .. math::
     :name: active_contour_model:eq:13
 
-    \frac{\partial}{\partial c[l]_y}|\mathbf{r}'(t)|^2 &= \frac{\partial}{\partial c[l]_y} \sum_x \sum_{k=0}^{M-1}\sum_{m=0}^{M-1} c[k]_x c[m]_x \Phi'(t-k) \Phi'(t-m) \\
-                                                       &= \sum_x \sum_{k=0}^{M-1}\sum_{m=0}^{M-1} \frac{\partial}{\partial c[l]_y} c[k]_x c[m]_x \Phi'(t-k) \Phi'(t-m) \\
-                                                       &= \sum_{k=0}^{M-1}\sum_{m=0}^{M-1} \frac{\partial}{\partial c[l]_y} c[k]_y c[m]_y \Phi'(t-k) \Phi'(t-m) \\
-                                                       &= \sum_{m=0}^{M-1}c[m]_y \Phi'(t-l) \Phi'(t-m) + \sum_{k=0}^{M-1}c[k]_y \Phi'(t-k) \Phi'(t-l)\\
-                                                       &= 2 \sum_{m=0}^{M-1}c[m]_y \Phi'(t-l) \Phi'(t-m)\\
-                                                       &= 2 \Phi'(t-l) \sum_{m=0}^{M-1}c[m]_y \Phi'(t-m)\\
-                                                       &= 2 \Phi'(t-l) r_y'(t)
+    \frac{\partial}{\partial c[l]_y}|\mathbf{r}'(t)|^2 &= \frac{\partial}{\partial c[l]_y} \sum_x \sum_{k=0}^{M-1}\sum_{m=0}^{M-1} c[k]_x c[m]_x \varphi'(t-k) \varphi'(t-m) \\
+                                                       &= \sum_x \sum_{k=0}^{M-1}\sum_{m=0}^{M-1} \frac{\partial}{\partial c[l]_y} c[k]_x c[m]_x \varphi'(t-k) \varphi'(t-m) \\
+                                                       &= \sum_{k=0}^{M-1}\sum_{m=0}^{M-1} \frac{\partial}{\partial c[l]_y} c[k]_y c[m]_y \varphi'(t-k) \varphi'(t-m) \\
+                                                       &= \sum_{m=0}^{M-1}c[m]_y \varphi'(t-l) \varphi'(t-m) + \sum_{k=0}^{M-1}c[k]_y \varphi'(t-k) \varphi'(t-l)\\
+                                                       &= 2 \sum_{m=0}^{M-1}c[m]_y \varphi'(t-l) \varphi'(t-m)\\
+                                                       &= 2 \varphi'(t-l) \sum_{m=0}^{M-1}c[m]_y \varphi'(t-m)\\
+                                                       &= 2 \varphi'(t-l) r_y'(t)
 
 The derivative of :math:`|r'(t)|^2` can then be used to derive the derivative of :math:`|r'(t)|^4` through the chain rule.
 
@@ -154,8 +154,8 @@ The derivative of :math:`|r'(t)|^2` can then be used to derive the derivative of
 
     \frac{\partial}{\partial c[l]_y}|\mathbf{r}'(t)|^4 &= \frac{\partial}{\partial c[l]_y}(|\mathbf{r}'(t)|^2)^2 \\
                                                        &= 2|\mathbf{r}'(t)|^2\frac{\partial}{\partial c[l]_y}|\mathbf{r}'(t)|^2 \\
-                                                       &= 2(\sum_{k=0}^{M-1}\sum_{m=0}^{M-1} \langle c[k], c[m] \rangle \Phi'(t-k) \Phi'(t-m))(2 \sum_{n=0}^{M-1}c[n]_y \Phi'(t-l) \Phi'(t-n)) \\
-                                                       &= 4\sum_{k=0}^{M-1}\sum_{m=0}^{M-1}\sum_{n=0}^{M-1} \langle c[k], c[m] \rangle c[n]_y \Phi'(t-k) \Phi'(t-m) \Phi'(t-l) \Phi'(t-n) \\
+                                                       &= 2(\sum_{k=0}^{M-1}\sum_{m=0}^{M-1} \langle c[k], c[m] \rangle \varphi'(t-k) \varphi'(t-m))(2 \sum_{n=0}^{M-1}c[n]_y \varphi'(t-l) \varphi'(t-n)) \\
+                                                       &= 4\sum_{k=0}^{M-1}\sum_{m=0}^{M-1}\sum_{n=0}^{M-1} \langle c[k], c[m] \rangle c[n]_y \varphi'(t-k) \varphi'(t-m) \varphi'(t-l) \varphi'(t-n) \\
 
 For convenience, we introduce the auxiliary quantities :math:`h_1` and :math:`h_2`, which depend only on the spline basis functions.
 These quantities can be precomputed once and reused throughout the optimisation.
@@ -163,12 +163,12 @@ These quantities can be precomputed once and reused throughout the optimisation.
 .. math::
     :name: active_contour_model:eq:15
 
-    h_1(k, m, l, n) := \int_0^{M-1}\Phi'(t-k) \Phi'(t-m) \Phi'(t-l) \Phi'(t-n)dt
+    h_1(k, m, l, n) := \int_0^{M-1}\varphi'(t-k) \varphi'(t-m) \varphi'(t-l) \varphi'(t-n)dt
 
 .. math::
     :name: active_contour_model:eq:16
 
-    h_2(l, m) := \int_0^{M-1}\Phi'(t-l) \Phi'(t-m)dt
+    h_2(l, m) := \int_0^{M-1}\varphi'(t-l) \varphi'(t-m)dt
 
 Substituting these expressions into the gradient of the internal energy yields the final formula used during gradient descent.
 
