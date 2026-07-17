@@ -171,6 +171,10 @@ class Spline:
         else:
             raise RuntimeError("M must be greater than or equal to the basis function support size.")
 
+        self._cached_h1 = None
+        self._cached_h2 = None
+        self._cached_h3 = None
+
         self.basis_function = basis_function
         self._half_support = self.basis_function.support / 2
         # Number of additional knots used for padding the ends
@@ -183,10 +187,6 @@ class Spline:
         self.integration_segment_size = integration_segment_size
         self._cached_segments = None
         self._cached_segment_lengths = None
-
-        self._cached_h1 = None
-        self._cached_h2 = None
-        self._cached_h3 = None
 
     def _check_control_points(self):
         """
@@ -319,6 +319,12 @@ class Spline:
             raise ValueError(
                 "You are trying to construct a Hermite spline using the ordinary `Spline` class. Use the `HermiteSpline` class instead."
             )
+
+        # Invalidate cached _h1, _h2, _h3
+        self._cached_h1 = None
+        self._cached_h2 = None
+        self._cached_h3 = None
+
         self._basis_function = value
 
     @property
@@ -332,6 +338,12 @@ class Spline:
             raise RuntimeError(
                 "M cannot be changed after the control points were set. Create a new spline or set the control_points to None first."
             )
+
+        # Invalidate cached _h1, _h2, _h3
+        self._cached_h1 = None
+        self._cached_h2 = None
+        self._cached_h3 = None
+
         self._M = M
 
     @property
@@ -345,6 +357,12 @@ class Spline:
             raise RuntimeError(
                 "closed cannot be changed after the control points were set. Create a new spline or set the control_points to None first."
             )
+
+        # Invalidate cached _h1, _h2, _h3
+        self._cached_h1 = None
+        self._cached_h2 = None
+        self._cached_h3 = None
+
         self._closed = closed
 
     @property
@@ -435,17 +453,30 @@ class Spline:
         if self._cached_h1 is None:
             n_control_points = len(self.control_points)
             self._cached_h1 = np.zeros((n_control_points, n_control_points, n_control_points, n_control_points))
-            for i0, l in enumerate(np.arange(-self.pad, self.M + self.pad)):
-                for i1, k in enumerate(np.arange(-self.pad, self.M + self.pad)):
-                    for i2, m in enumerate(np.arange(-self.pad, self.M + self.pad)):
-                        for i3, n in enumerate(np.arange(-self.pad, self.M + self.pad)):
-                            func = (
-                                lambda t: self.basis_function(t - l, derivative=1)
-                                * self.basis_function(t - k, derivative=1)
-                                * self.basis_function(t - m, derivative=1)
-                                * self.basis_function(t - n, derivative=1)
+            arange = np.arange(self.M) if self.closed else np.arange(-self.pad, self.M + self.pad)
+            for i0, l in enumerate(arange):
+                for i1, k in enumerate(arange):
+                    for i2, m in enumerate(arange):
+                        for i3, n in enumerate(arange):
+                            if self.closed:
+                                func = (
+                                    lambda t: self.basis_function(t - l, derivative=1)
+                                    * self.basis_function((t - k) % self.M, derivative=1)
+                                    * self.basis_function((t - m) % self.M, derivative=1)
+                                    * self.basis_function((t - n) % self.M, derivative=1)
+                                )
+                            else:
+                                func = (
+                                    lambda t: self.basis_function(t - l, derivative=1)
+                                    * self.basis_function(t - k, derivative=1)
+                                    * self.basis_function(t - m, derivative=1)
+                                    * self.basis_function(t - n, derivative=1)
+                                )
+                            res = scipy.integrate.quad(
+                                func,
+                                0,
+                                self.M if self.closed else self.M - 1,
                             )
-                            res = scipy.integrate.quad(func, 0, self.M - 1)
                             self._cached_h1[i0, i1, i2, i3] = res[0]
         return self._cached_h1
 
@@ -457,10 +488,22 @@ class Spline:
         if self._cached_h2 is None:
             n_control_points = len(self.control_points)
             self._cached_h2 = np.zeros((n_control_points, n_control_points))
-            for i, l in enumerate(np.arange(-self.pad, self.M + self.pad)):
-                for j, k in enumerate(np.arange(-self.pad, self.M + self.pad)):
-                    func = lambda t: self.basis_function(t - l, derivative=1) * self.basis_function(t - k, derivative=1)
-                    res = scipy.integrate.quad(func, 0, self.M - 1)
+            arange = np.arange(self.M) if self.closed else np.arange(-self.pad, self.M + self.pad)
+            for i, l in enumerate(arange):
+                for j, k in enumerate(arange):
+                    if self.closed:
+                        func = lambda t: self.basis_function((t - l) % self.M, derivative=1) * self.basis_function(
+                            (t - k) % self.M, derivative=1
+                        )
+                    else:
+                        func = lambda t: self.basis_function(t - l, derivative=1) * self.basis_function(
+                            t - k, derivative=1
+                        )
+                    res = scipy.integrate.quad(
+                        func,
+                        0,
+                        self.M if self.closed else self.M - 1,
+                    )
                     self._cached_h2[i, j] = res[0]
         return self._cached_h2
 
@@ -472,10 +515,22 @@ class Spline:
         if self._cached_h3 is None:
             n_control_points = len(self.control_points)
             self._cached_h3 = np.zeros((n_control_points, n_control_points))
-            for i, l in enumerate(np.arange(-self.pad, self.M + self.pad)):
-                for j, k in enumerate(np.arange(-self.pad, self.M + self.pad)):
-                    func = lambda t: self.basis_function(t - l, derivative=2) * self.basis_function(t - k, derivative=2)
-                    res = scipy.integrate.quad(func, 0, self.M - 1)
+            arange = np.arange(self.M) if self.closed else np.arange(-self.pad, self.M + self.pad)
+            for i, l in enumerate(arange):
+                for j, k in enumerate(arange):
+                    if self.closed:
+                        func = lambda t: self.basis_function((t - l) % self.M, derivative=2) * self.basis_function(
+                            (t - k) % self.M, derivative=2
+                        )
+                    else:
+                        func = lambda t: self.basis_function(t - l, derivative=2) * self.basis_function(
+                            t - k, derivative=2
+                        )
+                    res = scipy.integrate.quad(
+                        func,
+                        0,
+                        self.M if self.closed else self.M - 1,
+                    )
                     self._cached_h3[i, j] = res[0]
         return self._cached_h3
 
@@ -1632,18 +1687,59 @@ class Spline:
         return 2 * bm.todense()[:, :, np.newaxis] * self(t, derivative=derivative)[:, np.newaxis, :]
 
     def derivative_of_curvilinear_reparametrisation_energy_wrt_control_points(self, c):
-        """
-        The curvilinear reparametrisation energy is defined in equation 25 of [Jacob2004]_.
-        The parameter :math:`c = (\frac{\text{desired arc length}}{M-1})^2` represents the desired squared speed of the spline.
+        r"""
+        Gradient of the curvilinear reparametrisation energy with respect to the
+        control points.
+
+        The energy is defined in equation 25 of [Jacob2004]_ as
+
+        .. math::
+
+            E_{\text{reparam}} = \int_0^{M-1} \left(|\mathbf{r}'(t)|^2 - c\right)^2 dt
+                                = \int_0^{M-1} |\mathbf{r}'(t)|^4 - 2c|\mathbf{r}'(t)|^2 + c^2 dt.
+
+        The parameter :math:`c = \left(\frac{\text{desired arc length}}{M-1}\right)^2`
+        represents the desired squared speed of the spline. Minimising this energy
+        encourages a uniform spacing of control points along the curve.
+
+        Parameters
+        ----------
+        c : float
+            Desired squared speed.
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of shape ``(n_control_points, ndim)`` containing the gradient
+            :math:`\frac{\partial E_{\text{reparam}}}{\partial c[l]_x}`.
+
+        For an analytical derivation see :ref:`theory/active_contours:Active contour model`.
         """
         return 4 * np.einsum(
             "ky,my,nx,lkmn->lx", self.control_points, self.control_points, self.control_points, self._h1
         ) - 4 * c * np.einsum("mx,lm->lx", self.control_points, self._h2)
 
-    def derivative_of_curvature_wrt_control_points(self):
-        """
-        Computes the partial derivatives of the spline curvature
-        with respect to the control points.
+    def derivative_of_curvature_energy_wrt_control_points(self):
+        r"""
+        Gradient of the curvature energy with respect to the control points.
+
+        The curvature energy penalises the squared magnitude of the second
+        derivative:
+
+        .. math::
+
+            E_{\text{curvature}} = \int_0^{M-1} |\mathbf{r}''(t)|^2 dt.
+
+        For curves with small slopes this is a good approximation of the
+        integral over the squared curvature.
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of shape ``(n_control_points, ndim)`` containing the gradient
+            :math:`\frac{\partial E_{\text{curvature}}}{\partial c[l]_x}`.
+
+        For an analytical derivation see :ref:`theory/active_contours:Active contour model`.
         """
         return np.einsum("mx,lm->lx", self.control_points, self._h3)
 
@@ -2536,7 +2632,7 @@ class HermiteSpline(Spline):
         return values
 
     def derivative_wrt_control_points(self, t, derivative=0):
-        r"""
+        """
         Computes the partial derivatives of the spline or one of its derivatives
         with respect to the control points.
 
@@ -2547,7 +2643,7 @@ class HermiteSpline(Spline):
         return self.basis_matrix(t, derivative=derivative)[0]
 
     def derivative_wrt_tangents(self, t, derivative=0):
-        r"""
+        """
         Computes the partial derivatives of the spline or one of its derivatives
         with respect to the tangents.
 
@@ -2556,7 +2652,7 @@ class HermiteSpline(Spline):
         return self.basis_matrix(t, derivative=derivative)[1]
 
     def derivative_of_norm_squared_wrt_control_points(self, t, derivative=0):
-        r"""
+        """
         Computes the partial derivatives of the squared norm with respect to the
         control points.
 
@@ -2566,12 +2662,22 @@ class HermiteSpline(Spline):
         return 2 * bm.todense()[:, :, np.newaxis] * self(t, derivative=derivative)[:, np.newaxis, :]
 
     def derivative_of_norm_squared_wrt_tangents(self, t, derivative=0):
-        r"""
+        """
         Computes the partial derivatives of the squared norm with respect to the
         tangents.
         """
         bm = self.derivative_wrt_tangents(t, derivative=derivative)
         return 2 * bm.todense()[:, :, np.newaxis] * self(t, derivative=derivative)[:, np.newaxis, :]
+
+    def derivative_of_curvilinear_reparametrisation_energy_wrt_control_points(self, c):
+        raise NotImplementedError(
+            "The derivative of the curvilinear reparametrisation energy with respect to the control points is not implemented for Hermite splines."
+        )
+
+    def derivative_of_curvature_energy_wrt_control_points(self):
+        raise NotImplementedError(
+            "The derivative of the curvature energy with respect to the control points is not implemented for Hermite splines."
+        )
 
     def scale(self, scaling_factor):
         self._check_control_points_and_tangents()
