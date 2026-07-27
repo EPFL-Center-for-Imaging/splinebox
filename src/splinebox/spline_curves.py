@@ -4,6 +4,7 @@ This module provides the classes necessary for constructing splines, along with 
 
 import collections
 import copy
+import itertools
 import json
 import math
 import warnings
@@ -445,6 +446,31 @@ class Spline:
             )
         return self._cached_segment_lengths
 
+    def _circular_span(self, a, b):
+        """Return the smallest circular distance between two integer indices in [0, M)."""
+        diff = abs(a - b)
+        return min(diff, self.M - diff)
+
+    def _gauss_legendra_quadrature_for_h123(self, func):
+        upper_bound = self.M if self.closed else self.M - 1
+        segments = np.arange(
+            0,
+            upper_bound + self.integration_segment_size / 10,
+            self.integration_segment_size,
+        )
+        tvals = np.add.outer(
+            (segments[:-1] + segments[1:]) / 2,
+            GAUSS_LEGENDRE_QUADRATURE_POINTS / (2 / self.integration_segment_size),
+        )
+        function_values = func(tvals)
+        res = math.fsum(function_values @ GAUSS_LEGENDRE_QUADRATURE_WEIGHTS / (2 / self.integration_segment_size))
+        return res
+
+    def _periodicity(self, t):
+        t[t > self.M - self.half_support] -= self.M
+        t[t < -self.M + self.half_support] += self.M
+        return t
+
     @property
     def _h1(self):
         """
@@ -454,30 +480,44 @@ class Spline:
             n_control_points = len(self.control_points)
             self._cached_h1 = np.zeros((n_control_points, n_control_points, n_control_points, n_control_points))
             arange = np.arange(self.M) if self.closed else np.arange(-self.pad, self.M + self.pad)
+            support = self.basis_function.support
+
             for i0, l in enumerate(arange):
-                for i1, k in enumerate(arange):
-                    for i2, m in enumerate(arange):
-                        for i3, n in enumerate(arange):
+                for i1, k in enumerate(arange[i0:], start=i0):
+                    span_lk = self._circular_span(l, k) if self.closed else k - l
+                    if span_lk >= support:
+                        continue
+                    for i2, m in enumerate(arange[i1:], start=i1):
+                        span_lm = self._circular_span(l, m) if self.closed else m - l
+                        if span_lm >= support:
+                            continue
+                        for i3, n in enumerate(arange[i2:], start=i2):
+                            span_ln = self._circular_span(l, n) if self.closed else n - l
+                            if span_ln >= support:
+                                continue
                             if self.closed:
-                                func = (
-                                    lambda t: self.basis_function(t - l, derivative=1)
-                                    * self.basis_function((t - k) % self.M, derivative=1)
-                                    * self.basis_function((t - m) % self.M, derivative=1)
-                                    * self.basis_function((t - n) % self.M, derivative=1)
-                                )
+
+                                def func(t):
+                                    return (
+                                        self.basis_function(self._periodicity(t - l), derivative=1)
+                                        * self.basis_function(self._periodicity(t - k), derivative=1)
+                                        * self.basis_function(self._periodicity(t - m), derivative=1)
+                                        * self.basis_function(self._periodicity(t - n), derivative=1)
+                                    )
+
                             else:
-                                func = (
-                                    lambda t: self.basis_function(t - l, derivative=1)
-                                    * self.basis_function(t - k, derivative=1)
-                                    * self.basis_function(t - m, derivative=1)
-                                    * self.basis_function(t - n, derivative=1)
-                                )
-                            res = scipy.integrate.quad(
-                                func,
-                                0,
-                                self.M if self.closed else self.M - 1,
-                            )
-                            self._cached_h1[i0, i1, i2, i3] = res[0]
+
+                                def func(t):
+                                    return (
+                                        self.basis_function(t - l, derivative=1)
+                                        * self.basis_function(t - k, derivative=1)
+                                        * self.basis_function(t - m, derivative=1)
+                                        * self.basis_function(t - n, derivative=1)
+                                    )
+
+                            res = self._gauss_legendra_quadrature_for_h123(func)
+                            for idx in set(itertools.permutations((i0, i1, i2, i3))):
+                                self._cached_h1[idx] = res
         return self._cached_h1
 
     @property
@@ -489,22 +529,28 @@ class Spline:
             n_control_points = len(self.control_points)
             self._cached_h2 = np.zeros((n_control_points, n_control_points))
             arange = np.arange(self.M) if self.closed else np.arange(-self.pad, self.M + self.pad)
+            support = self.basis_function.support
+
             for i, l in enumerate(arange):
-                for j, k in enumerate(arange):
+                for j, k in enumerate(arange[i:], start=i):
+                    span = self._circular_span(l, k) if self.closed else k - l
+                    if span >= support:
+                        continue
                     if self.closed:
-                        func = lambda t: self.basis_function((t - l) % self.M, derivative=1) * self.basis_function(
-                            (t - k) % self.M, derivative=1
-                        )
+
+                        def func(t):
+                            return self.basis_function(self._periodicity(t - l), derivative=1) * self.basis_function(
+                                self._periodicity(t - k), derivative=1
+                            )
+
                     else:
-                        func = lambda t: self.basis_function(t - l, derivative=1) * self.basis_function(
-                            t - k, derivative=1
-                        )
-                    res = scipy.integrate.quad(
-                        func,
-                        0,
-                        self.M if self.closed else self.M - 1,
-                    )
-                    self._cached_h2[i, j] = res[0]
+
+                        def func(t):
+                            return self.basis_function(t - l, derivative=1) * self.basis_function(t - k, derivative=1)
+
+                    res = self._gauss_legendra_quadrature_for_h123(func)
+                    self._cached_h2[i, j] = res
+                    self._cached_h2[j, i] = res
         return self._cached_h2
 
     @property
@@ -516,22 +562,28 @@ class Spline:
             n_control_points = len(self.control_points)
             self._cached_h3 = np.zeros((n_control_points, n_control_points))
             arange = np.arange(self.M) if self.closed else np.arange(-self.pad, self.M + self.pad)
+            support = self.basis_function.support
+
             for i, l in enumerate(arange):
-                for j, k in enumerate(arange):
+                for j, k in enumerate(arange[i:], start=i):
+                    span = self._circular_span(l, k) if self.closed else k - l
+                    if span >= support:
+                        continue
                     if self.closed:
-                        func = lambda t: self.basis_function((t - l) % self.M, derivative=2) * self.basis_function(
-                            (t - k) % self.M, derivative=2
-                        )
+
+                        def func(t):
+                            return self.basis_function(self._periodicity(t - l), derivative=2) * self.basis_function(
+                                self._periodicity(t - k), derivative=2
+                            )
+
                     else:
-                        func = lambda t: self.basis_function(t - l, derivative=2) * self.basis_function(
-                            t - k, derivative=2
-                        )
-                    res = scipy.integrate.quad(
-                        func,
-                        0,
-                        self.M if self.closed else self.M - 1,
-                    )
-                    self._cached_h3[i, j] = res[0]
+
+                        def func(t):
+                            return self.basis_function(t - l, derivative=2) * self.basis_function(t - k, derivative=2)
+
+                    res = self._gauss_legendra_quadrature_for_h123(func)
+                    self._cached_h3[i, j] = res
+                    self._cached_h3[j, i] = res
         return self._cached_h3
 
     def copy(self):
