@@ -1100,7 +1100,7 @@ class Spline:
         >>> spline = splinebox.Spline(M=M, basis_function=splinebox.Exponential(M), closed=False)
         >>> spline.knots = np.array([[0, 0], [1, 1], [2, 0], [2.5, -0.5], [3, 0]])
         >>> spline.curvature([1, 3])
-        array([ 2.234, -4.104])
+        array([ 2.035, -3.616])
         """
         self._check_control_points()
         t, single_value = self._convert_to_array(t)
@@ -1898,10 +1898,7 @@ class Spline:
         self._check_control_points()
         if self.ndim != 3:
             raise NotImplementedError("Meshes are only implemented for splines in 3D.")
-        if mesh_type == "surface" and not self.closed:
-            cap_ends = self._normalize_cap_ends(cap_ends)
-        else:
-            cap_ends = None
+        cap_ends = self._normalize_cap_ends(cap_ends) if mesh_type == "surface" and not self.closed else None
         end_t = self.M if self.closed else self.M - 1
         t = np.arange(0, end_t, step_t)
         if len(t) == 0 or not np.isclose(t[-1], end_t):

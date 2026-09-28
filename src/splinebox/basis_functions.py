@@ -10,13 +10,67 @@ To enable the :code:`__call__` method, subclasses must implement :code:`_func(t)
 For more information on implementing a new basis function, see :class:`splinebox.basis_functions.BasisFunction`.
 """
 
+import contextlib
 import inspect
 import math
 import sys
 import warnings
 
+import array_api_compat
+import array_api_compat.numpy
 import numba
 import numpy as np
+
+
+@contextlib.contextmanager
+def _torch_compile_recompile_limit(limit=64):
+    """
+    Context manager that temporarily raises the torch dynamo recompile limit.
+
+    Compiling the filters with torch.compile unrolls their loops statically,
+    which means a separate graph is compiled for every combination of input
+    shape and basis function parameters (e.g. the pole of the exponential
+    basis function depends on ``M``). This can exceed the default recompile
+    limit of a single code object, so it is temporarily raised while compiling.
+    """
+    import torch
+
+    config = torch._dynamo.config
+    key = "recompile_limit" if hasattr(config, "recompile_limit") else "cache_size_limit"
+    old = getattr(config, key)
+    setattr(config, key, max(old, limit))
+    try:
+        yield
+    finally:
+        setattr(config, key, old)
+
+
+def _item_set(arr, idx, value, xp):
+    """
+    Assign ``value`` to ``arr[idx]`` and return the updated array.
+
+    JAX arrays are immutable and do not support in-place item assignment,
+    so the assignment is performed functionally using ``arr.at[idx].set``.
+    All other backends support in-place assignment directly.
+    """
+    if array_api_compat.is_jax_namespace(xp):
+        return arr.at[idx].set(value)
+    arr[idx] = value
+    return arr
+
+
+def _item_add(arr, idx, value, xp):
+    """
+    Add ``value`` to ``arr[idx]`` and return the updated array.
+
+    JAX arrays are immutable and do not support in-place item assignment,
+    so the addition is performed functionally using ``arr.at[idx].add``.
+    All other backends support in-place assignment directly.
+    """
+    if array_api_compat.is_jax_namespace(xp):
+        return arr.at[idx].add(value)
+    arr[idx] += value
+    return arr
 
 
 class BasisFunction:
@@ -54,15 +108,15 @@ class BasisFunction:
     ...         # Change this if your new basis function is not in splinebox.basis_functions
     ...         return "splinebox.basis_functions.MyBasis()"
     ...
-    ...     def _func(self, t):
+    ...     def _func_numba(self, t):
     ...         # Implement your function here
     ...         return val
     ...
-    ...     def _derivative_1(self, t):
+    ...     def _derivative_1_numba(self, t):
     ...         # Implement the first derivative of your function here
     ...         return val
     ...
-    ...     def _derivative_2(self, t):
+    ...     def _derivative_2_numba(self, t):
     ...         # Implement the second derivative of your function here
     ...         # or raise an error if not differentiable
     ...         raise RuntimeError("MyBasis isn't twice differentiable.")
@@ -97,7 +151,7 @@ class BasisFunction:
             and other.support == self.support
         )
 
-    def __call__(self, t, derivative=0):
+    def __call__(self, t, derivative=0, jit=True):
         """
         Evaluate the function at position(s) t. You can optionally
         pass derivative=1 or 2 to obtain the respective derivative(s).
@@ -128,25 +182,51 @@ class BasisFunction:
         >>> basis_function(t, derivative=1)
         array([ 1., -1.])
         """
+        xp = array_api_compat.numpy if isinstance(t, (int, float)) else array_api_compat.array_namespace(t)
+
+        use_numba = jit and array_api_compat.is_numpy_namespace(xp)
+
+        # Select the function that should be run
         if derivative == 0:
-            return self._func(t)
+            func = self._func_numba if use_numba else self._func_xp
         elif derivative == 1:
-            return self._derivative_1(t)
+            func = self._derivative_1_numba if use_numba else self._derivative_1_xp
         elif derivative == 2:
-            return self._derivative_2(t)
+            func = self._derivative_2_numba if use_numba else self._derivative_2_xp
         else:
             raise ValueError(f"derivative has to be 0, 1, or 2 not {derivative}")
 
-    def _func(self, t):
+        # Decide how to run the function
+        if use_numba:
+            return func(t)
+        elif jit and array_api_compat.is_torch_namespace(xp):
+            return xp.compile(fullgraph=True, dynamic=True, mode="reduce-overhead")(func)(t, xp)
+        elif jit and array_api_compat.is_jax_namespace(xp):
+            import jax
+
+            return jax.jit(func, static_argnames=["xp"])(t, xp)
+        else:
+            return func(t, xp)
+
+    def _func_numba(self, t):
         raise NotImplementedError(BasisFunction._unimplemented_message)
 
-    def _derivative_1(self, t):
+    def _func_xp(self, t, xp):
         raise NotImplementedError(BasisFunction._unimplemented_message)
 
-    def _derivative_2(self, t):
+    def _derivative_1_numba(self, t):
         raise NotImplementedError(BasisFunction._unimplemented_message)
 
-    def filter_symmetric(self, s):
+    def _derivative_1_xp(self, t, xp):
+        raise NotImplementedError(BasisFunction._unimplemented_message)
+
+    def _derivative_2_numba(self, t):
+        raise NotImplementedError(BasisFunction._unimplemented_message)
+
+    def _derivative_2_xp(self, t, xp):
+        raise NotImplementedError(BasisFunction._unimplemented_message)
+
+    def filter_symmetric(self, s, jit=True):
         """
         Returns a filtered version of the input s,
         used to convert knots into control points for an **open spline**.
@@ -191,9 +271,37 @@ class BasisFunction:
 
         To perform the same test for the first and the last knot, padding is required.
         """
+        xp = array_api_compat.array_namespace(s)
+
+        s = xp.astype(s, float)
+
+        use_numba = jit and array_api_compat.is_numpy_namespace(xp)
+
+        if use_numba:
+            result = self._filter_symmetric_numba(s)
+        elif jit and array_api_compat.is_torch_namespace(xp):
+            with _torch_compile_recompile_limit():
+                result = xp.compile(fullgraph=True, dynamic=False, mode="reduce-overhead")(self._filter_symmetric_xp)(
+                    s, xp
+                )
+        elif jit and array_api_compat.is_jax_namespace(xp):
+            import jax
+
+            result = jax.jit(self._filter_symmetric_xp, static_argnames=["xp"])(s, xp)
+        else:
+            result = self._filter_symmetric_xp(s, xp)
+
+        if s.ndim == 1:
+            return xp.squeeze(result)
+        return result
+
+    def _filter_symmetric_numba(self, s):
         raise NotImplementedError(BasisFunction._unimplemented_message)
 
-    def filter_periodic(self, s):
+    def _filter_symmetric_xp(self, s, xp):
+        raise NotImplementedError(BasisFunction._unimplemented_message)
+
+    def filter_periodic(self, s, jit=True):
         """
         Returns a filtered version of the input s, used to convert
         knots into control points for a **closed spline**.
@@ -244,6 +352,34 @@ class BasisFunction:
         >>> b3(-1) * control_points[1] + b3(0) * control_points[2] + b3(1) * control_points[0]
         array([1., 3.])
         """
+        xp = array_api_compat.array_namespace(s)
+
+        s = xp.astype(s, float)
+
+        use_numba = jit and array_api_compat.is_numpy_namespace(xp)
+
+        if use_numba:
+            result = self._filter_periodic_numba(s)
+        elif jit and array_api_compat.is_torch_namespace(xp):
+            with _torch_compile_recompile_limit():
+                result = xp.compile(fullgraph=True, dynamic=False, mode="reduce-overhead")(self._filter_periodic_xp)(
+                    s, xp
+                )
+        elif jit and array_api_compat.is_jax_namespace(xp):
+            import jax
+
+            result = jax.jit(self._filter_periodic_xp, static_argnames=["xp"])(s, xp)
+        else:
+            result = self._filter_periodic_xp(s, xp)
+
+        if s.ndim == 1:
+            return xp.squeeze(result)
+        return result
+
+    def _filter_periodic_numba(self, s):
+        raise NotImplementedError(BasisFunction._unimplemented_message)
+
+    def _filter_periodic_xp(self, s, xp):
         raise NotImplementedError(BasisFunction._unimplemented_message)
 
     def refinement_mask(self):
@@ -312,15 +448,23 @@ class B1(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _func(t):  # pragma: no cover
+    def _func_numba(t):  # pragma: no cover
         val = 0
         if abs(t) >= 0 and abs(t) < 1:
             val = 1 - abs(t)
         return val
 
     @staticmethod
+    def _func_xp(t, xp):  # pragma: no cover
+        return xp.where(
+            xp.abs(t) < 1,
+            1 - xp.abs(t),
+            0,
+        )
+
+    @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _derivative_1(t):  # pragma: no cover
+    def _derivative_1_numba(t):  # pragma: no cover
         val = 0
         if t > -1 and t < 0:
             val = 1
@@ -331,17 +475,36 @@ class B1(BasisFunction):
         return val
 
     @staticmethod
+    def _derivative_1_xp(t, xp):  # pragma: no cover
+        abs_t = xp.abs(t)
+        result = -xp.sign(t)
+        result = xp.where((t == 0) | (abs_t == 1), xp.nan, result)
+        return xp.where(abs_t > 1, 0, result)
+
+    @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _derivative_2(t):
+    def _derivative_2_numba(t):
         return np.nan if t in (-1, 0, 1) else 0
 
     @staticmethod
-    def filter_symmetric(s):
-        return s.astype(float)
+    def _derivative_2_xp(t, xp):
+        return xp.where((t == -1) | (t == 0) | (t == 1), xp.nan, 0)
 
     @staticmethod
-    def filter_periodic(s):
-        return s.astype(float)
+    def _filter_symmetric_numba(s):
+        return s
+
+    @staticmethod
+    def _filter_symmetric_xp(s, xp):
+        return s
+
+    @staticmethod
+    def _filter_periodic_numba(s):
+        return s
+
+    @staticmethod
+    def _filter_periodic_xp(s, xp):
+        return s
 
     def refinement_mask(self):
         order = int(self.support)
@@ -403,7 +566,7 @@ class B2(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _func(t):  # pragma: no cover
+    def _func_numba(t):  # pragma: no cover
         val = 0
         if t >= -1.5 and t <= -0.5:
             val = 0.5 * (t**2) + 1.5 * t + 1.125
@@ -415,7 +578,7 @@ class B2(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _derivative_1(t):  # pragma: no cover
+    def _derivative_1_numba(t):  # pragma: no cover
         val = 0
         if t >= -1.5 and t <= -0.5:
             val = t + 1.5
@@ -427,7 +590,7 @@ class B2(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _derivative_2(t):  # pragma: no cover
+    def _derivative_2_numba(t):  # pragma: no cover
         val = np.nan
         if t < -1.5:
             val = 0
@@ -440,6 +603,62 @@ class B2(BasisFunction):
         elif t > 1.5:
             val = 0
         return val
+
+    @staticmethod
+    def _func_xp(t, xp):  # pragma: no cover
+        return xp.where(
+            (t >= -1.5) & (t <= -0.5),
+            0.5 * (t**2) + 1.5 * t + 1.125,
+            xp.where(
+                (t > -0.5) & (t <= 0.5),
+                -t * t + 0.75,
+                xp.where(
+                    (t > 0.5) & (t <= 1.5),
+                    0.5 * (t**2) - 1.5 * t + 1.125,
+                    0,
+                ),
+            ),
+        )
+
+    @staticmethod
+    def _derivative_1_xp(t, xp):  # pragma: no cover
+        return xp.where(
+            (t >= -1.5) & (t <= -0.5),
+            t + 1.5,
+            xp.where(
+                (t > -0.5) & (t <= 0.5),
+                -2 * t,
+                xp.where(
+                    (t > 0.5) & (t <= 1.5),
+                    t - 1.5,
+                    0,
+                ),
+            ),
+        )
+
+    @staticmethod
+    def _derivative_2_xp(t, xp):  # pragma: no cover
+        return xp.where(
+            t < -1.5,
+            0,
+            xp.where(
+                (t > -1.5) & (t < -0.5),
+                1,
+                xp.where(
+                    (t > -0.5) & (t < 0.5),
+                    -2,
+                    xp.where(
+                        (t > 0.5) & (t < 1.5),
+                        1,
+                        xp.where(
+                            t > 1.5,
+                            0,
+                            xp.nan,
+                        ),
+                    ),
+                ),
+            ),
+        )
 
     def refinement_mask(self):
         order = int(self.support)
@@ -501,7 +720,7 @@ class B3(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _func(t):  # pragma: no cover
+    def _func_numba(t):  # pragma: no cover
         val = 0
         if abs(t) >= 0 and abs(t) < 1:
             val = 2 / 3 - (abs(t) ** 2) + (abs(t) ** 3) / 2
@@ -511,7 +730,7 @@ class B3(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _derivative_1(t):  # pragma: no cover
+    def _derivative_1_numba(t):  # pragma: no cover
         val = 0
         if t >= 0 and t < 1:
             val = -2 * t + 1.5 * t * t
@@ -525,7 +744,7 @@ class B3(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _derivative_2(t):  # pragma: no cover
+    def _derivative_2_numba(t):  # pragma: no cover
         val = 0
         if t >= 0 and t < 1:
             val = -2 + 3 * t
@@ -537,16 +756,62 @@ class B3(BasisFunction):
             val = 2 + t
         return val
 
-    def filter_symmetric(self, s):
-        # This is necessary for the docs to build correctly
-        result = self._filter_symmetric(s.astype(float))
-        if s.ndim == 1:
-            return np.squeeze(result)
-        return result
+    @staticmethod
+    def _func_xp(t, xp):  # pragma: no cover
+        abs_t = xp.abs(t)
+        return xp.where(
+            abs_t < 1,
+            2 / 3 - (abs_t**2) + (abs_t**3) / 2,
+            xp.where(
+                (abs_t >= 1) & (abs_t <= 2),
+                ((2 - abs_t) ** 3) / 6,
+                0,
+            ),
+        )
+
+    @staticmethod
+    def _derivative_1_xp(t, xp):  # pragma: no cover
+        return xp.where(
+            (t >= 0) & (t < 1),
+            -2 * t + 1.5 * t * t,
+            xp.where(
+                (t > -1) & (t < 0),
+                -2 * t - 1.5 * t * t,
+                xp.where(
+                    (t >= 1) & (t <= 2),
+                    -0.5 * ((2 - t) ** 2),
+                    xp.where(
+                        (t >= -2) & (t <= -1),
+                        0.5 * ((2 + t) ** 2),
+                        0,
+                    ),
+                ),
+            ),
+        )
+
+    @staticmethod
+    def _derivative_2_xp(t, xp):  # pragma: no cover
+        return xp.where(
+            (t >= 0) & (t < 1),
+            -2 + 3 * t,
+            xp.where(
+                (t > -1) & (t < 0),
+                -2 - 3 * t,
+                xp.where(
+                    (t >= 1) & (t <= 2),
+                    2 - t,
+                    xp.where(
+                        (t >= -2) & (t <= -1),
+                        2 + t,
+                        0,
+                    ),
+                ),
+            ),
+        )
 
     @staticmethod
     @numba.jit(nopython=True, nogil=True, cache=True)
-    def _filter_symmetric(s):  # pragma: no cover
+    def _filter_symmetric_numba(s):  # pragma: no cover
         M = len(s)
         pole = -2 + np.sqrt(3)
 
@@ -579,16 +844,39 @@ class B3(BasisFunction):
         c = c.reshape(shape)
         return c
 
-    def filter_periodic(self, s):
-        # This is necessary for the docs to build correctly
-        result = self._filter_periodic(s.astype(float))
-        if s.ndim == 1:
-            return np.squeeze(result)
-        return result
+    @staticmethod
+    def _filter_symmetric_xp(s, xp):  # pragma: no cover
+        M = len(s)
+        pole = -2 + math.sqrt(3)
+
+        ndim = 1 if s.ndim == 1 else s.shape[1]
+
+        cp = xp.zeros((M, ndim), dtype=s.dtype)
+        eps = 1e-8
+        k0 = min(((2 * M) - 2, int(math.ceil(math.log(eps) / math.log(abs(pole))))))
+        for k in range(k0):
+            m = k % (2 * M - 2)
+            val = s[2 * M - 2 - m] if m >= M else s[m]
+            cp = _item_add(cp, 0, val * (pole**m), xp)
+        cp = _item_set(cp, 0, cp[0] * (1 / (1 - (pole ** (2 * M - 2)))), xp)
+
+        for k in range(1, M):
+            cp = _item_set(cp, k, s[k] + pole * cp[k - 1], xp)
+
+        cm = xp.zeros((M, ndim), dtype=s.dtype)
+        cm = _item_set(cm, M - 1, cp[M - 1] + (pole * cp[M - 2]), xp)
+        cm = _item_set(cm, M - 1, cm[M - 1] * (pole / ((pole**2) - 1)), xp)
+
+        for k in range(M - 2, -1, -1):
+            cm = _item_set(cm, k, pole * (cm[k + 1] - cp[k]), xp)
+
+        c = cm * 6
+
+        return xp.where(xp.abs(c) < eps, 0, c)
 
     @staticmethod
     @numba.jit(nopython=True, nogil=True, cache=True)
-    def _filter_periodic(s):  # pragma: no cover
+    def _filter_periodic_numba(s):  # pragma: no cover
         M = len(s)
         pole = -2 + np.sqrt(3)
 
@@ -620,6 +908,36 @@ class B3(BasisFunction):
         c[np.abs(c) < eps] = 0
         c = c.reshape(shape)
         return c
+
+    @staticmethod
+    def _filter_periodic_xp(s, xp):  # pragma: no cover
+        M = len(s)
+        pole = -2 + math.sqrt(3)
+
+        ndim = 1 if s.ndim == 1 else s.shape[1]
+
+        cp = xp.zeros((M, ndim), dtype=s.dtype)
+        for k in range(M):
+            cp = _item_add(cp, 0, s[(M - k) % M] * (pole**k), xp)
+        cp = _item_set(cp, 0, cp[0] * (1 / (1 - (pole**M))), xp)
+
+        for k in range(1, M):
+            cp = _item_set(cp, k, s[k] + pole * cp[k - 1], xp)
+
+        cm = xp.zeros((M, ndim), dtype=s.dtype)
+        for k in range(M):
+            cm = _item_add(cm, M - 1, (pole**k) * cp[k], xp)
+        cm = _item_set(cm, M - 1, cm[M - 1] * (pole / (1 - (pole**M))), xp)
+        cm = _item_add(cm, M - 1, cp[M - 1], xp)
+        cm = _item_set(cm, M - 1, cm[M - 1] * -pole, xp)
+
+        for k in range(M - 2, -1, -1):
+            cm = _item_set(cm, k, pole * (cm[k + 1] - cp[k]), xp)
+
+        c = cm * 6
+
+        eps = 1e-8
+        return xp.where(xp.abs(c) < eps, 0, c)
 
     def refinement_mask(self):
         order = int(self.support)
@@ -683,12 +1001,12 @@ class Exponential(BasisFunction):
     def __eq__(self, other):
         return isinstance(other, type(self)) and other.M == self.M
 
-    def _func(self, t):
-        return self.__func(t, self.support / 2, self.M)
+    def _func_numba(self, t):
+        return self.__func_numba(t, self.support / 2, self.M)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64, numba.float64)], nopython=True, cache=True)
-    def __func(t, half_support, M):  # pragma: no cover
+    def __func_numba(t, half_support, M):  # pragma: no cover
         t += half_support
 
         alpha = np.pi / M
@@ -704,12 +1022,12 @@ class Exponential(BasisFunction):
 
         return L * val
 
-    def _derivative_1(self, t):
-        return self.__derivative_1(t, self.support / 2, self.M)
+    def _derivative_1_numba(self, t):
+        return self.__derivative_1_numba(t, self.support / 2, self.M)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64, numba.float64)], nopython=True, cache=True)
-    def __derivative_1(t, half_support, M):  # pragma: no cover
+    def __derivative_1_numba(t, half_support, M):  # pragma: no cover
         t += half_support
 
         alpha = np.pi / M
@@ -725,12 +1043,12 @@ class Exponential(BasisFunction):
 
         return L * val
 
-    def _derivative_2(self, t):
-        return self.__derivative_2(t, self.support / 2, self.M)
+    def _derivative_2_numba(self, t):
+        return self.__derivative_2_numba(t, self.support / 2, self.M)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64, numba.float64)], nopython=True, cache=True)
-    def __derivative_2(t, half_support, M):  # pragma: no cover
+    def __derivative_2_numba(t, half_support, M):  # pragma: no cover
         t += half_support
 
         alpha = np.pi / M
@@ -750,20 +1068,89 @@ class Exponential(BasisFunction):
 
         return L * val
 
-    def filter_symmetric(self, s):
-        self.M = len(s)
+    def _func_xp(self, t, xp):  # pragma: no cover
+        half_support = self.support / 2
+        t = t + half_support
 
-        b0 = self._func(0)
-        b1 = self._func(1)
+        alpha = xp.asarray(xp.pi / self.M)
+        L = 1 / (4 * xp.sin(alpha) ** 2)
 
-        result = self._filter_symmetric(s.astype(float), self.M, b0, b1)
-        if s.ndim == 1:
-            return np.squeeze(result)
-        return result
+        val = xp.where(
+            (t >= 0) & (t < 1),
+            2 * xp.sin(alpha * t) ** 2,
+            xp.where(
+                (t >= 1) & (t < 2),
+                xp.cos(2 * alpha * (t - 2)) + xp.cos(2 * alpha * (t - 1)) - 2 * xp.cos(2 * alpha),
+                xp.where(
+                    (t >= 2) & (t <= 3),
+                    2 * xp.sin(alpha * (t - 3)) ** 2,
+                    0,
+                ),
+            ),
+        )
+        return L * val
+
+    def _derivative_1_xp(self, t, xp):  # pragma: no cover
+        half_support = self.support / 2
+        t = t + half_support
+
+        alpha = xp.asarray(xp.pi / self.M)
+        L = 1 / (4 * xp.sin(alpha) ** 2)
+
+        val = xp.where(
+            (t >= 0) & (t <= 1),
+            4 * alpha * xp.sin(alpha * t) * xp.cos(alpha * t),
+            xp.where(
+                (t > 1) & (t <= 2),
+                2 * alpha * (xp.sin(2 * alpha * (2 - t)) + xp.sin(2 * alpha * (1 - t))),
+                xp.where(
+                    (t > 2) & (t <= 3),
+                    4 * alpha * xp.sin(alpha * (t - 3)) * xp.cos(alpha * (t - 3)),
+                    0,
+                ),
+            ),
+        )
+        return L * val
+
+    def _derivative_2_xp(self, t, xp):  # pragma: no cover
+        half_support = self.support / 2
+        t = t + half_support
+
+        alpha = xp.asarray(xp.pi / self.M)
+        L = 1 / (4 * xp.sin(alpha) ** 2)
+
+        val = xp.where(
+            t < 0,
+            0,
+            xp.where(
+                (t > 0) & (t < 1),
+                4 * alpha**2 * (xp.cos(alpha * t) ** 2 - xp.sin(alpha * t) ** 2),
+                xp.where(
+                    (t > 1) & (t < 2),
+                    -4 * alpha**2 * (xp.cos(2 * alpha * (2 - t)) + xp.cos(2 * alpha * (1 - t))),
+                    xp.where(
+                        (t > 2) & (t < 3),
+                        4 * alpha**2 * (xp.cos(alpha * (t - 3)) ** 2 - xp.sin(alpha * (t - 3)) ** 2),
+                        xp.where(
+                            t > 3,
+                            0,
+                            xp.nan,
+                        ),
+                    ),
+                ),
+            ),
+        )
+        return L * val
+
+    def _filter_symmetric_numba(self, s):
+        M = len(s)
+        b0 = self._func_numba(0)
+        b1 = self._func_numba(1)
+        return self.__filter_symmetric_numba(s, M, b0, b1)
 
     @staticmethod
     @numba.jit(nopython=True, nogil=True, cache=True)
-    def _filter_symmetric(s, M, b0, b1):  # pragma: no cover
+    def __filter_symmetric_numba(s, M, b0, b1):  # pragma: no cover
         ndim = 1 if s.ndim == 1 else s.shape[1]
         pole = (-b0 + np.sqrt(2 * b0 - 1)) / (1 - b0)
 
@@ -798,17 +1185,56 @@ class Exponential(BasisFunction):
         c = c.reshape(shape)
         return c
 
-    def filter_periodic(self, s):
-        self.M = len(s)
-        b0 = self._func(0)
-        result = self._filter_periodic(s.astype(float), self.M, b0)
-        if s.ndim == 1:
-            return np.squeeze(result)
-        return result
+    @staticmethod
+    def __b0_b1(M):
+        """
+        The values of the basis function at 0 and 1, computed with pure python
+        math so that the result can be compiled (e.g. with torch.compile).
+        """
+        alpha = math.pi / M
+        L = 1 / (4 * math.sin(alpha) ** 2)
+        b0 = L * (2 * math.cos(alpha) - 2 * math.cos(2 * alpha))
+        b1 = 2 * L * math.sin(alpha / 2) ** 2
+        return b0, b1
+
+    def _filter_symmetric_xp(self, s, xp):  # pragma: no cover
+        M = len(s)
+        b0, b1 = self.__b0_b1(self.M)
+        pole = (-b0 + math.sqrt(2 * b0 - 1)) / (1 - b0)
+
+        ndim = 1 if s.ndim == 1 else s.shape[1]
+
+        cp = xp.zeros((M, ndim), dtype=s.dtype)
+        eps = 1e-8
+        k0 = min(((2 * M) - 2, int(math.ceil(math.log(eps) / math.log(abs(pole))))))
+        for k in range(k0):
+            m = k % (2 * M - 2)
+            val = s[2 * M - 2 - m] if m >= M else s[m]
+            cp = _item_add(cp, 0, val * (pole**m), xp)
+        cp = _item_set(cp, 0, cp[0] * (1 / (1 - (pole ** (2 * M - 2)))), xp)
+
+        for k in range(1, M):
+            cp = _item_set(cp, k, s[k] + pole * cp[k - 1], xp)
+
+        cm = xp.zeros((M, ndim), dtype=s.dtype)
+        cm = _item_set(cm, M - 1, cp[M - 1] + (pole * cp[M - 2]), xp)
+        cm = _item_set(cm, M - 1, cm[M - 1] * (pole / ((pole * pole) - 1)), xp)
+
+        for k in range(M - 2, -1, -1):
+            cm = _item_set(cm, k, pole * (cm[k + 1] - cp[k]), xp)
+
+        c = cm / b1
+
+        return xp.where(xp.abs(c) < eps, 0, c)
+
+    def _filter_periodic_numba(self, s):
+        M = len(s)
+        b0 = self._func_numba(0)
+        return self.__filter_periodic_numba(s, M, b0)
 
     @staticmethod
     @numba.jit(nopython=True, nogil=True, cache=True)
-    def _filter_periodic(s, M, b0):  # pragma: no cover
+    def __filter_periodic_numba(s, M, b0):  # pragma: no cover
         ndim = 1 if s.ndim == 1 else s.shape[1]
 
         pole = (-b0 + np.sqrt(2 * b0 - 1)) / (1 - b0)
@@ -840,6 +1266,37 @@ class Exponential(BasisFunction):
         c[np.abs(c) < eps] = 0
         c = c.reshape(shape)
         return c
+
+    def _filter_periodic_xp(self, s, xp):  # pragma: no cover
+        M = len(s)
+        b0, _ = self.__b0_b1(self.M)
+        pole = (-b0 + math.sqrt(2 * b0 - 1)) / (1 - b0)
+
+        ndim = 1 if s.ndim == 1 else s.shape[1]
+
+        cp = xp.zeros((M, ndim), dtype=s.dtype)
+        cp = _item_set(cp, 0, s[0], xp)
+        for k in range(1, M):
+            cp = _item_add(cp, 0, s[k] * (pole ** (M - k)), xp)
+        cp = _item_set(cp, 0, cp[0] * (1 / (1 - (pole**M))), xp)
+
+        for k in range(1, M):
+            cp = _item_set(cp, k, s[k] + (pole * cp[k - 1]), xp)
+
+        cm = xp.zeros((M, ndim), dtype=s.dtype)
+        cm = _item_set(cm, M - 1, cp[M - 1], xp)
+        for k in range(M - 1):
+            cm = _item_add(cm, M - 1, cp[k] * (pole ** (k + 1)), xp)
+        cm = _item_set(cm, M - 1, cm[M - 1] * (1 / (1 - (pole**M))), xp)
+        cm = _item_set(cm, M - 1, cm[M - 1] * ((1 - pole) ** 2), xp)
+
+        for k in range(M - 2, -1, -1):
+            cm = _item_set(cm, k, (pole * cm[k + 1]) + (((1 - pole) ** 2) * cp[k]), xp)
+
+        c = cm
+
+        eps = 1e-8
+        return xp.where(xp.abs(c) < eps, 0, c)
 
     def refinement_mask(self):
         """
@@ -915,7 +1372,7 @@ class CatmullRom(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _func(t):  # pragma: no cover
+    def _func_numba(t):  # pragma: no cover
         val = 0
         if np.abs(t) >= 0 and np.abs(t) <= 1:
             val = (3 / 2) * (np.abs(t) ** 3) - (5 / 2) * (np.abs(t) ** 2) + 1
@@ -925,7 +1382,7 @@ class CatmullRom(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _derivative_1(t):  # pragma: no cover
+    def _derivative_1_numba(t):  # pragma: no cover
         val = 0
         if t >= 0 and t <= 1:
             val = t * (4.5 * t - 5)
@@ -939,7 +1396,7 @@ class CatmullRom(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def _derivative_2(t):  # pragma: no cover
+    def _derivative_2_numba(t):  # pragma: no cover
         val = 0
         if t >= 0 and t < 1:
             val = 9 * t - 5
@@ -954,12 +1411,81 @@ class CatmullRom(BasisFunction):
         return val
 
     @staticmethod
-    def filter_symmetric(s):
-        return s.astype(float)
+    def _func_xp(t, xp):  # pragma: no cover
+        abs_t = xp.abs(t)
+        return xp.where(
+            abs_t <= 1,
+            (3 / 2) * (abs_t**3) - (5 / 2) * (abs_t**2) + 1,
+            xp.where(
+                (abs_t > 1) & (abs_t <= 2),
+                (-1 / 2) * (abs_t**3) + (5 / 2) * (abs_t**2) - 4 * abs_t + 2,
+                0,
+            ),
+        )
 
     @staticmethod
-    def filter_periodic(s):
-        return s.astype(float)
+    def _derivative_1_xp(t, xp):  # pragma: no cover
+        return xp.where(
+            (t >= 0) & (t <= 1),
+            t * (4.5 * t - 5),
+            xp.where(
+                (t >= -1) & (t < 0),
+                -t * (4.5 * t + 5),
+                xp.where(
+                    (t > 1) & (t <= 2),
+                    -1.5 * t * t + 5 * t - 4,
+                    xp.where(
+                        (t >= -2) & (t < -1),
+                        1.5 * t * t + 5 * t + 4,
+                        0,
+                    ),
+                ),
+            ),
+        )
+
+    @staticmethod
+    def _derivative_2_xp(t, xp):  # pragma: no cover
+        return xp.where(
+            xp.abs(t) == 1,
+            xp.nan,
+            xp.where(
+                xp.abs(t) == 2,
+                xp.nan,
+                xp.where(
+                    (t >= 0) & (t < 1),
+                    9 * t - 5,
+                    xp.where(
+                        (t > -1) & (t < 0),
+                        -9 * t - 5,
+                        xp.where(
+                            (t > 1) & (t < 2),
+                            -3 * t + 5,
+                            xp.where(
+                                (t > -2) & (t < -1),
+                                3 * t + 5,
+                                0,
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+    @staticmethod
+    def _filter_symmetric_numba(s):
+        return s
+
+    @staticmethod
+    def _filter_symmetric_xp(s, xp):
+        return s
+
+    @staticmethod
+    def _filter_periodic_numba(s):
+        return s
+
+    @staticmethod
+    def _filter_periodic_xp(s, xp):
+        return s
 
 
 class CubicHermite(BasisFunction):
@@ -1021,12 +1547,12 @@ class CubicHermite(BasisFunction):
     def __repr__(self):
         return "splinebox.basis_functions.CubicHermite()"
 
-    def _func(self, t):
-        return np.stack([self.h31(t), self.h32(t)], axis=-1)
+    def _func_numba(self, t):
+        return np.stack([self.h31_numba(t), self.h32_numba(t)], axis=-1)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def h31(t):  # pragma: no cover
+    def h31_numba(t):  # pragma: no cover
         val = 0
         if t >= 0 and t <= 1:
             val = (1 + (2 * t)) * (t - 1) * (t - 1)
@@ -1036,7 +1562,7 @@ class CubicHermite(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def h32(t):  # pragma: no cover
+    def h32_numba(t):  # pragma: no cover
         val = 0
         if t >= 0 and t <= 1:
             val = t * (t - 1) * (t - 1)
@@ -1044,12 +1570,12 @@ class CubicHermite(BasisFunction):
             val = t * (t + 1) * (t + 1)
         return val
 
-    def _derivative_1(self, t):
-        return np.stack([self.h31prime(t), self.h32prime(t)], axis=-1)
+    def _derivative_1_numba(self, t):
+        return np.stack([self.h31prime_numba(t), self.h32prime_numba(t)], axis=-1)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def h31prime(t):  # pragma: no cover
+    def h31prime_numba(t):  # pragma: no cover
         val = 0
         if t >= 0 and t <= 1:
             val = 6 * t * (t - 1)
@@ -1059,7 +1585,7 @@ class CubicHermite(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def h32prime(t):  # pragma: no cover
+    def h32prime_numba(t):  # pragma: no cover
         val = 0
         if t >= 0 and t <= 1:
             val = 3 * t * t - 4 * t + 1
@@ -1067,12 +1593,12 @@ class CubicHermite(BasisFunction):
             val = 3 * t * t + 4 * t + 1
         return val
 
-    def _derivative_2(self, t):
-        return np.stack([self.h31primeprime(t), self.h32primeprime(t)], axis=-1)
+    def _derivative_2_numba(self, t):
+        return np.stack([self.h31primeprime_numba(t), self.h32primeprime_numba(t)], axis=-1)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def h31primeprime(t):  # pragma: no cover
+    def h31primeprime_numba(t):  # pragma: no cover
         val = 0
         if t >= 0 and t <= 1:
             val = 12 * t - 6
@@ -1082,13 +1608,94 @@ class CubicHermite(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
-    def h32primeprime(t):  # pragma: no cover
+    def h32primeprime_numba(t):  # pragma: no cover
         val = 0
         if t >= 0 and t <= 1:
             val = 6 * t - 4
         elif t < 0 and t >= -1:
             val = 6 * t + 4
         return val
+
+    def _func_xp(self, t, xp):  # pragma: no cover
+        return xp.stack([self.h31_xp(t, xp), self.h32_xp(t, xp)], axis=-1)
+
+    @staticmethod
+    def h31_xp(t, xp):  # pragma: no cover
+        return xp.where(
+            (t >= 0) & (t <= 1),
+            (1 + (2 * t)) * (t - 1) * (t - 1),
+            xp.where(
+                (t < 0) & (t >= -1),
+                (1 - (2 * t)) * (t + 1) * (t + 1),
+                0,
+            ),
+        )
+
+    @staticmethod
+    def h32_xp(t, xp):  # pragma: no cover
+        return xp.where(
+            (t >= 0) & (t <= 1),
+            t * (t - 1) * (t - 1),
+            xp.where(
+                (t < 0) & (t >= -1),
+                t * (t + 1) * (t + 1),
+                0,
+            ),
+        )
+
+    def _derivative_1_xp(self, t, xp):  # pragma: no cover
+        return xp.stack([self.h31prime_xp(t, xp), self.h32prime_xp(t, xp)], axis=-1)
+
+    @staticmethod
+    def h31prime_xp(t, xp):  # pragma: no cover
+        return xp.where(
+            (t >= 0) & (t <= 1),
+            6 * t * (t - 1),
+            xp.where(
+                (t < 0) & (t >= -1),
+                -6 * t * (t + 1),
+                0,
+            ),
+        )
+
+    @staticmethod
+    def h32prime_xp(t, xp):  # pragma: no cover
+        return xp.where(
+            (t >= 0) & (t <= 1),
+            3 * t * t - 4 * t + 1,
+            xp.where(
+                (t < 0) & (t >= -1),
+                3 * t * t + 4 * t + 1,
+                0,
+            ),
+        )
+
+    def _derivative_2_xp(self, t, xp):  # pragma: no cover
+        return xp.stack([self.h31primeprime_xp(t, xp), self.h32primeprime_xp(t, xp)], axis=-1)
+
+    @staticmethod
+    def h31primeprime_xp(t, xp):  # pragma: no cover
+        return xp.where(
+            (t >= 0) & (t <= 1),
+            12 * t - 6,
+            xp.where(
+                (t < 0) & (t >= -1),
+                -12 * t - 6,
+                0,
+            ),
+        )
+
+    @staticmethod
+    def h32primeprime_xp(t, xp):  # pragma: no cover
+        return xp.where(
+            (t >= 0) & (t <= 1),
+            6 * t - 4,
+            xp.where(
+                (t < 0) & (t >= -1),
+                6 * t + 4,
+                0,
+            ),
+        )
 
     def h31_autocorrelation(self, i, j, M):  # pragma: no cover
         """
@@ -1202,12 +1809,20 @@ class CubicHermite(BasisFunction):
         return val
 
     @staticmethod
-    def filter_symmetric(s):
-        return s.astype(float)
+    def _filter_symmetric_numba(s):
+        return s
 
     @staticmethod
-    def filter_periodic(s):
-        return s.astype(float)
+    def _filter_symmetric_xp(s, xp):
+        return s
+
+    @staticmethod
+    def _filter_periodic_numba(s):
+        return s
+
+    @staticmethod
+    def _filter_periodic_xp(s, xp):
+        return s
 
 
 class ExponentialHermite(BasisFunction):
@@ -1273,12 +1888,12 @@ class ExponentialHermite(BasisFunction):
     def __eq__(self, other):
         return isinstance(other, type(self)) and other.M == self.M
 
-    def _func(self, t):
-        return np.stack([self._he31(t, self.M), self._he32(t, self.M)], axis=-1)
+    def _func_numba(self, t):
+        return np.stack([self._he31_numba(t, self.M), self._he32_numba(t, self.M)], axis=-1)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
-    def _he31(t, M):  # pragma: no cover
+    def _he31_numba(t, M):  # pragma: no cover
         def _g1(t, M):
             val = 0
             if t >= 0 and t <= 1:
@@ -1297,7 +1912,7 @@ class ExponentialHermite(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
-    def _he32(t, M):  # pragma: no cover
+    def _he32_numba(t, M):  # pragma: no cover
         def _g2(t, M):
             val = 0
             if t >= 0 and t <= 1:
@@ -1315,12 +1930,12 @@ class ExponentialHermite(BasisFunction):
         val = _g2(t, M) if t >= 0 else -1 * _g2(-t, M)
         return val
 
-    def _derivative_1(self, t):
-        return np.stack([self._he31prime(t, self.M), self._he32prime(t, self.M)], axis=-1)
+    def _derivative_1_numba(self, t):
+        return np.stack([self._he31prime_numba(t, self.M), self._he32prime_numba(t, self.M)], axis=-1)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
-    def _he31prime(t, M):  # pragma: no cover
+    def _he31prime_numba(t, M):  # pragma: no cover
         def _g1prime(t, M):
             val = 0
             if t >= 0 and t <= 1:
@@ -1335,7 +1950,7 @@ class ExponentialHermite(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
-    def _he32prime(t, M):  # pragma: no cover
+    def _he32prime_numba(t, M):  # pragma: no cover
         def _g2prime(t, M):
             val = 0
             if t >= 0 and t <= 1:
@@ -1352,12 +1967,12 @@ class ExponentialHermite(BasisFunction):
         val = _g2prime(t, M) if t >= 0 else _g2prime(-t, M)
         return val
 
-    def _derivative_2(self, t):
-        return np.stack([self._he31primeprime(t, self.M), self._he32primeprime(t, self.M)], axis=-1)
+    def _derivative_2_numba(self, t):
+        return np.stack([self._he31primeprime_numba(t, self.M), self._he32primeprime_numba(t, self.M)], axis=-1)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
-    def _he31primeprime(t, M):  # pragma: no cover
+    def _he31primeprime_numba(t, M):  # pragma: no cover
         def _g1primeprime(t, M):
             val = 0
             if t >= 0 and t <= 1:
@@ -1372,7 +1987,7 @@ class ExponentialHermite(BasisFunction):
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
-    def _he32primeprime(t, M):  # pragma: no cover
+    def _he32primeprime_numba(t, M):  # pragma: no cover
         def _g2primeprime(t, M):
             val = 0
             if t >= 0 and t <= 1:
@@ -1387,13 +2002,96 @@ class ExponentialHermite(BasisFunction):
         val = _g2primeprime(t, M) if t >= 0 else -1 * _g2primeprime(-t, M)
         return val
 
-    @staticmethod
-    def filter_symmetric(s):
-        return s.astype(float)
+    def _func_xp(self, t, xp):  # pragma: no cover
+        return xp.stack([self._he31_xp(t, self.M, xp), self._he32_xp(t, self.M, xp)], axis=-1)
 
     @staticmethod
-    def filter_periodic(s):
-        return s.astype(float)
+    def _he31_xp(t, M, xp):  # pragma: no cover
+        abs_t = xp.abs(t)
+        alpha = xp.asarray(xp.pi / M)
+        denom = (alpha * xp.cos(alpha)) - xp.sin(alpha)
+        num = (
+            (0.5 * (2 * alpha * xp.cos(alpha) - xp.sin(alpha)))
+            - (alpha * xp.cos(alpha) * abs_t)
+            - (0.5 * xp.sin(alpha - (2 * alpha * abs_t)))
+        )
+        return xp.where((abs_t >= 0) & (abs_t <= 1), num / denom, 0)
+
+    @staticmethod
+    def _he32_xp(t, M, xp):  # pragma: no cover
+        abs_t = xp.abs(t)
+        alpha = xp.asarray(xp.pi / M)
+        denom = ((alpha * xp.cos(alpha)) - xp.sin(alpha)) * 8 * alpha * xp.sin(alpha)
+        num = (
+            -((2 * alpha * xp.cos(2 * alpha)) - xp.sin(2 * alpha))
+            - (4 * alpha * xp.sin(alpha) * xp.sin(alpha) * abs_t)
+            - (2 * xp.sin(alpha) * xp.cos(2 * alpha * (abs_t - 0.5)))
+            + (2 * alpha * xp.cos(2 * alpha * (abs_t - 1)))
+        )
+        val = xp.where((abs_t >= 0) & (abs_t <= 1), num / denom, 0)
+        return xp.where(t >= 0, val, -val)
+
+    def _derivative_1_xp(self, t, xp):  # pragma: no cover
+        return xp.stack([self._he31prime_xp(t, self.M, xp), self._he32prime_xp(t, self.M, xp)], axis=-1)
+
+    @staticmethod
+    def _he31prime_xp(t, M, xp):  # pragma: no cover
+        abs_t = xp.abs(t)
+        alpha = xp.asarray(xp.pi / M)
+        denom = (alpha * xp.cos(alpha)) - xp.sin(alpha)
+        num = -(alpha * xp.cos(alpha)) + (alpha * xp.cos(alpha - (2 * alpha * abs_t)))
+        val = xp.where((abs_t >= 0) & (abs_t <= 1), num / denom, 0)
+        return xp.where(t >= 0, val, -val)
+
+    @staticmethod
+    def _he32prime_xp(t, M, xp):  # pragma: no cover
+        abs_t = xp.abs(t)
+        alpha = xp.asarray(xp.pi / M)
+        denom = ((alpha * xp.cos(alpha)) - xp.sin(alpha)) * 8 * alpha * xp.sin(alpha)
+        num = (
+            -(4 * alpha * xp.sin(alpha) * xp.sin(alpha))
+            + (4 * alpha * xp.sin(alpha) * xp.sin(2 * alpha * (abs_t - 0.5)))
+            - (4 * alpha**2 * xp.sin(2 * alpha * (abs_t - 1)))
+        )
+        return xp.where((abs_t >= 0) & (abs_t <= 1), num / denom, 0)
+
+    def _derivative_2_xp(self, t, xp):  # pragma: no cover
+        return xp.stack([self._he31primeprime_xp(t, self.M, xp), self._he32primeprime_xp(t, self.M, xp)], axis=-1)
+
+    @staticmethod
+    def _he31primeprime_xp(t, M, xp):  # pragma: no cover
+        abs_t = xp.abs(t)
+        alpha = xp.asarray(xp.pi / M)
+        denom = (alpha * xp.cos(alpha)) - xp.sin(alpha)
+        num = 2 * alpha**2 * xp.sin(alpha - (2 * alpha * abs_t))
+        return xp.where((abs_t >= 0) & (abs_t <= 1), num / denom, 0)
+
+    @staticmethod
+    def _he32primeprime_xp(t, M, xp):  # pragma: no cover
+        abs_t = xp.abs(t)
+        alpha = xp.asarray(xp.pi / M)
+        denom = ((alpha * xp.cos(alpha)) - xp.sin(alpha)) * 8 * alpha * xp.sin(alpha)
+        num = +(8 * alpha**2 * xp.sin(alpha) * xp.cos(2 * alpha * (abs_t - 0.5))) - (
+            8 * alpha**3 * xp.cos(2 * alpha * (abs_t - 1))
+        )
+        val = xp.where((abs_t >= 0) & (abs_t <= 1), num / denom, 0)
+        return xp.where(t >= 0, val, -val)
+
+    @staticmethod
+    def _filter_symmetric_numba(s):
+        return s
+
+    @staticmethod
+    def _filter_symmetric_xp(s, xp):
+        return s
+
+    @staticmethod
+    def _filter_periodic_numba(s):
+        return s
+
+    @staticmethod
+    def _filter_periodic_xp(s, xp):
+        return s
 
 
 def _multinomial(
