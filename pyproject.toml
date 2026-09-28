@@ -94,7 +94,7 @@ test = [
     "pytest",
     "pytest-cov",
     "array-api-compat",
-    "pytorch",
+    "torch",
     "jax"
 ]
 examples = [
