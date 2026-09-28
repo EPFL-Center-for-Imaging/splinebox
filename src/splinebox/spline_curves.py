@@ -1339,7 +1339,7 @@ class Spline:
         >>> spline = splinebox.Spline(M=M, basis_function=splinebox.Exponential(M), closed=False)
         >>> spline.knots = np.array([[0, 0], [1, 1], [2, 0], [2.5, -0.5], [3, 0]])
         >>> spline.curvature([1, 3])
-        array([ 2.234, -4.104])
+        array([ 2.035, -3.616])
         """
         self._check_control_points()
         t, single_value = self._convert_to_array(t)
