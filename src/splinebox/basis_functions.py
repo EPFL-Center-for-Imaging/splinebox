@@ -45,6 +45,31 @@ def _torch_compile_recompile_limit(limit=64):
         setattr(config, key, old)
 
 
+def _cached_compiled(fn, key, compile_fn):
+    """
+    Return a compiled version of ``fn``, caching the compiled wrapper.
+
+    Constructing compiled wrappers, e.g. with ``torch.compile`` or
+    ``jax.jit``, is expensive, so the wrapper is constructed once per
+    function instead of on every call. The wrapper is cached on the
+    instance for bound methods, so that the ``self`` captured by the
+    cached wrapper matches the instance, and on the function itself
+    otherwise. ``key`` identifies the compilation configuration and must
+    be distinct for functions that are compiled differently, e.g. for
+    different backends.
+    """
+    if hasattr(fn, "__self__"):
+        owner, cache_key = fn.__self__, (fn.__func__, key)
+    elif hasattr(fn, "__func__"):
+        owner, cache_key = fn, (fn.__func__, key)
+    else:
+        owner, cache_key = fn, (fn, key)
+    cache = owner.__dict__.setdefault("_compiled_wrappers", {})
+    if cache_key not in cache:
+        cache[cache_key] = compile_fn(fn)
+    return cache[cache_key]
+
+
 def _item_set(arr, idx, value, xp):
     """
     Assign ``value`` to ``arr[idx]`` and return the updated array.
@@ -200,11 +225,13 @@ class BasisFunction:
         if use_numba:
             return func(t)
         elif jit and array_api_compat.is_torch_namespace(xp):
-            return xp.compile(fullgraph=True, dynamic=True, mode="reduce-overhead")(func)(t, xp)
+            return _cached_compiled(
+                func, "torch", lambda fn: xp.compile(fullgraph=True, dynamic=True, mode="reduce-overhead")(fn)
+            )(t, xp)
         elif jit and array_api_compat.is_jax_namespace(xp):
             import jax
 
-            return jax.jit(func, static_argnames=["xp"])(t, xp)
+            return _cached_compiled(func, "jax", lambda fn: jax.jit(fn, static_argnames=["xp"]))(t, xp)
         else:
             return func(t, xp)
 
@@ -281,18 +308,25 @@ class BasisFunction:
             result = self._filter_symmetric_numba(s)
         elif jit and array_api_compat.is_torch_namespace(xp):
             with _torch_compile_recompile_limit():
-                result = xp.compile(fullgraph=True, dynamic=False, mode="reduce-overhead")(self._filter_symmetric_xp)(
-                    s, xp
-                )
+                result = _cached_compiled(
+                    self._filter_symmetric_xp,
+                    "torch",
+                    lambda fn: xp.compile(fullgraph=True, dynamic=False, mode="reduce-overhead")(fn),
+                )(s, xp)
         elif jit and array_api_compat.is_jax_namespace(xp):
             import jax
 
-            result = jax.jit(self._filter_symmetric_xp, static_argnames=["xp"])(s, xp)
+            result = _cached_compiled(self._filter_symmetric_xp, "jax", lambda fn: jax.jit(fn, static_argnames=["xp"]))(
+                s, xp
+            )
         else:
             result = self._filter_symmetric_xp(s, xp)
 
         if s.ndim == 1:
-            return xp.squeeze(result)
+            # array_api_compat.torch requires the axis argument for squeeze,
+            # so the unit axes are determined explicitly.
+            axes = tuple(axis for axis, size in enumerate(result.shape) if size == 1)
+            return xp.squeeze(result, axis=axes) if axes else result
         return result
 
     def _filter_symmetric_numba(self, s):
@@ -362,18 +396,25 @@ class BasisFunction:
             result = self._filter_periodic_numba(s)
         elif jit and array_api_compat.is_torch_namespace(xp):
             with _torch_compile_recompile_limit():
-                result = xp.compile(fullgraph=True, dynamic=False, mode="reduce-overhead")(self._filter_periodic_xp)(
-                    s, xp
-                )
+                result = _cached_compiled(
+                    self._filter_periodic_xp,
+                    "torch",
+                    lambda fn: xp.compile(fullgraph=True, dynamic=False, mode="reduce-overhead")(fn),
+                )(s, xp)
         elif jit and array_api_compat.is_jax_namespace(xp):
             import jax
 
-            result = jax.jit(self._filter_periodic_xp, static_argnames=["xp"])(s, xp)
+            result = _cached_compiled(self._filter_periodic_xp, "jax", lambda fn: jax.jit(fn, static_argnames=["xp"]))(
+                s, xp
+            )
         else:
             result = self._filter_periodic_xp(s, xp)
 
         if s.ndim == 1:
-            return xp.squeeze(result)
+            # array_api_compat.torch requires the axis argument for squeeze,
+            # so the unit axes are determined explicitly.
+            axes = tuple(axis for axis, size in enumerate(result.shape) if size == 1)
+            return xp.squeeze(result, axis=axes) if axes else result
         return result
 
     def _filter_periodic_numba(self, s):
