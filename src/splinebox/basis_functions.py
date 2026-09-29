@@ -10,6 +10,7 @@ To enable the :code:`__call__` method, subclasses must implement :code:`_func(t)
 For more information on implementing a new basis function, see :class:`splinebox.basis_functions.BasisFunction`.
 """
 
+import collections
 import contextlib
 import inspect
 import math
@@ -45,34 +46,40 @@ def _torch_compile_recompile_limit(limit=64):
         setattr(config, key, old)
 
 
-_compiled_wrapper_cache = {}
-
-
 def _cached_compiled(fn, key, compile_fn):
     """
     Return a compiled version of ``fn``, caching the compiled wrapper.
 
     Constructing compiled wrappers, e.g. with ``torch.compile`` or
     ``jax.jit``, is expensive, so each wrapper is constructed only once.
-    Wrappers compiled for bound methods capture the instance they were
-    constructed for, so they can only be reused by instances whose
-    attributes are equal. The cache is therefore keyed by the instance's
-    attributes, which allows fresh instances with the same state, e.g. a
-    new ``Exponential(5)``, to reuse the wrapper compiled for a previous
-    one. This relies on basis function attributes not being modified after
-    the first compiled call, which holds because they are only set in
-    ``__init__``. Wrappers for plain functions are keyed by the function
-    itself. ``key`` identifies the compilation configuration and must be
-    distinct for functions that are compiled differently, e.g. for
-    different backends.
+    The wrappers are cached in the ``_compiled_wrapper_cache`` dictionary
+    of the owning class. Wrappers compiled for bound methods capture the
+    instance they were compiled for, so the cache is keyed by the
+    instance's attributes in addition to the function. This allows fresh
+    instances with the same state, e.g. a new ``Exponential(5)``, to
+    reuse the wrapper compiled for a previous one, while instances with
+    different state, e.g. ``Exponential(7)``, get their own wrapper. It
+    relies on basis function attributes not being modified after the
+    first compiled call, which holds because they are only set in
+    ``__init__``. Note that this keeps the first instance with a given
+    state alive for the lifetime of the process. Wrappers for plain
+    functions are keyed by the function itself. ``key`` identifies the
+    compilation configuration and must be distinct for functions that are
+    compiled differently, e.g. for different backends.
     """
     if hasattr(fn, "__self__"):
-        cache_key = (fn.__func__, key, tuple(sorted(fn.__self__.__dict__.items())))
+        instance = fn.__self__
+        owner = type(instance)
+        cache_key = (fn.__func__, key, tuple(sorted(instance.__dict__.items())))
     else:
+        parts = fn.__qualname__.split(".")[:-1]  # drop the function name
+        owner = sys.modules[fn.__module__]
+        for part in parts:
+            owner = getattr(owner, part)
         cache_key = (fn, key)
-    if cache_key not in _compiled_wrapper_cache:
-        _compiled_wrapper_cache[cache_key] = compile_fn(fn)
-    return _compiled_wrapper_cache[cache_key]
+    if cache_key not in owner._compiled_wrapper_cache:
+        owner._compiled_wrapper_cache[cache_key] = compile_fn(fn)
+    return owner._compiled_wrapper_cache[cache_key]
 
 
 def _item_set(arr, idx, value, xp):
@@ -163,6 +170,7 @@ class BasisFunction:
     """
 
     _unimplemented_message = "This function is not implemented."
+    _compiled_wrapper_cache: dict[tuple, collections.abc.Callable] = {}
 
     def __init__(self, multigenerator, support):
         self.multigenerator = multigenerator
