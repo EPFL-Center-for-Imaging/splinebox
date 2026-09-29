@@ -45,29 +45,34 @@ def _torch_compile_recompile_limit(limit=64):
         setattr(config, key, old)
 
 
+_compiled_wrapper_cache = {}
+
+
 def _cached_compiled(fn, key, compile_fn):
     """
     Return a compiled version of ``fn``, caching the compiled wrapper.
 
     Constructing compiled wrappers, e.g. with ``torch.compile`` or
-    ``jax.jit``, is expensive, so the wrapper is constructed once per
-    function instead of on every call. The wrapper is cached on the
-    instance for bound methods, so that the ``self`` captured by the
-    cached wrapper matches the instance, and on the function itself
-    otherwise. ``key`` identifies the compilation configuration and must
-    be distinct for functions that are compiled differently, e.g. for
+    ``jax.jit``, is expensive, so each wrapper is constructed only once.
+    Wrappers compiled for bound methods capture the instance they were
+    constructed for, so they can only be reused by instances whose
+    attributes are equal. The cache is therefore keyed by the instance's
+    attributes, which allows fresh instances with the same state, e.g. a
+    new ``Exponential(5)``, to reuse the wrapper compiled for a previous
+    one. This relies on basis function attributes not being modified after
+    the first compiled call, which holds because they are only set in
+    ``__init__``. Wrappers for plain functions are keyed by the function
+    itself. ``key`` identifies the compilation configuration and must be
+    distinct for functions that are compiled differently, e.g. for
     different backends.
     """
     if hasattr(fn, "__self__"):
-        owner, cache_key = fn.__self__, (fn.__func__, key)
-    elif hasattr(fn, "__func__"):
-        owner, cache_key = fn, (fn.__func__, key)
+        cache_key = (fn.__func__, key, tuple(sorted(fn.__self__.__dict__.items())))
     else:
-        owner, cache_key = fn, (fn, key)
-    cache = owner.__dict__.setdefault("_compiled_wrappers", {})
-    if cache_key not in cache:
-        cache[cache_key] = compile_fn(fn)
-    return cache[cache_key]
+        cache_key = (fn, key)
+    if cache_key not in _compiled_wrapper_cache:
+        _compiled_wrapper_cache[cache_key] = compile_fn(fn)
+    return _compiled_wrapper_cache[cache_key]
 
 
 def _item_set(arr, idx, value, xp):
