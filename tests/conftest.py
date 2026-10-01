@@ -1,12 +1,83 @@
+import contextlib
 import functools
 import itertools
 import math
 import unittest.mock
 
-import numpy as np
 import pytest
 import splinebox.basis_functions
 import splinebox.spline_curves
+
+ARRAY_BACKENDS_AND_DEVICES = []
+
+# NumPy
+with contextlib.suppress(ImportError):
+
+    import array_api_compat.numpy as np
+
+    ARRAY_BACKENDS_AND_DEVICES.append(pytest.param((np, "cpu"), id="numpy-cpu"))
+
+# PyTorch
+with contextlib.suppress(ImportError):
+
+    import array_api_compat.torch as torch
+    import torch as _torch
+
+    ARRAY_BACKENDS_AND_DEVICES.append(pytest.param((torch, "cpu"), id="torch-cpu"))
+
+    if _torch.cuda.is_available():
+        ARRAY_BACKENDS_AND_DEVICES.append(pytest.param((torch, "cuda"), id="torch-cuda"))
+
+# JAX
+with contextlib.suppress(ImportError):
+
+    import jax
+    import jax.numpy
+
+    # Enable 64-bit floats so that jax matches the float64 semantics of the
+    # other array backends (jax silently truncates float64 data otherwise).
+    jax.config.update("jax_enable_x64", True)
+
+    ARRAY_BACKENDS_AND_DEVICES.append(pytest.param((jax.numpy, jax.devices("cpu")[0]), id="jax-cpu"))
+
+    if any(device.platform == "gpu" for device in jax.devices()):
+        gpus = jax.devices("gpu")
+        ARRAY_BACKENDS_AND_DEVICES.append(pytest.param((jax.numpy, gpus[0]), id="jax-gpu"))
+
+
+@pytest.fixture(params=ARRAY_BACKENDS_AND_DEVICES)
+def xp_device(request):
+    return request.param
+
+
+@pytest.fixture
+def xp(xp_device):
+    return xp_device[0]
+
+
+@pytest.fixture
+def device(xp_device):
+    return xp_device[1]
+
+
+@pytest.fixture
+def as_xp_array(xp, device):
+    def _as_xp_array(obj, **kwargs):
+        if xp.__name__.endswith("numpy"):
+            return xp.asarray(obj, **kwargs)
+        return xp.asarray(obj, device=device, **kwargs)
+
+    return _as_xp_array
+
+
+@pytest.fixture(
+    params=[
+        # pytest.param(True, id="jit"),
+        pytest.param(False, id="no-jit"),
+    ]
+)
+def jit(request):
+    return request.param
 
 
 @pytest.fixture(
@@ -97,12 +168,12 @@ def is_locally_refinable():
     return _is_locally_refinable
 
 
-@pytest.fixture(params=[4, 5, 8])
+@pytest.fixture(params=[4, 5, 8], ids=["M=4", "M=5", "M=8"])
 def M(request):
     return request.param
 
 
-@pytest.fixture(params=[True, False])
+@pytest.fixture(params=[True, False], ids=["closed", "open"])
 def closed(request):
     return request.param
 
@@ -163,7 +234,7 @@ def twice_differentiable_spline_curve(twice_differentiable_basis_function, M, cl
     return splinebox.spline_curves.Spline(M, twice_differentiable_basis_function, closed=closed)
 
 
-@pytest.fixture(params=[0, 1, 2])
+@pytest.fixture(params=[0, 1, 2], ids=["derivative=0", "derivative=1", "derivative=2"])
 def derivative(request):
     return request.param
 
@@ -173,7 +244,7 @@ def call_positions(request):
     return request.param
 
 
-@pytest.fixture(params=[1, 2, 3, 5])
+@pytest.fixture(params=[1, 2, 3, 5], ids=["ndim=1", "ndim=2", "ndim=3", "ndim=5"])
 def codomain_dimensionality(request):
     """
     The number of dimensions the spline output
@@ -210,11 +281,11 @@ def control_point_gen_3D():
 
 
 @pytest.fixture
-def knot_gen(codomain_dimensionality):
+def knot_gen(codomain_dimensionality, as_xp_array):
     rng = np.random.default_rng(seed=2657)
 
     def _knot_gen(M=100):
-        return rng.random((M, codomain_dimensionality))
+        return as_xp_array(rng.random((M, codomain_dimensionality)))
 
     return _knot_gen
 
