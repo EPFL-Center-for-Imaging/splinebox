@@ -28,6 +28,7 @@ select = [
 ]
 ignore = [
     "E501", # line too long. let black handle this
+    "E741", # Allow l as a variable name for loops
 ]
 
 exclude = [

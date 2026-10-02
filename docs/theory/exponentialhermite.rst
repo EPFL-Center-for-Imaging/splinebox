@@ -6,7 +6,7 @@ See [Uhlmann2014]_.
 .. math::
    :name: exponentialhermite:eq:1
 
-   \phi_{1,M}(t) &= \left\{
+   \varphi_{1,M}(t) &= \left\{
        \begin{array}{ll}
           	g_{1,M}(t)  & t \geq 0 \\
            g_{1,M}(-t) &  t < 0
@@ -16,7 +16,7 @@ See [Uhlmann2014]_.
 .. math::
    :name: exponentialhermite:eq:2
 
-   \phi_{2,M}(t) &= \left\{
+   \varphi_{2,M}(t) &= \left\{
        \begin{array}{lll}
    		g_{2,M}(t) & t \geq 0 \\
            -g_{2,M}(-t) & t < 0

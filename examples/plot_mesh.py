@@ -203,3 +203,5 @@ plotter.show()
 # Tips
 # ----
 # * Save meshes for visualization in ParaView using :code:`mesh.save("mesh.vtk")`.
+# * Surface meshes are open by default. Use :code:`cap_ends="flat"` for planar end caps or
+#   :code:`cap_ends="sphere"` for hemispherical end caps in :meth:`splinebox.spline_curves.Spline.mesh()`.

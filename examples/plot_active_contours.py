@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy
 import skimage
+
 import splinebox.basis_functions
 import splinebox.spline_curves
 
@@ -32,21 +33,18 @@ edge = skimage.filters.sobel(smooth)
 plt.imshow(edge)
 plt.show()
 
-
 # %%
-# To make calculating the edge energy at non-integer locations easier, we use a surface spline on a regular grid.
-# This returns a callable object that can be queried for edge energy values.
-edge_energy = scipy.interpolate.RectBivariateSpline(
-    np.arange(edge.shape[1]), np.arange(edge.shape[0]), edge, kx=2, ky=2, s=1
-)
+# The control points of our spline will be updated based on the edge image.
+# In order to decide in which direction to move the control points, we will used the spatial derivatives (gradients)
+# of the edge image.
+SIGMA = 3
+edge_gy = scipy.ndimage.gaussian_filter(edge, SIGMA, order=[1, 0], mode="nearest", output=float)
+edge_gx = scipy.ndimage.gaussian_filter(edge, SIGMA, order=[0, 1], mode="nearest", output=float)
 
-
-# %%
-# We define an internal energy function to regularize the curvature of the spline.
-# The internal energy depends on the first and second derivatives of the spline.
-def internal_energy(spline, t, alpha, beta):
-    return 0.5 * (alpha * spline(t, derivative=1) ** 2 + beta * spline(t, derivative=2) ** 2)
-
+fig, axes = plt.subplots(1, 2)
+axes[0].imshow(edge_gy)
+axes[1].imshow(edge_gx)
+plt.show()
 
 # %%
 # Initialize the spline with 30 knots that form a circle around the astronaut's head.
@@ -75,61 +73,54 @@ plt.show()
 
 
 # %%
-# Here, we set the necessary paramters for the active contours algorithm:
-#
-# * :math:`\alpha` controls the contribution of the first derivative (smoothness) to the internal energy
-# * :math:`\beta` controls the contribution of the second derivative (curvature) to the internal energy
-
-alpha = 0
-beta = 0.001
+# Next, we will fit the spline around the head using the active contour approach.
+# The control points are updated in every iteration minimising the energy function.
+# The energy function consist of two terms:
+#   (1) Image energy: measures the pixel values below the spline.
+#   (2) Internal energy: penalises curvy spline
+# A detailed description of the math can be found in :ref:`theory/active_contour`.
 
 # Store intermediate contours
 contours = []
-# Store the energy values
-external_energies = []
 
-# %%
-# Nex, we define the energy function to be minimized. It combines the external energy from the edge map
-# and the internal energy based on spline smoothness and curvature.
+t = np.linspace(0, spline.M, 3000)[:-1]
 
-
-def energy_function(control_points, spline, t, alpha, beta):
-    control_points = control_points.reshape((spline.M, -1))
-    spline.control_points = control_points
+for _ in range(5000):
     contour = spline(t)
     contours.append(contour.copy())
 
-    # Compute external energy from the edge map
-    edge_energy_value = np.sum(edge_energy(contour[:, 0], contour[:, 1], grid=False))
-    external_energies.append(-edge_energy_value)
+    dy = scipy.ndimage.map_coordinates(edge_gy, contour.T, order=1)
+    dx = scipy.ndimage.map_coordinates(edge_gx, contour.T, order=1)
+    img_gradients = np.stack([dy, dx], axis=-1)
 
-    # Compute internal energy
-    internal_energy_value = np.sum(internal_energy(spline, t, alpha, beta))
+    partial_derivs = spline.derivative_wrt_control_points(t)
 
-    # Total energy to minimize
-    return -edge_energy_value + internal_energy_value
+    image_energy_gradients = partial_derivs.T @ img_gradients
 
+    internal_energy_gradients = np.mean(spline.derivative_of_norm_squared_wrt_control_points(t, derivative=2), axis=0)
+
+    gradients = -image_energy_gradients + internal_energy_gradients / 2
+
+    # Take a step toward minimizing the energy
+    spline.control_points = spline.control_points - gradients
+
+    # They process has converged when the step size is small
+    gradient_norm = np.sum(np.linalg.norm(gradients, axis=1))
+    if gradient_norm < 0.5:
+        break
 
 # %%
-# The active contours approach consists of iteratively updating our control points (coefficients)
-# to minimize the energy and find the optimal contour.
-initial_control_points = spline.control_points.copy()
-result = scipy.optimize.minimize(
-    energy_function, initial_control_points.flatten(), method="Powell", args=(spline, t, alpha, beta)
-)
-
-# %%
-# Inorder to plot the spline as a smooth line, we have to evaluate it
-# more densly than just at the knots.
+# In order to plot the spline as a smooth line, we have to evaluate it
+# more densely than just at the knots.
 samples = spline(t)
 
-final_knots = spline(np.arange(M))
+final_knots = spline.knots
 
 # %%
-# Finaly, we can plot the result.
+# Finally, we can plot the result.
 plt.imshow(img)
 plt.scatter(initial_knots[:, 1], initial_knots[:, 0], marker="x", color="black", label="initial knots")
-contours = contours[::2000]
+contours = contours[::20]
 colors = matplotlib.colormaps["viridis"](np.linspace(0, 1, len(contours)))
 for contour, color in zip(contours, colors):
     plt.plot(contour[:, 1], contour[:, 0], color=color, alpha=0.2)

@@ -4,6 +4,7 @@ This module provides the classes necessary for constructing splines, along with 
 
 import collections
 import copy
+import itertools
 import json
 import math
 import warnings
@@ -170,6 +171,10 @@ class Spline:
         else:
             raise RuntimeError("M must be greater than or equal to the basis function support size.")
 
+        self._cached_h1 = None
+        self._cached_h2 = None
+        self._cached_h3 = None
+
         self.basis_function = basis_function
         self._half_support = self.basis_function.support / 2
         # Number of additional knots used for padding the ends
@@ -314,6 +319,12 @@ class Spline:
             raise ValueError(
                 "You are trying to construct a Hermite spline using the ordinary `Spline` class. Use the `HermiteSpline` class instead."
             )
+
+        # Invalidate cached _h1, _h2, _h3
+        self._cached_h1 = None
+        self._cached_h2 = None
+        self._cached_h3 = None
+
         self._basis_function = value
 
     @property
@@ -327,6 +338,12 @@ class Spline:
             raise RuntimeError(
                 "M cannot be changed after the control points were set. Create a new spline or set the control_points to None first."
             )
+
+        # Invalidate cached _h1, _h2, _h3
+        self._cached_h1 = None
+        self._cached_h2 = None
+        self._cached_h3 = None
+
         self._M = M
 
     @property
@@ -340,6 +357,12 @@ class Spline:
             raise RuntimeError(
                 "closed cannot be changed after the control points were set. Create a new spline or set the control_points to None first."
             )
+
+        # Invalidate cached _h1, _h2, _h3
+        self._cached_h1 = None
+        self._cached_h2 = None
+        self._cached_h3 = None
+
         self._closed = closed
 
     @property
@@ -421,6 +444,149 @@ class Spline:
                 function_values @ GAUSS_LEGENDRE_QUADRATURE_WEIGHTS / (2 / self.integration_segment_size)
             )
         return self._cached_segment_lengths
+
+    def _circular_span(self, a, b):
+        """Return the smallest circular distance between two integer indices in [0, M)."""
+        diff = abs(a - b)
+        return min(diff, self.M - diff)
+
+    def _gauss_legendra_quadrature_for_h123(self, func, kwargs):
+        upper_bound = self.M if self.closed else self.M - 1
+        segments = np.arange(
+            0,
+            upper_bound + self.integration_segment_size / 10,
+            self.integration_segment_size,
+        )
+        tvals = np.add.outer(
+            (segments[:-1] + segments[1:]) / 2,
+            GAUSS_LEGENDRE_QUADRATURE_POINTS / (2 / self.integration_segment_size),
+        )
+        function_values = func(tvals, **kwargs)
+        res = math.fsum(function_values @ GAUSS_LEGENDRE_QUADRATURE_WEIGHTS / (2 / self.integration_segment_size))
+        return res
+
+    def _periodicity(self, t):
+        t[t > self.M - self.half_support] -= self.M
+        t[t < -self.M + self.half_support] += self.M
+        return t
+
+    @property
+    def _h1(self):
+        """
+        See :ref:`theory/active_contours:Active contour model`.
+        """
+        if self._cached_h1 is None:
+            n_control_points = len(self.control_points)
+            self._cached_h1 = np.zeros((n_control_points, n_control_points, n_control_points, n_control_points))
+            arange = np.arange(self.M) if self.closed else np.arange(-self.pad, self.M + self.pad)
+            support = self.basis_function.support
+
+            if self.closed:
+
+                def func(t, l, k, m, n):
+                    return (
+                        self.basis_function(self._periodicity(t - l), derivative=1)
+                        * self.basis_function(self._periodicity(t - k), derivative=1)
+                        * self.basis_function(self._periodicity(t - m), derivative=1)
+                        * self.basis_function(self._periodicity(t - n), derivative=1)
+                    )
+
+            else:
+
+                def func(t, l, k, m, n):
+                    return (
+                        self.basis_function(t - l, derivative=1)
+                        * self.basis_function(t - k, derivative=1)
+                        * self.basis_function(t - m, derivative=1)
+                        * self.basis_function(t - n, derivative=1)
+                    )
+
+            for i0, l in enumerate(arange):
+                for i1, k in enumerate(arange[i0:], start=i0):
+                    span_lk = self._circular_span(l, k) if self.closed else k - l
+                    if span_lk >= support:
+                        continue
+                    for i2, m in enumerate(arange[i1:], start=i1):
+                        span_lm = self._circular_span(l, m) if self.closed else m - l
+                        if span_lm >= support:
+                            continue
+                        for i3, n in enumerate(arange[i2:], start=i2):
+                            span_ln = self._circular_span(l, n) if self.closed else n - l
+                            if span_ln >= support:
+                                continue
+
+                            res = self._gauss_legendra_quadrature_for_h123(func, {"l": l, "k": k, "m": m, "n": n})
+                            for idx in set(itertools.permutations((i0, i1, i2, i3))):
+                                self._cached_h1[idx] = res
+        return self._cached_h1
+
+    @property
+    def _h2(self):
+        """
+        See :ref:`theory/active_contours:Active contour model`.
+        """
+        if self._cached_h2 is None:
+            n_control_points = len(self.control_points)
+            self._cached_h2 = np.zeros((n_control_points, n_control_points))
+            arange = np.arange(self.M) if self.closed else np.arange(-self.pad, self.M + self.pad)
+            support = self.basis_function.support
+
+            if self.closed:
+
+                def func(t, l, k):
+                    return self.basis_function(self._periodicity(t - l), derivative=1) * self.basis_function(
+                        self._periodicity(t - k), derivative=1
+                    )
+
+            else:
+
+                def func(t, l, k):
+                    return self.basis_function(t - l, derivative=1) * self.basis_function(t - k, derivative=1)
+
+            for i, l in enumerate(arange):
+                for j, k in enumerate(arange[i:], start=i):
+                    span = self._circular_span(l, k) if self.closed else k - l
+                    if span >= support:
+                        continue
+
+                    res = self._gauss_legendra_quadrature_for_h123(func, {"l": l, "k": k})
+                    self._cached_h2[i, j] = res
+                    self._cached_h2[j, i] = res
+        return self._cached_h2
+
+    @property
+    def _h3(self):
+        """
+        See :ref:`theory/active_contours:Active contour model`.
+        """
+        if self._cached_h3 is None:
+            n_control_points = len(self.control_points)
+            self._cached_h3 = np.zeros((n_control_points, n_control_points))
+            arange = np.arange(self.M) if self.closed else np.arange(-self.pad, self.M + self.pad)
+            support = self.basis_function.support
+
+            if self.closed:
+
+                def func(t, l, k):
+                    return self.basis_function(self._periodicity(t - l), derivative=2) * self.basis_function(
+                        self._periodicity(t - k), derivative=2
+                    )
+
+            else:
+
+                def func(t, l, k):
+                    return self.basis_function(t - l, derivative=2) * self.basis_function(t - k, derivative=2)
+
+            for i, l in enumerate(arange):
+                for j, k in enumerate(arange[i:], start=i):
+                    span = self._circular_span(l, k) if self.closed else k - l
+                    if span >= support:
+                        continue
+
+                    res = self._gauss_legendra_quadrature_for_h123(func, {"l": l, "k": k})
+                    self._cached_h3[i, j] = res
+                    self._cached_h3[j, i] = res
+        return self._cached_h3
 
     def copy(self):
         """
@@ -784,6 +950,7 @@ class Spline:
             for i in range(self.ndim):
                 self.control_points[:, i] = scipy.sparse.linalg.lsqr(basis_function_values, points[:, i])[0]
         elif boundary_condition in ("clamped", "natural"):
+
             deriv = 1 if boundary_condition == "clamped" else 2
 
             if np.any(np.isnan(self.basis_function(np.arange(-self.pad, self.pad + 1), derivative=deriv))):
@@ -1418,14 +1585,96 @@ class Spline:
         cache=True,
     )
     def _compute_tval_and_indices(t, shift, closed, M, pad, tval, indices):
+        """
+        Helper function for creating a csr sparse matrix.
+
+        Parameters
+        ----------
+        t : np.array
+            The t value at which the spline should be evaluated.
+        shift : np.array
+            The integer displacements that for the control points that affect
+            a given t value. This depends on the half support of the basis function.
+        closed : boolean
+            Whether the spline is closed or not.
+        M : int
+            The number of knots.
+        pad : int
+            The amount of padding the spline has.
+        tval : np.array
+            An empty array in which the t values are stored at which the basis
+            function have to be evaluated.
+        indices : np.array
+            An empty array in which the index of the control point is stored.
+        """
         t_mod_1 = t % 1
         tval[:] = t_mod_1[:, np.newaxis] - shift[np.newaxis, :]
         if closed:
             indices[:] = ((t - t_mod_1)[:, np.newaxis] + shift[np.newaxis, :]) % M
         else:
-            # The modulo prevents out of bounds errors and can be safely applied because
-            # the basis function values will be zero.
             indices[:] = (t - t_mod_1)[:, np.newaxis] + shift[np.newaxis, :] + pad
+
+    def basis_matrix(self, t, derivative=0):
+        r"""
+        Computes the basis matrix :math:`\mathbf{\Phi}` as defined in :ref:`theory/data_approximation:Data approximation`.
+        In some contexts this matrix is referred to as a collocation matrix.
+
+        Parameters
+        ----------
+        t : np.array
+            The t values where the spline should be evaluated.
+        derivative : int
+            The degree of the derivative to compute.
+
+        Returns
+        -------
+        bm : scipy.sparse.csr_array
+            The basis matrix.
+        """
+        t, single_value = self._convert_to_array(t)
+
+        minimum = np.min(t)
+        maximum = np.max(t)
+        if np.isnan(maximum):
+            raise ValueError("t should not contain any NaN values.")
+
+        bound = math.ceil(self.half_support)
+        shift = np.arange(-bound + 1, bound + 1)
+        n_control_points = self.M if self.closed else self.M + 2 * self.pad
+
+        tval = np.empty((len(t), len(shift)), dtype=float)
+        indices = np.empty((len(t), len(shift)), dtype=int)
+        self._compute_tval_and_indices(t, shift, self.closed, self.M, self.pad, tval, indices)
+        data = self.basis_function(tval, derivative=derivative)
+
+        if not self.closed and (minimum < 0 or maximum > self.M - 1):
+            mask = (indices >= 0) & (indices <= (self.M - 1 + 2 * self.pad))
+
+            # Mask row that are completely empty
+            row_mask = np.any(mask, axis=1)
+            data = data[row_mask]
+            indices = indices[row_mask]
+
+            mask = mask[row_mask]
+            data[~mask] = 0
+
+            data = data.flatten()
+            indices = indices.flatten()
+
+            indptr = np.full(len(t) + 1, len(indices))
+            indptr[: len(indices) // len(shift) + 1] = np.arange(0, len(indices) + 1, len(shift))
+
+        else:
+            data = data.flatten()
+            indices = indices.flatten()
+            indptr = np.arange(0, len(indices) + 1, len(shift))
+
+        # This is necessary because there is not enough padding of the control points.
+        # When t=M-1 shift reaches past the last padded control point.
+        # The seems to be the limiting factor. An alternative solution should be found.
+        bm = scipy.sparse.csr_array((data, indices, indptr), shape=(len(t), n_control_points + 1), copy=False)
+        bm = bm[:, :n_control_points]
+        return bm
 
     def __call__(self, t, derivative=0):
         """
@@ -1461,28 +1710,92 @@ class Spline:
         """
         self._check_control_points()
         t, single_value = self._convert_to_array(t)
-        if np.any(np.isnan(t)):
-            raise ValueError("t should not contain any NaN values.")
-        bound = math.ceil(self.half_support)
-        shift = np.arange(-bound + 1, bound + 1)
-        tval = np.empty((len(t), len(shift)), dtype=float)
-        indices = np.empty((len(t), len(shift)), dtype=int)
-        self._compute_tval_and_indices(t, shift, self.closed, self.M, self.pad, tval, indices)
 
-        basis_function_values = self.basis_function(tval, derivative=derivative)
-        control_points = self.control_points
-        if not self.closed:
-            before = -min(np.min(indices), 0)
-            after = max(np.max(indices) - self.M + 1 - self.pad, 0)
-            control_points = np.pad(control_points, ((before, after), (0, 0)))
-            indices += before
-        control_points = control_points[indices]
+        bm = self.basis_matrix(t, derivative=derivative)
 
-        values = np.einsum("ij,ijl->il", basis_function_values, control_points)
+        values = bm @ self.control_points
+
         if single_value:
             values = values[0]
 
         return values
+
+    def derivative_wrt_control_points(self, t, derivative=0):
+        r"""
+        Computes the partial derivatives of the spline or one of it's derivatives with respect to the control points.
+
+        This is just a wrapper around the :meth:`splinebox.spline_curves.Spline.basis_matrix` since it can analytically be shown that
+        the derivatives with respect to the control points are equal to the basis matrix.
+        For details see :ref:`theory/active_contours:Active contour model`.
+        """
+        return self.basis_matrix(t, derivative=derivative)
+
+    def derivative_of_norm_squared_wrt_control_points(self, t, derivative=0):
+        r"""
+        Computes the partial derivatives of the squared norm with respect to the control points.
+        For an analytical derivation see :ref:`theory/active_contours:Active contour model`.
+
+        Returns the following matrix: :math:`A_{tly}=\frac{\partial |r(t)|^2}{\partial c[l]_y}`.
+        """
+        bm = self.basis_matrix(t, derivative=derivative)
+        return 2 * bm.todense()[:, :, np.newaxis] * self(t, derivative=derivative)[:, np.newaxis, :]
+
+    def derivative_of_curvilinear_reparametrisation_energy_wrt_control_points(self, c):
+        r"""
+        Gradient of the curvilinear reparametrisation energy with respect to the
+        control points.
+
+        The energy is defined in equation 25 of [Jacob2004]_ as
+
+        .. math::
+
+            E_{\text{reparam}} = \int_0^{M-1} \left(|\mathbf{r}'(t)|^2 - c\right)^2 dt
+                                = \int_0^{M-1} |\mathbf{r}'(t)|^4 - 2c|\mathbf{r}'(t)|^2 + c^2 dt.
+
+        The parameter :math:`c = \left(\frac{\text{desired arc length}}{M-1}\right)^2`
+        represents the desired squared speed of the spline. Minimising this energy
+        encourages a uniform spacing of control points along the curve.
+
+        Parameters
+        ----------
+        c : float
+            Desired squared speed.
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of shape ``(n_control_points, ndim)`` containing the gradient
+            :math:`\frac{\partial E_{\text{reparam}}}{\partial c[l]_x}`.
+
+        For an analytical derivation see :ref:`theory/active_contours:Active contour model`.
+        """
+        return 4 * np.einsum(
+            "ky,my,nx,lkmn->lx", self.control_points, self.control_points, self.control_points, self._h1
+        ) - 4 * c * np.einsum("mx,lm->lx", self.control_points, self._h2)
+
+    def derivative_of_curvature_energy_wrt_control_points(self):
+        r"""
+        Gradient of the curvature energy with respect to the control points.
+
+        The curvature energy penalises the squared magnitude of the second
+        derivative:
+
+        .. math::
+
+            E_{\text{curvature}} = \int_0^{M-1} |\mathbf{r}''(t)|^2 dt.
+
+        For curves with small slopes this is a good approximation of the
+        integral over the squared curvature.
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of shape ``(n_control_points, ndim)`` containing the gradient
+            :math:`\frac{\partial E_{\text{curvature}}}{\partial c[l]_x}`.
+
+        For an analytical derivation see :ref:`theory/active_contours:Active contour model`.
+        """
+        return 2 * np.einsum("mx,lm->lx", self.control_points, self._h3)
 
     def _convert_to_array(self, t):
         """
@@ -1795,7 +2108,7 @@ class Spline:
             The frame to use for orientation of the mesh:
             - "frenet": Uses the Frenet-Serret frame.
             - "bishop": Uses the Bishop frame, requiring an `initial_vector`.
-            See :meth:`splinebox.spline_curves.moving_frame`. Default is "bishop".
+            See :meth:`splinebox.spline_curves.Spline.moving_frame`. Default is "bishop".
         initial_vector : numpy array or None, optional
             For the Bishop frame, an initial vector that defines the orientation of
             the frame at the start of the spline (`t[0]`). This vector must be
@@ -1898,10 +2211,7 @@ class Spline:
         self._check_control_points()
         if self.ndim != 3:
             raise NotImplementedError("Meshes are only implemented for splines in 3D.")
-        if mesh_type == "surface" and not self.closed:
-            cap_ends = self._normalize_cap_ends(cap_ends)
-        else:
-            cap_ends = None
+        cap_ends = self._normalize_cap_ends(cap_ends) if mesh_type == "surface" and not self.closed else None
         end_t = self.M if self.closed else self.M - 1
         t = np.arange(0, end_t, step_t)
         if len(t) == 0 or not np.isclose(t[-1], end_t):
@@ -2311,37 +2621,117 @@ class HermiteSpline(Spline):
         else:
             raise ValueError(f"Unknown boundary_conditions {boundary_condition}")
 
-    def __call__(self, t, derivative=0):
-        self._check_control_points_and_tangents()
+    def basis_matrix(self, t, derivative=0):
         t, single_value = self._convert_to_array(t)
-        if np.any(np.isnan(t)):
+
+        minimum = np.min(t)
+        maximum = np.max(t)
+        if np.isnan(maximum):
             raise ValueError("t should not contain any NaN values.")
+
         bound = math.ceil(self.half_support)
         shift = np.arange(-bound + 1, bound + 1)
+        n_control_points = self.M if self.closed else self.M + 2 * self.pad
+
         tval = np.empty((len(t), len(shift)), dtype=float)
         indices = np.empty((len(t), len(shift)), dtype=int)
         self._compute_tval_and_indices(t, shift, self.closed, self.M, self.pad, tval, indices)
+        data = self.basis_function(tval, derivative=derivative)
+        data0 = data[..., 0]
+        data1 = data[..., 1]
 
-        basis_function_values = self.basis_function(tval, derivative=derivative)
-        control_points = self.control_points
-        tangents = self.tangents
-        if not self.closed:
-            before = -min(np.min(indices), 0)
-            after = max(np.max(indices) - self.M + 1 - self.pad, 0)
-            control_points = np.pad(control_points, ((before, after), (0, 0)))
-            tangents = np.pad(tangents, ((before, after), (0, 0)))
-            indices += before
-        control_points = control_points[indices]
-        tangents = tangents[indices]
+        if not self.closed and (minimum < 0 or maximum > self.M - 1):
+            mask = (indices >= 0) & (indices <= (self.M - 1 + 2 * self.pad))
 
-        values = np.einsum("ij,ijl->il", basis_function_values[..., 0], control_points) + np.einsum(
-            "ij,ijl->il", basis_function_values[..., 1], tangents
-        )
+            # Mask row that are completely empty
+            row_mask = np.any(mask, axis=1)
+            data0 = data0[row_mask]
+            data1 = data1[row_mask]
+            indices = indices[row_mask]
+
+            mask = mask[row_mask]
+            data0[~mask] = 0
+            data1[~mask] = 0
+
+            data0 = data0.flatten()
+            data1 = data1.flatten()
+            indices = indices.flatten()
+
+            indptr = np.full(len(t) + 1, len(indices))
+            indptr[: len(indices) // len(shift) + 1] = np.arange(0, len(indices) + 1, len(shift))
+
+        else:
+            data0 = data0.flatten()
+            data1 = data1.flatten()
+            indices = indices.flatten()
+            indptr = np.arange(0, len(indices) + 1, len(shift))
+
+        bm0 = scipy.sparse.csr_array((data0, indices, indptr), shape=(len(t), n_control_points + 1), copy=False)
+        bm0 = bm0[:, :n_control_points]
+        bm1 = scipy.sparse.csr_array((data1, indices, indptr), shape=(len(t), n_control_points + 1), copy=False)
+        bm1 = bm1[:, :n_control_points]
+        return bm0, bm1
+
+    def __call__(self, t, derivative=0):
+        self._check_control_points_and_tangents()
+        t, single_value = self._convert_to_array(t)
+
+        bm0, bm1 = self.basis_matrix(t, derivative=derivative)
+
+        values = bm0 @ self.control_points + bm1 @ self.tangents
 
         if single_value:
             values = values[0]
 
         return values
+
+    def derivative_wrt_control_points(self, t, derivative=0):
+        """
+        Computes the partial derivatives of the spline or one of its derivatives
+        with respect to the control points.
+
+        For a Hermite spline this returns the basis matrix for the control-point
+        component only (the tangent component is handled separately by
+        :meth:`splinebox.spline_curves.HermiteSpline.derivative_wrt_tangents`).
+        """
+        return self.basis_matrix(t, derivative=derivative)[0]
+
+    def derivative_wrt_tangents(self, t, derivative=0):
+        """
+        Computes the partial derivatives of the spline or one of its derivatives
+        with respect to the tangents.
+
+        Returns the basis matrix for the tangent component of a Hermite spline.
+        """
+        return self.basis_matrix(t, derivative=derivative)[1]
+
+    def derivative_of_norm_squared_wrt_control_points(self, t, derivative=0):
+        """
+        Computes the partial derivatives of the squared norm with respect to the
+        control points.
+
+        For an analytical derivation see :ref:`theory/active_contours:Active contour model`.
+        """
+        bm = self.derivative_wrt_control_points(t, derivative=derivative)
+        return 2 * bm.todense()[:, :, np.newaxis] * self(t, derivative=derivative)[:, np.newaxis, :]
+
+    def derivative_of_norm_squared_wrt_tangents(self, t, derivative=0):
+        """
+        Computes the partial derivatives of the squared norm with respect to the
+        tangents.
+        """
+        bm = self.derivative_wrt_tangents(t, derivative=derivative)
+        return 2 * bm.todense()[:, :, np.newaxis] * self(t, derivative=derivative)[:, np.newaxis, :]
+
+    def derivative_of_curvilinear_reparametrisation_energy_wrt_control_points(self, c):
+        raise NotImplementedError(
+            "The derivative of the curvilinear reparametrisation energy with respect to the control points is not implemented for Hermite splines."
+        )
+
+    def derivative_of_curvature_energy_wrt_control_points(self):
+        raise NotImplementedError(
+            "The derivative of the curvature energy with respect to the control points is not implemented for Hermite splines."
+        )
 
     def scale(self, scaling_factor):
         self._check_control_points_and_tangents()
