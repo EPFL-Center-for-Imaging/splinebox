@@ -5,7 +5,6 @@ import unittest.mock
 import numpy as np
 import pytest
 import scipy
-
 import splinebox
 
 
@@ -1515,7 +1514,12 @@ def test_derivative_of_curvature_energy_wrt_control_points_zero_for_straight_lin
     assert np.allclose(result, 0, atol=1e-10)
 
 
-def test_derivative_of_curvature_energy_wrt_control_points_zero_for_circle(M, codomain_dimensionality):
+def test_derivative_of_curvature_energy_wrt_control_points_radial_for_circle(M, codomain_dimensionality):
+    # For control points on a circle, the gradient of the curvature energy is
+    # radial, i.e. parallel to the control points themselves. The energy is
+    # invariant under rotations of the circle, so the gradient has no
+    # tangential component. Note that the gradient does not vanish: shrinking
+    # the circle reduces the energy.
     control_points = np.zeros((M, codomain_dimensionality))
     for i in range(M):
         control_points[i, 0] = np.sin(2 * np.pi * i / M)
@@ -1524,15 +1528,13 @@ def test_derivative_of_curvature_energy_wrt_control_points_zero_for_circle(M, co
 
     spline = splinebox.Spline(M=M, basis_function=splinebox.Exponential(M), closed=True, control_points=control_points)
 
-    # plt.scatter(control_points[:, 0], control_points[:, 1])
-    # plt.gca().axis("equal")
-    # t = np.linspace(0, M, 1000)
-    # plt.plot(spline(t)[:, 0], spline(t)[:, 1])
-    # plt.show()
-
     result = spline.derivative_of_curvature_energy_wrt_control_points()
-    print(result)
-    assert np.allclose(result, 0, atol=1e-10)
+
+    # Subtract the radial component; only the tangential remainder must vanish.
+    radial_coefficient = np.sum(result * control_points) / np.sum(control_points**2)
+    assert np.allclose(result - radial_coefficient * control_points, 0, atol=1e-10)
+    # The energy decreases when the circle shrinks, so the gradient points radially outward.
+    assert radial_coefficient > 0
 
 
 def test_derivative_of_curvature_energy_wrt_control_points_finite_difference(
