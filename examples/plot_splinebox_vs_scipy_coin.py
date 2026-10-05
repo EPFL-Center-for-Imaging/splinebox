@@ -3,7 +3,7 @@ Comparison splinebox and scipy: contour approximation
 -----------------------------------------------------
 
 This example compares ``splinebox`` and ``scipy`` when trying to approximate a contour/shape
-with a closed spline with a fixe number of control points.
+with a closed spline with a fixed number of control points.
 """
 
 # sphinx_gallery_thumbnail_number = 4
@@ -47,8 +47,7 @@ contour = contour[:-1]
 
 # %%
 # Our goal is to fit a cubic B-spline with M control points to
-# the contour. We will first use splinbox to acchive this and then
-# use scipy.
+# the contour. We will first use splinbox and then scipy.
 M = 9
 
 spline = splinebox.Spline(M=M, basis_function=splinebox.B3(), closed=True)
@@ -73,13 +72,13 @@ k = 3
 
 # %%
 # To get a spline with a specific number of control points in scipy
-# we have to precalculate the parameters values ``t`` for the knots and the parameter values ``u``
+# we have to pre-calculate the parameters values ``t`` for the knots and the parameter values ``u``
 # for the data points. It is important that we account for the periodicity and padding of the knots.
 t = np.arange(-k, M + k + 1)
 u = np.linspace(0, M, N + 1)[:-1]
 
 # %%
-# When constructinc the spline using ``splprep`` we have to specify the oder of the basis spline,
+# When constructing the spline using ``splprep`` we have to specify the order of the basis spline,
 # the ``u`` and ``t`` we just computed, and the periodicity. Since we don't want to smooth our fit
 # but instead regularize it by fixing the number of control points we need to set ``s=0`` and
 # ``task=-1``.
