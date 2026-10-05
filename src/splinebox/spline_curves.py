@@ -128,7 +128,7 @@ class Spline:
 
     >>> spline.knots = np.array([[1, 1], [2, 2], [3, 3], [4, 4], [5, 5]])
 
-    Define a set of parameter value where we want to evaluate the spline
+    Define a set of parameter values where we want to evaluate the spline
 
     >>> t = np.linspace(0, 5, 11)
     >>> t
@@ -450,7 +450,7 @@ class Spline:
         diff = abs(a - b)
         return min(diff, self.M - diff)
 
-    def _gauss_legendra_quadrature_for_h123(self, func, kwargs):
+    def _gauss_legendre_quadrature_for_h123(self, func, kwargs):
         upper_bound = self.M if self.closed else self.M - 1
         segments = np.arange(
             0,
@@ -559,7 +559,7 @@ class Spline:
                             if span_ln >= support:
                                 continue
 
-                            res = self._gauss_legendra_quadrature_for_h123(func, {"l": l, "k": k, "m": m, "n": n})
+                            res = self._gauss_legendre_quadrature_for_h123(func, {"l": l, "k": k, "m": m, "n": n})
                             for idx in set(itertools.permutations((i0, i1, i2, i3))):
                                 self._cached_h1[idx] = res
         return self._cached_h1
@@ -593,7 +593,7 @@ class Spline:
                     if span >= support:
                         continue
 
-                    res = self._gauss_legendra_quadrature_for_h123(func, {"l": l, "k": k})
+                    res = self._gauss_legendre_quadrature_for_h123(func, {"l": l, "k": k})
                     self._cached_h2[i, j] = res
                     self._cached_h2[j, i] = res
         return self._cached_h2
@@ -627,7 +627,7 @@ class Spline:
                     if span >= support:
                         continue
 
-                    res = self._gauss_legendra_quadrature_for_h123(func, {"l": l, "k": k})
+                    res = self._gauss_legendre_quadrature_for_h123(func, {"l": l, "k": k})
                     self._cached_h3[i, j] = res
                     self._cached_h3[j, i] = res
         return self._cached_h3
@@ -644,12 +644,12 @@ class Spline:
         representing the spline that can be saved as a json.
         This is implemented separately from :meth:`splinebox.spline_curves.Spline.to_json`
         to allow the :class:`splinebox.spline_curves.HermiteSpline` to inherit this
-        conversion only adding the addiontion tangents.
+        conversion only adding the additional tangents.
 
-        Paramters
+        Parameters
         ---------
         version : int
-            The version of the convertion for future compatibility.
+            The version of the conversion for future compatibility.
 
         Returns
         -------
@@ -755,7 +755,7 @@ class Spline:
         -------
         drawing : numpy array
             A 2D numpy array of float values.
-            The values indicates the following:
+            The values indicate the following:
             0.0 -> pixel centre lies outside the closed spline.
             0.5 -> pixel centre lies on the spline.
             1.0 -> pixel centre lies inside the spline.
@@ -928,7 +928,7 @@ class Spline:
         points : numpy.ndarray
             The data points that should be fit.
         boundary_condition : str
-            Specifies how to hand the ends of open splines.
+            Specifies how to handle the ends of open splines.
             Can be one of the following:
             'free' (default): No restrictions.
             'clamped': First derivative is zero at the ends.
@@ -1050,9 +1050,9 @@ class Spline:
     def arc_length(self, stop=None, start=0):
         """
         Compute the arc length of the spline between
-        the two parameter values specified. If no value for start is give,
+        the two parameter values specified. If no value for start is given,
         start from the beginning of the spline.
-        If no value for stop is give, go until the end of the spline.
+        If no value for stop is given, go until the end of the spline.
         When arrays with multiple values are given for start and/or stop,
         an array with all of the arc lengths is returned.
 
@@ -1080,7 +1080,7 @@ class Spline:
         >>> spline.arc_length(M-1)  # doctest: +NUMBER
         17.03
 
-        Arc length between the thrid and fourth knot:
+        Arc length between the third and fourth knot:
 
         >>> spline.arc_length(2, 3)  # doctest: +NUMBER
         3.08
@@ -1140,7 +1140,7 @@ class Spline:
         self, s, current_value, lower_bound, upper_bound, intermediate_results=None, atol=1e-4
     ):
         """
-        Convert the given arc length s on the curve to a value in parameters space.
+        Convert the given arc length s on the curve to a value in parameter space.
         This is done recursively, i.e. check if the point is before or after halfway
         and repeat. It uses binary search.
 
@@ -1153,7 +1153,7 @@ class Spline:
         lower_bound : float
             Lower limit in parameter space.
         upper_bound : float
-            Upper limit in parameters space.
+            Upper limit in parameter space.
         intermediate_results : list
             A list where all computed length parameter pairs are stored.
             This can be used to initialize subsequent conversions more efficiently.
@@ -1163,7 +1163,7 @@ class Spline:
         Returns
         -------
         t : float
-            The paramters value for the given length `s`.
+            The parameter value for the given length `s`.
         """
         midpoint = lower_bound + (upper_bound - lower_bound) / 2
         midpoint_length = current_value + self.arc_length(lower_bound, midpoint)
@@ -1183,19 +1183,19 @@ class Spline:
 
     def arc_length_to_parameter(self, s, atol=1e-4):
         """
-        Convert the arc length `s` to the coresponding value in parameter space.
+        Convert the arc length `s` to the corresponding value in parameter space.
 
         Parameters
         ----------
         s : float or np.array
             Length on curve.
         atol : float
-            The ablsolute error tolerance.
+            The absolute error tolerance.
 
-        Retruns
+        Returns
         -------
         parameter : float or numpy array of floats
-            The parameter value whos arc length distance is :code:`s` from the
+            The parameter value whose arc length distance is :code:`s` from the
             start of the spline.
 
         Examples
@@ -1311,7 +1311,7 @@ class Spline:
         Parameters
         ----------
         t : float or numpy array
-            The paramter value(s) at which the curvature
+            The parameter value(s) at which the curvature
             should be calculated.
 
         Returns
@@ -1391,7 +1391,7 @@ class Spline:
 
         >>> normal = spline.normal(0.5)
 
-        Let's, plot the spline and our normal.
+        Let's plot the spline and our normal.
 
         >>> t = np.linspace(0, spline.M - 1, 1000)
         >>> vals = spline(t)
@@ -1416,7 +1416,7 @@ class Spline:
             nan_mask = np.isnan(first_deriv)
             if np.any(nan_mask):
                 raise RuntimeError(
-                    f"The normals cannot be compute for t={t[np.any(nan_mask, axis=-1)]} because the spline is not differentiable at those positions. Consider using the `shift` to avoid this problem."
+                    f"The normals cannot be computed for t={t[np.any(nan_mask, axis=-1)]} because the spline is not differentiable at those positions. Consider using the `shift` to avoid this problem."
                 )
 
             normals = (np.array([[0, -1], [1, 0]]) @ first_deriv.T).T
@@ -1530,7 +1530,7 @@ class Spline:
 
         t, single_value = self._convert_to_array(t)
 
-        # Sort t and keep the indicies so the original order can be restored
+        # Sort t and keep the indices so the original order can be restored
         sort_indices = np.argsort(t)
         t = t[sort_indices]
 
@@ -1543,7 +1543,7 @@ class Spline:
         nan_mask = np.isnan(first_derivative)
         if np.any(nan_mask):
             raise RuntimeError(
-                f"The frame cannot be compute for t={t[np.any(nan_mask, axis=-1)]} because the spline is not differentiable at those positions. Consider using the `shift` to avoid this problem."
+                f"The frame cannot be computed for t={t[np.any(nan_mask, axis=-1)]} because the spline is not differentiable at those positions. Consider using the `shift` to avoid this problem."
             )
 
         frame = np.zeros((len(t), 3, 3))
@@ -1559,7 +1559,7 @@ class Spline:
             nan_mask = np.isnan(second_derivative)
             if np.any(nan_mask):
                 raise RuntimeError(
-                    f"The Frenet frame cannot be compute for t={t[np.any(nan_mask, axis=-1)]} because the spline is not twice differentiable at those positions. Consider using `shift` or the Bishop frame."
+                    f"The Frenet frame cannot be computed for t={t[np.any(nan_mask, axis=-1)]} because the spline is not twice differentiable at those positions. Consider using `shift` or the Bishop frame."
                 )
 
             frame[:, 2] = np.cross(first_derivative, second_derivative)
@@ -1619,7 +1619,7 @@ class Spline:
                         + n * np.dot(n, frame[i - 1, 2]) * (1 - np.cos(phi))
                     )
         else:
-            raise ValueError(f"Unkown method '{method}' for moving frame.")
+            raise ValueError(f"Unknown method '{method}' for moving frame.")
 
         # Restore to the original order of t
         frame = frame[0] if single_value else frame[np.argsort(sort_indices)]
@@ -1708,7 +1708,7 @@ class Spline:
         if not self.closed and (minimum < 0 or maximum > self.M - 1):
             mask = (indices >= 0) & (indices <= (self.M - 1 + 2 * self.pad))
 
-            # Mask row that are completely empty
+            # Mask rows that are completely empty
             row_mask = np.any(mask, axis=1)
             data = data[row_mask]
             indices = indices[row_mask]
@@ -1736,7 +1736,7 @@ class Spline:
 
     def __call__(self, t, derivative=0):
         """
-        Evalute the spline or one of its derivatives at
+        Evaluate the spline or one of its derivatives at
         parameter value(s) `t`.
 
         Parameters
@@ -1759,7 +1759,7 @@ class Spline:
         >>> spline(2.3)
         array([2.349, 0.143])
 
-        Or we can evaluate it a multiple positions at once:
+        Or we can evaluate it at multiple positions at once:
         >>> t = np.linspace(0, spline.M - 1, 3)
         >>> spline(t)
         array([[-0. , -0. ],
@@ -1780,7 +1780,7 @@ class Spline:
 
     def derivative_wrt_control_points(self, t, derivative=0):
         r"""
-        Computes the partial derivatives of the spline or one of it's derivatives with respect to the control points.
+        Computes the partial derivatives of the spline or one of its derivatives with respect to the control points.
 
         This is just a wrapper around the :meth:`splinebox.spline_curves.Spline.basis_matrix` since it can analytically be shown that
         the derivatives with respect to the control points are equal to the basis matrix.
@@ -2047,7 +2047,7 @@ class Spline:
         points : numpy.array
             Array with the coordinates of one or multiple point(s).
         return_t : bool
-            Whether to return the paramter t of the spline.
+            Whether to return the parameter t of the spline.
             `spline(t)` gives the location on the spline
             closest to the point.
 
@@ -2195,7 +2195,7 @@ class Spline:
             orthogonal to the tangent at `t[0]`. Ignored for the Frenet frame. If
             None, a suitable initial vector is computed automatically. Default is None.
         shift : float or None
-            The shift applied to any t value that fall on non-differentiable positions.
+            The shift applied to any t value that falls on non-differentiable positions.
             Default is 1e-10.
 
         Returns
@@ -2214,7 +2214,7 @@ class Spline:
         NotImplementedError
             If the spline is not defined in 3D, as meshes are only supported for 3D splines.
         RuntimeError
-            If the the control points of the spline are not set.
+            If the control points of the spline are not set.
 
         Notes
         -----
@@ -2250,12 +2250,12 @@ class Spline:
 
         >>> points, connectivity = spline.mesh(radius=0.5, step_t=0.1, step_angle=10, mesh_type="surface")
 
-        The number of 3D point in the mesh depends on the steps in t and angle.
+        The number of 3D points in the mesh depends on the steps in t and angle.
 
         >>> points.shape
         (1116, 3)
 
-        The mesh consist of triangles all defined by three points.
+        The mesh consists of triangles all defined by three points.
 
         >>> connectivity.shape
         (2160, 3)
@@ -2531,7 +2531,7 @@ class HermiteSpline(Spline):
     Class for the construction of a Hermite spline.
     It inherits from :class:`splinebox.spline_curves.Spline`.
     Here, we only document the additional methods and attributes.
-    For information on the inherited methods and attributes refere to the
+    For information on the inherited methods and attributes refer to the
     documentation of :class:`splinebox.spline_curves.Spline`.
 
     Parameters
@@ -2558,7 +2558,7 @@ class HermiteSpline(Spline):
     def _check_control_points_and_tangents(self):
         """
         Most methods require control points and tangents to be set before they
-        can be used. This helper function checks if control pointa and tangents have been
+        can be used. This helper function checks if control points and tangents have been
         set.
         """
         self._check_control_points()
@@ -2723,7 +2723,7 @@ class HermiteSpline(Spline):
         if not self.closed and (minimum < 0 or maximum > self.M - 1):
             mask = (indices >= 0) & (indices <= (self.M - 1 + 2 * self.pad))
 
-            # Mask row that are completely empty
+            # Mask rows that are completely empty
             row_mask = np.any(mask, axis=1)
             data0 = data0[row_mask]
             data1 = data1[row_mask]
@@ -2835,7 +2835,7 @@ class HermiteSpline(Spline):
 def _prepared_dict_for_constructor(data):
     """
     Helper function that processes the dictionaries loaded from
-    json files. It ensure all of the values are valid and prepares
+    json files. It ensures all of the values are valid and prepares
     a dictionary that can be passed to the constructor using `**`.
 
     Parameters
@@ -2896,7 +2896,7 @@ def splines_to_json(path, splines, version=1):
 
     >>> splinebox.splines_to_json("splines.json", [spline1, spline2])
 
-    Then we can load them back into python.
+    Then we can load them back into Python.
 
     >>> loaded_splines = splinebox.splines_from_json("splines.json")
     >>> loaded_splines[0] == spline1
@@ -2942,7 +2942,7 @@ def splines_from_json(path):
 
     >>> splinebox.splines_to_json("splines.json", [spline1, spline2])
 
-    Then we can load them back into python.
+    Then we can load them back into Python.
 
     >>> loaded_splines = splinebox.splines_from_json("splines.json")
     >>> loaded_splines[0] == spline1

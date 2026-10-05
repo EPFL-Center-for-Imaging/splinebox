@@ -100,7 +100,7 @@ This can be written more compactly using matrices assuming :math:`\Delta t_i` is
 Internal energy
 ---------------
 
-The internal energy acts as a regularisation term that controls the shape and parameterization of the spline.
+The internal energy acts as a regularisation term that controls the shape and parameterisation of the spline.
 Different choices of internal energy can be used depending on which geometric properties should be encouraged or penalised.
 
 In this implementation, we use the curvilinear reparameterisation energy proposed by [Jacob2004]_.

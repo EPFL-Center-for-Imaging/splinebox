@@ -1,7 +1,7 @@
 Data approximation
 ==================
 
-In order to build :math:`r`, one can either use a pre-defined sequence of control points :math:`\{ c[k] \}_{k=0,...,M-1}` or of knots :math:`\{ n[k] \}_{k=0,...,M-1}`. Alternatively, one can also attempt to retreive the control points that best approximate a set of data points, as in the classical spline approximation setting.
+In order to build :math:`r`, one can either use a pre-defined sequence of control points :math:`\{ c[k] \}_{k=0,...,M-1}` or of knots :math:`\{ n[k] \}_{k=0,...,M-1}`. Alternatively, one can also attempt to retrieve the control points that best approximate a set of data points, as in the classical spline approximation setting.
 
 The problem is framed as follows. We consider a set :math:`\{ p[i] \}_{i=0,...,N-1}` of :math:`N` points to be approximated with the spline model :ref:`(1) <theory:eq:1>` of :math:`M` control points. Hereafter, we will assume a periodic spline model, but a similar derivation can easily be done for the non-periodic case.
 
@@ -61,14 +61,14 @@ Boundary conditions
 -------------------
 
 Open splines are padded with additional control points at the ends (:ref:`getting_started/padding:Padding`).
-They are located at parameters values :math:`t = -1, -2, \ldots` and :math:`t = M, M+1, \ldots`.
-Since the data points are only positions on the parameters interval :math:`[0, M-1]`, the additional control points can cause erratic behavior of the spline when fitting noisy data.
+They are located at parameter values :math:`t = -1, -2, \ldots` and :math:`t = M, M+1, \ldots`.
+Since the data points are only positions on the parameter interval :math:`[0, M-1]`, the additional control points can cause erratic behavior of the spline when fitting noisy data.
 To control this behaviour, one of the following boundary conditions can be enforced:
 
 * *clamped*: :math:`r'(0)=0` and :math:`r'(M-1)=0`
 * *natural*: :math:`r''(0)=0` and :math:`r''(M-1)=0`
 
-With out loss of generality, we will describe how to fit a spline with the *clamped* boundary condition.
+Without loss of generality, we will describe how to fit a spline with the *clamped* boundary condition.
 
 The spline can be written as:
 
@@ -89,14 +89,14 @@ The boundary condition allows us to express the first control point as a combina
 
 *Note*: We assume that :math:`\varphi'(p) \neq 0`.
 
-Plugging this into equation :ref:`(7) <approx:eq:7>` and grouping the summand by control point yields:
+Plugging this into equation :ref:`(7) <approx:eq:7>` and grouping the summands by control point yields:
 
 .. math::
    :name: approx:eq:8
 
    r(t) = \sum_{k=-p+1}^{M-1+p} c[k] (\varphi(t-k) - \frac{\varphi'(-k)}{\varphi'(p)}\varphi(t+p))
 
-*Note*: :math:`\varphi(t+p)` will be zero for most :math:`t` since the support of the basis function :math:`\varphi` end in the interval :math:`[p, p+1)`.
+*Note*: :math:`\varphi(t+p)` will be zero for most :math:`t` since the support of the basis function :math:`\varphi` ends in the interval :math:`[p, p+1)`.
 
 We can do the same for the last control point, starting from equation :ref:`(8) <approx:eq:8>`:
 
@@ -105,9 +105,9 @@ We can do the same for the last control point, starting from equation :ref:`(8) 
    r'(M-1) &= 0 \\
          0 &= \sum_{k=-p+1}^{M-1+p} c[k] (\varphi'(M-1-k) - \frac{\varphi'(-k)}{\varphi'(p)}\varphi'(M-1+p)) \\
 
-Because of the way we choose :math:`p` and the fact that :math:`M > 1`, we know that is outside the support of :math:`\varphi`
+Because of the way we choose :math:`p` and the fact that :math:`M > 1`, we know that it is outside the support of :math:`\varphi`
 and :math:`\varphi'(M-1+p)=0`.
-Therefor we get:
+Therefore, we get:
 
 .. math::
 

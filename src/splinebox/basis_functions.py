@@ -175,7 +175,7 @@ class BasisFunction:
                [2., 2.],
                [1., 3.]])
 
-        For non-interpolating spline the returned control points are different.
+        For non-interpolating splines the returned control points are different.
 
         >>> b3 = splinebox.basis_functions.B3()
         >>> b3.filter_symmetric(knots)
@@ -183,7 +183,7 @@ class BasisFunction:
                [1.5 , 1.  ],
                [0.75, 4.  ]])
 
-        We can confirm that the returned control points indeed results in the second knot provided.
+        We can confirm that the returned control points indeed result in the second knot provided.
 
         >>> control_points = b3.filter_symmetric(knots)
         >>> b3(-1) * control_points[0] + b3(0) * control_points[1] + b3(1) * control_points[2]
@@ -213,7 +213,7 @@ class BasisFunction:
 
         Examples
         --------
-        For interpolating basis functions the is the identity.
+        For interpolating basis functions the filter is the identity.
 
         >>> knots = np.array([[4, 3], [2, 2], [1, 3]])
         >>> b1 = splinebox.basis_functions.B1()
@@ -222,7 +222,7 @@ class BasisFunction:
                [2., 2.],
                [1., 3.]])
 
-        For non-interpolating spline the returned control points are different.
+        For non-interpolating splines the returned control points are different.
 
         >>> b3 = splinebox.basis_functions.B3()
         >>> b3.filter_periodic(knots)
@@ -230,13 +230,13 @@ class BasisFunction:
                [ 1.667,  1.333],
                [-0.333,  3.333]])
 
-        We can confirm that the returned control points indeed results in the knots provided.
+        We can confirm that the returned control points indeed result in the knots provided.
 
         >>> control_points = b3.filter_periodic(knots)
         >>> b3(-1) * control_points[0] + b3(0) * control_points[1] + b3(1) * control_points[2]
         array([2., 2.])
 
-        For the other two knots we need to take the preiodicity into account.
+        For the other two knots we need to take the periodicity into account.
 
         >>> b3(-1) * control_points[-1] + b3(0) * control_points[0] + b3(1) * control_points[1]
         array([4., 3.])
@@ -250,10 +250,10 @@ class BasisFunction:
         """
         This function is needed for local refinement (see [Badoual2016]_).
         Basis splines with the 'local refinement property' can be expressed as a
-        linear combination of themselfs. This is useful when you iteratively want
+        linear combination of themselves. This is useful when you iteratively want
         to refine your spline with additional knots in a given interval.
         This creates a non-uniform spline, which is not supported by splinebox.
-        We keep it here incase we ever decide to support non-uniform splines in the
+        We keep it here in case we ever decide to support non-uniform splines in the
         future.
         """
         raise NotImplementedError(BasisFunction._unimplemented_message)
@@ -1092,7 +1092,7 @@ class CubicHermite(BasisFunction):
 
     def h31_autocorrelation(self, i, j, M):  # pragma: no cover
         """
-        Derived by V. Uhlman during her PhD.
+        Derived by V. Uhlmann during her PhD.
         """
         warnings.warn("This function is untested.", stacklevel=2)
         if self.support > M:
@@ -1109,7 +1109,7 @@ class CubicHermite(BasisFunction):
 
     def h31_periodic_autocorrelation(self, n, M):  # pragma: no cover
         """
-        Derived by V. Uhlman during her PhD.
+        Derived by V. Uhlmann during her PhD.
         """
         warnings.warn("This function is untested.", stacklevel=2)
         if self.support > M:
@@ -1127,7 +1127,7 @@ class CubicHermite(BasisFunction):
 
     def h32_autocorrelation(self, i, j, M):  # pragma: no cover
         """
-        Derived by V. Uhlman during her PhD.
+        Derived by V. Uhlmann during her PhD.
         """
         warnings.warn("This function is untested.", stacklevel=2)
         if self.support > M:
@@ -1144,7 +1144,7 @@ class CubicHermite(BasisFunction):
 
     def h32_periodic_autocorrelation(self, n, M):  # pragma: no cover
         """
-        Derived by V. Uhlman during her PhD.
+        Derived by V. Uhlmann during her PhD.
         """
         warnings.warn("This function is untested.", stacklevel=2)
         if self.support > M:
@@ -1162,7 +1162,7 @@ class CubicHermite(BasisFunction):
 
     def h3_crosscorrelation(self, i, j, M):  # pragma: no cover
         """
-        Derived by V. Uhlman during her PhD.
+        Derived by V. Uhlmann during her PhD.
         """
         warnings.warn("This function is untested.", stacklevel=2)
         if self.support > M:
@@ -1184,7 +1184,7 @@ class CubicHermite(BasisFunction):
 
     def h3_periodic_crosscorrelation(self, n, M):  # pragma: no cover
         """
-        Derived by V. Uhlman during her PhD.
+        Derived by V. Uhlmann during her PhD.
         """
         warnings.warn("This function is untested.", stacklevel=2)
         if self.support > M:
@@ -1441,8 +1441,8 @@ def _multinomial(
 def inventory():
     """
     This function returns a dictionary with all
-    implemented basis function.
-    The keys are the names of the basis function and the
+    implemented basis functions.
+    The keys are the names of the basis functions and the
     values are the classes.
 
     Examples
@@ -1474,7 +1474,7 @@ def basis_function_from_name(name, **kwargs):
 
     Returns
     -------
-    basis_function : Object of one of the subcases of :class:`splinebox.basis_functions.BasisFunction`.
+    basis_function : Object of one of the subclasses of :class:`splinebox.basis_functions.BasisFunction`.
         An instance of a subclass of splinebox.basis_functions.BasisFunction,
         initialized according to the provided name and keyword arguments.
 

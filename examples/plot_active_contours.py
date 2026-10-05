@@ -74,7 +74,7 @@ plt.show()
 # %%
 # Next, we will fit the spline around the head using the active contour approach.
 # The control points are updated in every iteration minimising the energy function.
-# The energy function consist of two terms:
+# The energy function consists of two terms:
 #   (1) Image energy: measures the pixel values below the spline.
 #   (2) Internal energy: penalises curvy spline
 # Both energy terms can be differentiated analytically with respect to the

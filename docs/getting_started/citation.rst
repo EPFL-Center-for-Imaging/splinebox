@@ -22,4 +22,4 @@ you can find out by running:
 .. code-block:: python
 
    import splinebox
-   print(splinbox.__version__)
+   print(splinebox.__version__)

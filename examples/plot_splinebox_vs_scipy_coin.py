@@ -47,7 +47,7 @@ contour = contour[:-1]
 
 # %%
 # Our goal is to fit a cubic B-spline with M control points to
-# the contour. We will first use splinbox and then scipy.
+# the contour. We will first use splinebox and then scipy.
 M = 9
 
 spline = splinebox.Spline(M=M, basis_function=splinebox.B3(), closed=True)
@@ -72,7 +72,7 @@ k = 3
 
 # %%
 # To get a spline with a specific number of control points in scipy
-# we have to pre-calculate the parameters values ``t`` for the knots and the parameter values ``u``
+# we have to pre-calculate the parameter values ``t`` for the knots and the parameter values ``u``
 # for the data points. It is important that we account for the periodicity and padding of the knots.
 t = np.arange(-k, M + k + 1)
 u = np.linspace(0, M, N + 1)[:-1]
