@@ -33,9 +33,9 @@ SplineBox
        <h1 style="margin-bottom: 0.2rem">SplineBox</h1>
        <h2 style="margin-top: 0.2rem">Take control of your splines</h2>
        <p style="margin-right: 3em">
-         SplineBox is an open-source python package for anyone trying to fit splines.
+         SplineBox is an open-source Python package for anyone trying to fit splines.
          It offers a wide variety of spline types including Hermite splines and makes
-         it easy to specify custom loss function to control spline properties such as
+         it easy to specify custom loss functions to control spline properties such as
          smoothness.
        </p>
 
@@ -97,7 +97,7 @@ SplineBox
        </svg>
        <p>
          <strong> Custom loss functions </strong> <br/>
-         Compatibility with python optimization frame works makes it easy to use custom loss functions for fitting.
+         Compatibility with Python optimisation frameworks makes it easy to use custom loss functions for fitting.
        </p>
      </div>
 
@@ -117,7 +117,7 @@ SplineBox
        </svg>
        <p>
          <strong> High performance </strong> <br/>
-         Just-in-time compilation allows us to match and in some cases overcome the performance of SciPy's fortran based splines.
+         Just-in-time compilation allows us to match and in some cases overcome the performance of SciPy's Fortran-based splines.
        </p>
      </div>
 
@@ -185,7 +185,7 @@ SplineBox
      .. raw:: html
 
        <p style="margin-left: 3em">
-         Scipy requires you to pre-compute the parameter values for all knots and data points
+         SciPy requires you to pre-compute the parameter values for all knots and data points
          accounting for padding and periodicity of the data.
          This can be confusing and difficult to do.
        </p>
@@ -207,14 +207,14 @@ SplineBox
     .. raw:: html
 
       <p>
-        We compare the performance to splinbox to SciPy's splines
+        We compare the performance of splinebox to SciPy's splines
         on three main tasks:
         <ul>
-        <li>Spline creation give a set of knots</li>
+        <li>Spline creation given a set of knots</li>
         <li>Evaluation of a spline at a given parameter value</li>
         <li>Data approximation using least-squares fitting</li>
         </ul>
-        Splinebox out performs SciPy by approximately two orders of magnitude on the first task, achieves comparable performance on the second task, and is out performed for least-squares fitting of splines.
+        Splinebox outperforms SciPy by approximately two orders of magnitude on the first task, achieves comparable performance on the second task, and is outperformed for least-squares fitting of splines.
         <a href="./_auto_examples/plot_performance_comparison_with_scipy.html">See detailed comparison →</a>
       </p>
 

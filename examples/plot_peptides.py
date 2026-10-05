@@ -75,27 +75,53 @@ plt.show()
 # %%
 # 5. Refine Spline
 # ----------------
+# We refine the spline by minimising an energy function that combines the image
+# energy (the mean pixel value under the spline) and an internal energy that
+# penalises curvy splines. Instead of using a derivative-free optimiser, we
+# supply the analytic derivatives of the energy with respect to the control points,
+# which splinebox computes with ``derivative_wrt_control_points`` and
+# ``derivative_of_norm_squared_wrt_control_points``.
+# The image energy term also requires the spatial gradients of the image.
+# We precompute them on a lightly Gaussian smoothed version of the image to
+# reduce the effect of noise. Note that we interpolate the pixel values on a
+# float version of the image because ``map_coordinates`` truncates interpolated
+# values to integers for integer input images.
+SIGMA = 1
+img_gy = scipy.ndimage.gaussian_filter(img.astype(float), SIGMA, order=[1, 0], mode="nearest")
+img_gx = scipy.ndimage.gaussian_filter(img.astype(float), SIGMA, order=[0, 1], mode="nearest")
 
 
 def loss_function(control_points, alpha):
     spline.control_points = control_points.reshape((-1, 2))
     coords = spline(t)
-    pixel_values = scipy.ndimage.map_coordinates(img, coords.T)
+    pixel_values = scipy.ndimage.map_coordinates(img.astype(float), coords.T)
     image_energy = np.mean(pixel_values)
-    internal_energy = np.mean(spline(t, derivative=2) ** 2)
+    internal_energy = np.mean(np.sum(spline(t, derivative=2) ** 2, axis=1))
     energy = -1 * image_energy + alpha * internal_energy
     return energy
 
 
+def jacobian(control_points, alpha):
+    spline.control_points = control_points.reshape((-1, 2))
+    coords = spline(t)
+    dy = scipy.ndimage.map_coordinates(img_gy, coords.T, order=1)
+    dx = scipy.ndimage.map_coordinates(img_gx, coords.T, order=1)
+    img_gradients = np.stack([dy, dx], axis=-1)
+    image_energy_gradients = spline.derivative_wrt_control_points(t).T @ img_gradients / len(t)
+    internal_energy_gradients = np.mean(spline.derivative_of_norm_squared_wrt_control_points(t, derivative=2), axis=0)
+    return (-image_energy_gradients + alpha * internal_energy_gradients).flatten()
+
+
 initial_control_points = initial_spline.control_points
 spline = initial_spline.copy()
-scipy.optimize.minimize(
+result = scipy.optimize.minimize(
     loss_function,
     initial_control_points.flatten(),
-    args=(0.3,),
-    method="Powell",
-    tol=0.01,
+    args=(0.04,),
+    method="L-BFGS-B",
+    jac=jacobian,
 )
+spline.control_points = result.x.reshape((-1, 2))
 
 vals = spline(t)
 knots = spline.knots

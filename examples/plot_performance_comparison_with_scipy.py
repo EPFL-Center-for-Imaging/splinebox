@@ -142,7 +142,7 @@ for periodicity in ["closed", "open"]:
     plt.show()
 
 # %%
-# The results show that ``splinbox`` outperforms ``scipy`` in all condition
+# The results show that ``splinebox`` outperforms ``scipy`` in all conditions
 # for the task of creating a spline from a given set of knots.
 
 # %%

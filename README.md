@@ -1,7 +1,7 @@
 <img style="float: right;" src="https://imaging.epfl.ch/resources/logo-for-gitlab.svg">
 
 # splinebox
-A python package for fitting splines.
+A Python package for fitting splines.
 Developed by the [EPFL Center for Imaging](https://imaging.epfl.ch/) as part of a collaboration with the [Uhlmann Group at EMBL-EBI](https://www.ebi.ac.uk/research/uhlmann/) in Feb 2024.
 
 [![Documentation Status](https://readthedocs.org/projects/splinebox/badge/?version=latest)](https://splinebox.readthedocs.io/en/latest/?badge=latest)
@@ -15,7 +15,7 @@ Developed by the [EPFL Center for Imaging](https://imaging.epfl.ch/) as part of 
 ## Features
 * Flexible spline fitting for various applications.
 * Support for many spline types in any dimensionality.
-* High-perfomance implementation in Python
+* High-performance implementation in Python.
 * Extensive [documentation](https://splinebox.readthedocs.io/en/latest/?badge=latest) with [examples](https://splinebox.readthedocs.io/en/latest/_auto_examples/index.html)
 
 ## Installation
@@ -48,7 +48,7 @@ plt.show()
 
 ## Support
 
-If you encounter any problems, please [file and issue](https://github.com/EPFL-Center-for-Imaging/splinebox/issues/new) describing the issue and include minimal example to reproduce the issue.
+If you encounter any problems, please [file an issue](https://github.com/EPFL-Center-for-Imaging/splinebox/issues/new) describing the issue and include a minimal example to reproduce the issue.
 
 ## Contributing
 
@@ -57,12 +57,12 @@ We welcome contributions! Before you submit a pull request, please ensure that t
 ## Citing splinebox
 
 If you use splinebox in the context of scientific publication, please cite it as follows.
-Note, that you will have to fill in the version yourself. If you are unsure what version you are running,
+Note that you will have to fill in the version yourself. If you are unsure what version you are running,
 you can find out by running
 
 ```python
 import splinebox
-print(splinbox.__version__)`
+print(splinebox.__version__)
 ```
 
 BibTeX:

@@ -85,7 +85,7 @@ class MultivariateSpline:
         to the control point grid, and the last axis is the codomain dimension.
         Control points can be supplied directly as a NumPy array, or built with
         helpers such as :func:`splinebox.multivariate.tensor_product` for
-        separable geometries. If ``None``, the spline must be initialized later
+        separable geometries. If ``None``, the spline must be initialised later
         via ``knots`` or ``fit``.
     padding_functions : callable or iterable of callables
         Function(s) used to pad knots for open splines. The default is
@@ -282,7 +282,7 @@ class MultivariateSpline:
     def _get_tval(self, t, variate):
         """
         This is a helper method for `__call__`. It is its own method
-        to allow :class:`splinebox.spline_curves. HermiteSpline` to
+        to allow :class:`splinebox.spline_curves.HermiteSpline` to
         overwrite the `__call__` method using `_get_tval`.
         It is also used in :meth:`splinebox.spline_curves.Spline.fit`
         """
@@ -316,7 +316,7 @@ class MultivariateSpline:
         """
         Fill the wrapped_tval array whenever a value t
         is affected by the basis function at knot k, taking
-        into account that basis functions at the begging/end
+        into account that basis functions at the beginning/end
         affect positions on the opposite end for closed splines.
         """
         outside_tvalue = half_support + 1

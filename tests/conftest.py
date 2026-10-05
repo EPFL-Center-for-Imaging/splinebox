@@ -163,6 +163,16 @@ def twice_differentiable_spline_curve(twice_differentiable_basis_function, M, cl
     return splinebox.spline_curves.Spline(M, twice_differentiable_basis_function, closed=closed)
 
 
+@pytest.fixture
+def reparametrization_energy_compatible_spline_curve(reparametrization_energy_compatible_basis_function, M):
+    return splinebox.spline_curves.Spline(M, reparametrization_energy_compatible_basis_function, closed=False)
+
+
+@pytest.fixture
+def curvature_energy_compatible_spline_curve(curvature_energy_compatible_basis_function, M):
+    return splinebox.spline_curves.Spline(M, curvature_energy_compatible_basis_function, closed=False)
+
+
 @pytest.fixture(params=[0, 1, 2])
 def derivative(request):
     return request.param
@@ -308,6 +318,16 @@ def initialized_twice_differentiable_2D_spline_curve(twice_differentiable_spline
 @pytest.fixture
 def initialized_twice_differentiable_3D_spline_curve(twice_differentiable_spline_curve, initialize_3D_spline_curve):
     return initialize_3D_spline_curve(twice_differentiable_spline_curve)
+
+
+@pytest.fixture
+def initialized_non_hermite_spline_curve(non_hermite_spline_curve, initialize_spline_curve):
+    return initialize_spline_curve(non_hermite_spline_curve)
+
+
+@pytest.fixture
+def initialized_hermite_spline_curve(hermite_spline_curve, initialize_spline_curve):
+    return initialize_spline_curve(hermite_spline_curve)
 
 
 @pytest.fixture

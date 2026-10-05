@@ -72,7 +72,7 @@ mesh.cell_data["curvature"] = spline.curvature(t[:-1] + np.diff(t))
 mesh.plot()
 
 # %%
-# To control the thickness of the the line we can use a mesh
+# To control the thickness of the line we can use a mesh
 
 points, connectivity = spline.mesh(step_t=t[1] - t[0], radius=0.01)
 connectivity = np.hstack((np.full((connectivity.shape[0], 1), 3), connectivity))

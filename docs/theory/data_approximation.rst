@@ -1,7 +1,7 @@
 Data approximation
 ==================
 
-In order to build :math:`r`, one can either use a pre-defined sequence of control points :math:`\{ c[k] \}_{k=0,...,M-1}` or of knots :math:`\{ n[k] \}_{k=0,...,M-1}`. Alternatively, one can also attempt to retreive the control points that best approximate a set of data points, as in the classical spline approximation setting.
+In order to build :math:`r`, one can either use a pre-defined sequence of control points :math:`\{ c[k] \}_{k=0,...,M-1}` or of knots :math:`\{ n[k] \}_{k=0,...,M-1}`. Alternatively, one can also attempt to retrieve the control points that best approximate a set of data points, as in the classical spline approximation setting.
 
 The problem is framed as follows. We consider a set :math:`\{ p[i] \}_{i=0,...,N-1}` of :math:`N` points to be approximated with the spline model :ref:`(1) <theory:eq:1>` of :math:`M` control points. Hereafter, we will assume a periodic spline model, but a similar derivation can easily be done for the non-periodic case.
 
@@ -10,9 +10,9 @@ We obtain an approximation by ensuring that the samples of the spline :math:`r` 
 .. math::
    :name: approx:eq:1
 
-   p[i] = \sum_{k=0}^{M-1}c[k]\phi\left(\frac{Mi}{N}-k\right).
+   p[i] = \sum_{k=0}^{M-1}c[k]\varphi\left(\frac{Mi}{N}-k\right).
 
-Since :math:`\phi` is of finite support, we can re-write :ref:`(1) <approx:eq:1>` as
+Since :math:`\varphi` is of finite support, we can re-write :ref:`(1) <approx:eq:1>` as
 
 .. math::
    :name: approx:eq:2
@@ -25,10 +25,10 @@ with the basis matrix :math:`\mathbf{\Phi}` (size :math:`N \times M`), the contr
    :name: approx:eq:3
 
    \mathbf{\Phi} = \begin{bmatrix}
-    \phi(0) &  \phi(-1) & \dots & \ \phi(-(M-1)) \\
-    \phi\left(\frac{M}{N}\right) &  \phi\left(\frac{M}{N}-1\right) & \dots & \ \phi\left(\frac{M}{N}-(M-1)\right) \\
+    \varphi(0) &  \varphi(-1) & \dots & \ \varphi(-(M-1)) \\
+    \varphi\left(\frac{M}{N}\right) &  \varphi\left(\frac{M}{N}-1\right) & \dots & \ \varphi\left(\frac{M}{N}-(M-1)\right) \\
     \vdots & \vdots & \ddots & \vdots \\
-    \phi\left(\frac{(N-1)M}{N}\right) &  \phi\left(\frac{(N-1)M}{N}-1\right) & \dots & \ \phi\left(\frac{(N-1)M}{N}-(M-1)\right)
+    \varphi\left(\frac{(N-1)M}{N}\right) &  \varphi\left(\frac{(N-1)M}{N}-1\right) & \dots & \ \varphi\left(\frac{(N-1)M}{N}-(M-1)\right)
    \end{bmatrix}
 
 .. math::
@@ -49,7 +49,7 @@ with the basis matrix :math:`\mathbf{\Phi}` (size :math:`N \times M`), the contr
     p[N-1]
    \end{bmatrix}.
 
-The control points :math:`\mathbf{C}` can then be retrieved by finding the least-square best solution that minimizes
+The control points :math:`\mathbf{C}` can then be retrieved by finding the least-square best solution that minimises
 
 .. math::
    :name: approx:eq:6
@@ -61,21 +61,21 @@ Boundary conditions
 -------------------
 
 Open splines are padded with additional control points at the ends (:ref:`getting_started/padding:Padding`).
-They are located at parameters values :math:`t = -1, -2, \ldots` and :math:`t = M, M+1, \ldots`.
-Since the data points are only positions on the parameters interval :math:`[0, M-1]`, the additional control points can cause erratic behavior of the spline when fitting noisy data.
+They are located at parameter values :math:`t = -1, -2, \ldots` and :math:`t = M, M+1, \ldots`.
+Since the data points are only positions on the parameter interval :math:`[0, M-1]`, the additional control points can cause erratic behaviour of the spline when fitting noisy data.
 To control this behaviour, one of the following boundary conditions can be enforced:
 
 * *clamped*: :math:`r'(0)=0` and :math:`r'(M-1)=0`
 * *natural*: :math:`r''(0)=0` and :math:`r''(M-1)=0`
 
-With out loss of generality, we will describe how to fit a spline with the *clamped* boundary condition.
+Without loss of generality, we will describe how to fit a spline with the *clamped* boundary condition.
 
 The spline can be written as:
 
 .. math::
    :name: approx:eq:7
 
-   r(t) = \sum_{k=-p}^{M-1+p}c[k]\Phi(t-k),
+   r(t) = \sum_{k=-p}^{M-1+p}c[k]\varphi(t-k),
 
 where :math:`p` is the amount of padding.
 
@@ -84,40 +84,40 @@ The boundary condition allows us to express the first control point as a combina
 .. math::
 
    r'(0) &= 0 \\
-       0 &= \sum_{k=-p}^{M-1+p}c[k]\Phi'(-k) \\
-   c[-p] &= \sum_{k=-p+1}^{M-1+p} -c[k] \frac{\Phi'(-k)}{\Phi'(p)}
+       0 &= \sum_{k=-p}^{M-1+p}c[k]\varphi'(-k) \\
+   c[-p] &= \sum_{k=-p+1}^{M-1+p} -c[k] \frac{\varphi'(-k)}{\varphi'(p)}
 
-*Note*: We assume that :math:`\Phi'(p) \neq 0`.
+*Note*: We assume that :math:`\varphi'(p) \neq 0`.
 
-Plugging this into equation :ref:`(7) <approx:eq:7>` and grouping the summand by control point yields:
+Plugging this into equation :ref:`(7) <approx:eq:7>` and grouping the summands by control point yields:
 
 .. math::
    :name: approx:eq:8
 
-   r(t) = \sum_{k=-p+1}^{M-1+p} c[k] (\Phi(t-k) - \frac{\Phi'(-k)}{\Phi'(p)}\Phi(t+p))
+   r(t) = \sum_{k=-p+1}^{M-1+p} c[k] (\varphi(t-k) - \frac{\varphi'(-k)}{\varphi'(p)}\varphi(t+p))
 
-*Note*: :math:`\Phi(t+p)` will be zero for most :math:`t` since the support of the basis function :math:`\Phi` end in the interval :math:`[p, p+1)`.
+*Note*: :math:`\varphi(t+p)` will be zero for most :math:`t` since the support of the basis function :math:`\varphi` ends in the interval :math:`[p, p+1)`.
 
 We can do the same for the last control point, starting from equation :ref:`(8) <approx:eq:8>`:
 
 .. math::
 
    r'(M-1) &= 0 \\
-         0 &= \sum_{k=-p+1}^{M-1+p} c[k] (\Phi'(M-1-k) - \frac{\Phi'(-k)}{\Phi'(p)}\Phi'(M-1+p)) \\
+         0 &= \sum_{k=-p+1}^{M-1+p} c[k] (\varphi'(M-1-k) - \frac{\varphi'(-k)}{\varphi'(p)}\varphi'(M-1+p)) \\
 
-Because of the way we choose :math:`p` and the fact that :math:`M > 1`, we know that is outside the support of :math:`\Phi`
-and :math:`\Phi'(M-1+p)=0`.
-Therefor we get:
+Because of the way we choose :math:`p` and the fact that :math:`M > 1`, we know that it is outside the support of :math:`\varphi`
+and :math:`\varphi'(M-1+p)=0`.
+Therefore, we get:
 
 .. math::
 
-          0 &= \sum_{k=-p+1}^{M-1+p} c[k] \Phi'(M-1-k) \\
-   c[M-1+p] &= \sum_{k=-p+1}^{M-2+p} -c[k] \frac{\Phi'(M-1-k)}{\Phi'(-p)}
+          0 &= \sum_{k=-p+1}^{M-1+p} c[k] \varphi'(M-1-k) \\
+   c[M-1+p] &= \sum_{k=-p+1}^{M-2+p} -c[k] \frac{\varphi'(M-1-k)}{\varphi'(-p)}
 
 Plugging this into equation :ref:`(8) <approx:eq:8>` yields:
 
 .. math::
 
-   r(t) = \sum_{k=-p+1}^{M-2+p} c[k] (\Phi(t-k) - \frac{\Phi'(-k)}{\Phi'(p)}\Phi(t+p) - \frac{\Phi'(M-1-k)}{\Phi'(-p)}\Phi(t-M+1-p))
+   r(t) = \sum_{k=-p+1}^{M-2+p} c[k] (\varphi(t-k) - \frac{\varphi'(-k)}{\varphi'(p)}\varphi(t+p) - \frac{\varphi'(M-1-k)}{\varphi'(-p)}\varphi(t-M+1-p))
 
 Like equation :ref:`(1) <approx:eq:1>`, this equation can be written as a matrix-vector multiplication and can be solved using least-squares.

@@ -4,6 +4,7 @@ This module provides the classes necessary for constructing splines, along with 
 
 import collections
 import copy
+import itertools
 import json
 import math
 import warnings
@@ -127,7 +128,7 @@ class Spline:
 
     >>> spline.knots = np.array([[1, 1], [2, 2], [3, 3], [4, 4], [5, 5]])
 
-    Define a set of parameter value where we want to evaluate the spline
+    Define a set of parameter values where we want to evaluate the spline
 
     >>> t = np.linspace(0, 5, 11)
     >>> t
@@ -170,6 +171,10 @@ class Spline:
         else:
             raise RuntimeError("M must be greater than or equal to the basis function support size.")
 
+        self._cached_h1 = None
+        self._cached_h2 = None
+        self._cached_h3 = None
+
         self.basis_function = basis_function
         self._half_support = self.basis_function.support / 2
         # Number of additional knots used for padding the ends
@@ -195,7 +200,7 @@ class Spline:
     def __str__(self):
         closed_str = "closed" if self.closed else "open"
         if self.control_points is None:
-            return f"uninitialized {closed_str} {self.basis_function} spline with {self.M} knots"
+            return f"uninitialised {closed_str} {self.basis_function} spline with {self.M} knots"
         else:
             return f"{closed_str} {self.ndim}D {self.basis_function} spline with {self.M} knots"
 
@@ -314,6 +319,12 @@ class Spline:
             raise ValueError(
                 "You are trying to construct a Hermite spline using the ordinary `Spline` class. Use the `HermiteSpline` class instead."
             )
+
+        # Invalidate cached _h1, _h2, _h3
+        self._cached_h1 = None
+        self._cached_h2 = None
+        self._cached_h3 = None
+
         self._basis_function = value
 
     @property
@@ -327,6 +338,12 @@ class Spline:
             raise RuntimeError(
                 "M cannot be changed after the control points were set. Create a new spline or set the control_points to None first."
             )
+
+        # Invalidate cached _h1, _h2, _h3
+        self._cached_h1 = None
+        self._cached_h2 = None
+        self._cached_h3 = None
+
         self._M = M
 
     @property
@@ -340,6 +357,12 @@ class Spline:
             raise RuntimeError(
                 "closed cannot be changed after the control points were set. Create a new spline or set the control_points to None first."
             )
+
+        # Invalidate cached _h1, _h2, _h3
+        self._cached_h1 = None
+        self._cached_h2 = None
+        self._cached_h3 = None
+
         self._closed = closed
 
     @property
@@ -367,7 +390,7 @@ class Spline:
         """
         if self.control_points is None:
             raise RuntimeError(
-                "The spline does not have a dimensionality yet because it has not been initialized. Set the control_points or knots or use the fit method."
+                "The spline does not have a dimensionality yet because it has not been initialised. Set the control_points or knots or use the fit method."
             )
         return self.control_points.shape[-1]
 
@@ -422,6 +445,193 @@ class Spline:
             )
         return self._cached_segment_lengths
 
+    def _circular_span(self, a, b):
+        """Return the smallest circular distance between two integer indices in [0, M)."""
+        diff = abs(a - b)
+        return min(diff, self.M - diff)
+
+    def _gauss_legendre_quadrature_for_h123(self, func, kwargs):
+        upper_bound = self.M if self.closed else self.M - 1
+        segments = np.arange(
+            0,
+            upper_bound + self.integration_segment_size / 10,
+            self.integration_segment_size,
+        )
+        tvals = np.add.outer(
+            (segments[:-1] + segments[1:]) / 2,
+            GAUSS_LEGENDRE_QUADRATURE_POINTS / (2 / self.integration_segment_size),
+        )
+        function_values = func(tvals, **kwargs)
+        res = math.fsum(function_values @ GAUSS_LEGENDRE_QUADRATURE_WEIGHTS / (2 / self.integration_segment_size))
+        return res
+
+    def _reparametrisation_quadrature(self, c):
+        """
+        Computes the raw curvilinear reparametrisation energy integral
+        and related quantities using Gauss-Legendre quadrature over the
+        same parameter range as the curvilinear reparametrisation energy.
+
+        Parameters
+        ----------
+        c : float
+            Desired squared speed.
+
+        Returns
+        -------
+        integral : float
+            The raw integral int (|r'|**2 - c)**2 dt.
+        linear_term : float
+            The integral int (|r'|**2 - c) dt.
+        arc_length_gradient : numpy.ndarray
+            The gradient of the arc length with respect to the control
+            points, array of shape ``(n_control_points, ndim)``.
+        """
+        upper_bound = self.M if self.closed else self.M - 1
+        segments = np.arange(
+            0,
+            upper_bound + self.integration_segment_size / 10,
+            self.integration_segment_size,
+        )
+        tvals = np.add.outer(
+            (segments[:-1] + segments[1:]) / 2,
+            GAUSS_LEGENDRE_QUADRATURE_POINTS / (2 / self.integration_segment_size),
+        )
+        weights = GAUSS_LEGENDRE_QUADRATURE_WEIGHTS / (2 / self.integration_segment_size)
+        t = tvals.flatten()
+        r_prime = self(t, derivative=1).reshape(*tvals.shape, -1)
+        unit_tangents = np.nan_to_num(r_prime / np.linalg.norm(r_prime, axis=-1)[..., np.newaxis])
+        basis_derivatives = self.basis_matrix(t, derivative=1).todense().reshape(*tvals.shape, -1)
+        squared_speeds = np.sum(r_prime**2, axis=-1)
+        integral = math.fsum(np.sum((squared_speeds - c) ** 2 * weights, axis=-1))
+        linear_term = math.fsum(np.sum((squared_speeds - c) * weights, axis=-1))
+        arc_length_gradient = np.einsum(
+            "snl,snx->lx", basis_derivatives, unit_tangents * weights[np.newaxis, :, np.newaxis]
+        )
+        return integral, linear_term, arc_length_gradient
+
+    def _periodicity(self, t):
+        t[t > self.M - self.half_support] -= self.M
+        t[t < -self.M + self.half_support] += self.M
+        return t
+
+    @property
+    def _h1(self):
+        """
+        See :ref:`theory/active_contours:Active contour model`.
+        """
+        if self._cached_h1 is None:
+            n_control_points = len(self.control_points)
+            self._cached_h1 = np.zeros((n_control_points, n_control_points, n_control_points, n_control_points))
+            arange = np.arange(self.M) if self.closed else np.arange(-self.pad, self.M + self.pad)
+            support = self.basis_function.support
+
+            if self.closed:
+
+                def func(t, l, k, m, n):
+                    return (
+                        self.basis_function(self._periodicity(t - l), derivative=1)
+                        * self.basis_function(self._periodicity(t - k), derivative=1)
+                        * self.basis_function(self._periodicity(t - m), derivative=1)
+                        * self.basis_function(self._periodicity(t - n), derivative=1)
+                    )
+
+            else:
+
+                def func(t, l, k, m, n):
+                    return (
+                        self.basis_function(t - l, derivative=1)
+                        * self.basis_function(t - k, derivative=1)
+                        * self.basis_function(t - m, derivative=1)
+                        * self.basis_function(t - n, derivative=1)
+                    )
+
+            for i0, l in enumerate(arange):
+                for i1, k in enumerate(arange[i0:], start=i0):
+                    span_lk = self._circular_span(l, k) if self.closed else k - l
+                    if span_lk >= support:
+                        continue
+                    for i2, m in enumerate(arange[i1:], start=i1):
+                        span_lm = self._circular_span(l, m) if self.closed else m - l
+                        if span_lm >= support:
+                            continue
+                        for i3, n in enumerate(arange[i2:], start=i2):
+                            span_ln = self._circular_span(l, n) if self.closed else n - l
+                            if span_ln >= support:
+                                continue
+
+                            res = self._gauss_legendre_quadrature_for_h123(func, {"l": l, "k": k, "m": m, "n": n})
+                            for idx in set(itertools.permutations((i0, i1, i2, i3))):
+                                self._cached_h1[idx] = res
+        return self._cached_h1
+
+    @property
+    def _h2(self):
+        """
+        See :ref:`theory/active_contours:Active contour model`.
+        """
+        if self._cached_h2 is None:
+            n_control_points = len(self.control_points)
+            self._cached_h2 = np.zeros((n_control_points, n_control_points))
+            arange = np.arange(self.M) if self.closed else np.arange(-self.pad, self.M + self.pad)
+            support = self.basis_function.support
+
+            if self.closed:
+
+                def func(t, l, k):
+                    return self.basis_function(self._periodicity(t - l), derivative=1) * self.basis_function(
+                        self._periodicity(t - k), derivative=1
+                    )
+
+            else:
+
+                def func(t, l, k):
+                    return self.basis_function(t - l, derivative=1) * self.basis_function(t - k, derivative=1)
+
+            for i, l in enumerate(arange):
+                for j, k in enumerate(arange[i:], start=i):
+                    span = self._circular_span(l, k) if self.closed else k - l
+                    if span >= support:
+                        continue
+
+                    res = self._gauss_legendre_quadrature_for_h123(func, {"l": l, "k": k})
+                    self._cached_h2[i, j] = res
+                    self._cached_h2[j, i] = res
+        return self._cached_h2
+
+    @property
+    def _h3(self):
+        """
+        See :ref:`theory/active_contours:Active contour model`.
+        """
+        if self._cached_h3 is None:
+            n_control_points = len(self.control_points)
+            self._cached_h3 = np.zeros((n_control_points, n_control_points))
+            arange = np.arange(self.M) if self.closed else np.arange(-self.pad, self.M + self.pad)
+            support = self.basis_function.support
+
+            if self.closed:
+
+                def func(t, l, k):
+                    return self.basis_function(self._periodicity(t - l), derivative=2) * self.basis_function(
+                        self._periodicity(t - k), derivative=2
+                    )
+
+            else:
+
+                def func(t, l, k):
+                    return self.basis_function(t - l, derivative=2) * self.basis_function(t - k, derivative=2)
+
+            for i, l in enumerate(arange):
+                for j, k in enumerate(arange[i:], start=i):
+                    span = self._circular_span(l, k) if self.closed else k - l
+                    if span >= support:
+                        continue
+
+                    res = self._gauss_legendre_quadrature_for_h123(func, {"l": l, "k": k})
+                    self._cached_h3[i, j] = res
+                    self._cached_h3[j, i] = res
+        return self._cached_h3
+
     def copy(self):
         """
         Returns a deep copy of this spline.
@@ -434,12 +644,12 @@ class Spline:
         representing the spline that can be saved as a json.
         This is implemented separately from :meth:`splinebox.spline_curves.Spline.to_json`
         to allow the :class:`splinebox.spline_curves.HermiteSpline` to inherit this
-        conversion only adding the addiontion tangents.
+        conversion only adding the additional tangents.
 
-        Paramters
+        Parameters
         ---------
         version : int
-            The version of the convertion for future compatibility.
+            The version of the conversion for future compatibility.
 
         Returns
         -------
@@ -545,7 +755,7 @@ class Spline:
         -------
         drawing : numpy array
             A 2D numpy array of float values.
-            The values indicates the following:
+            The values indicate the following:
             0.0 -> pixel centre lies outside the closed spline.
             0.5 -> pixel centre lies on the spline.
             1.0 -> pixel centre lies inside the spline.
@@ -718,7 +928,7 @@ class Spline:
         points : numpy.ndarray
             The data points that should be fit.
         boundary_condition : str
-            Specifies how to hand the ends of open splines.
+            Specifies how to handle the ends of open splines.
             Can be one of the following:
             'free' (default): No restrictions.
             'clamped': First derivative is zero at the ends.
@@ -731,7 +941,7 @@ class Spline:
         >>> print(spline.control_points)
         None
 
-        The spline is not initialized yet, i.e. the control points haven't been set yet.
+        The spline is not initialised yet, i.e. the control points haven't been set yet.
         We fit the spline to some data to set them.
 
         >>> x = np.linspace(1, 8, 70)
@@ -784,6 +994,7 @@ class Spline:
             for i in range(self.ndim):
                 self.control_points[:, i] = scipy.sparse.linalg.lsqr(basis_function_values, points[:, i])[0]
         elif boundary_condition in ("clamped", "natural"):
+
             deriv = 1 if boundary_condition == "clamped" else 2
 
             if np.any(np.isnan(self.basis_function(np.arange(-self.pad, self.pad + 1), derivative=deriv))):
@@ -839,9 +1050,9 @@ class Spline:
     def arc_length(self, stop=None, start=0):
         """
         Compute the arc length of the spline between
-        the two parameter values specified. If no value for start is give,
+        the two parameter values specified. If no value for start is given,
         start from the beginning of the spline.
-        If no value for stop is give, go until the end of the spline.
+        If no value for stop is given, go until the end of the spline.
         When arrays with multiple values are given for start and/or stop,
         an array with all of the arc lengths is returned.
 
@@ -869,7 +1080,7 @@ class Spline:
         >>> spline.arc_length(M-1)  # doctest: +NUMBER
         17.03
 
-        Arc length between the thrid and fourth knot:
+        Arc length between the third and fourth knot:
 
         >>> spline.arc_length(2, 3)  # doctest: +NUMBER
         3.08
@@ -929,7 +1140,7 @@ class Spline:
         self, s, current_value, lower_bound, upper_bound, intermediate_results=None, atol=1e-4
     ):
         """
-        Convert the given arc length s on the curve to a value in parameters space.
+        Convert the given arc length s on the curve to a value in parameter space.
         This is done recursively, i.e. check if the point is before or after halfway
         and repeat. It uses binary search.
 
@@ -942,17 +1153,17 @@ class Spline:
         lower_bound : float
             Lower limit in parameter space.
         upper_bound : float
-            Upper limit in parameters space.
+            Upper limit in parameter space.
         intermediate_results : list
             A list where all computed length parameter pairs are stored.
-            This can be used to initialize subsequent conversions more efficiently.
+            This can be used to initialise subsequent conversions more efficiently.
         atol : float
             Absolute precision to which the length is matched.
 
         Returns
         -------
         t : float
-            The paramters value for the given length `s`.
+            The parameter value for the given length `s`.
         """
         midpoint = lower_bound + (upper_bound - lower_bound) / 2
         midpoint_length = current_value + self.arc_length(lower_bound, midpoint)
@@ -972,19 +1183,19 @@ class Spline:
 
     def arc_length_to_parameter(self, s, atol=1e-4):
         """
-        Convert the arc length `s` to the coresponding value in parameter space.
+        Convert the arc length `s` to the corresponding value in parameter space.
 
         Parameters
         ----------
         s : float or np.array
             Length on curve.
         atol : float
-            The ablsolute error tolerance.
+            The absolute error tolerance.
 
-        Retruns
+        Returns
         -------
         parameter : float or numpy array of floats
-            The parameter value whos arc length distance is :code:`s` from the
+            The parameter value whose arc length distance is :code:`s` from the
             start of the spline.
 
         Examples
@@ -1037,13 +1248,18 @@ class Spline:
             results = results[0]
         return results
 
-    def curvilinear_reparametrization_energy(self, atol=1e-6, rtol=1e-6):
+    def curvilinear_reparametrisation_energy(self, atol=1e-6, rtol=1e-6, c=None):
         """
         This energy can be used to enforce equal spacing of the knots.
 
         Implements equation 25 from [Jacob2004]_.
-        In order to make the energy scale invariant,
-        we added a factor of (arc length)^-4 to the integral.
+        If no value for ``c`` is provided, it is derived from the arc length as
+        ``(arc length / M)**2`` and, in order to make the energy scale invariant,
+        a factor of (arc length)^-4 is added to the integral.
+        If a value for ``c`` is provided, the unnormalised integral
+        (equation 25) is returned.
+        The gradient of this energy with respect to the control points is
+        available from ``derivative_of_curvilinear_reparametrisation_energy_wrt_control_points``.
 
         Parameters
         ----------
@@ -1055,16 +1271,23 @@ class Spline:
             The relative accuracy for the integration.
             Default is 1e-6.
             For details see scipy.integrate.quad_.
+        c : float
+            The desired squared speed of the spline.
+            If not provided, it is derived from the arc length as
+            ``(arc length / M)**2`` and the energy is normalised by
+            (arc length)^-4 to make it scale invariant.
 
         Returns
         -------
         energy : float
-            The curvilinear reparametrization energy of the spline.
+            The curvilinear reparametrisation energy of the spline.
 
         .. _scipy.integrate.quad: https://docs.scipy.org/doc/scipy-1.14.0/reference/generated/scipy.integrate.quad.html
         """
         arc_length = self.arc_length()
-        c = (arc_length / self.M) ** 2
+        scale_invariant = c is None
+        if scale_invariant:
+            c = (arc_length / self.M) ** 2
         upper_limit = self.M if self.closed else self.M - 1
         integral = scipy.integrate.quad(
             lambda t: (np.linalg.norm(np.nan_to_num(self(t, derivative=1))) ** 2 - c) ** 2,
@@ -1075,7 +1298,23 @@ class Spline:
             maxp1=50,
             limit=100,
         )
-        return integral[0] / arc_length**4
+        if scale_invariant:
+            return integral[0] / arc_length**4
+        return integral[0]
+
+    def curvilinear_reparametrization_energy(self, atol=1e-6, rtol=1e-6, c=None):
+        """
+        Deprecated alias for :meth:`curvilinear_reparametrisation_energy`.
+
+        .. deprecated::
+            Use :meth:`curvilinear_reparametrisation_energy` instead.
+        """
+        warnings.warn(
+            "`curvilinear_reparametrization_energy` is deprecated, use `curvilinear_reparametrisation_energy` instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.curvilinear_reparametrisation_energy(atol=atol, rtol=rtol, c=c)
 
     def curvature(self, t):
         """
@@ -1086,7 +1325,7 @@ class Spline:
         Parameters
         ----------
         t : float or numpy array
-            The paramter value(s) at which the curvature
+            The parameter value(s) at which the curvature
             should be calculated.
 
         Returns
@@ -1166,7 +1405,7 @@ class Spline:
 
         >>> normal = spline.normal(0.5)
 
-        Let's, plot the spline and our normal.
+        Let's plot the spline and our normal.
 
         >>> t = np.linspace(0, spline.M - 1, 1000)
         >>> vals = spline(t)
@@ -1191,7 +1430,7 @@ class Spline:
             nan_mask = np.isnan(first_deriv)
             if np.any(nan_mask):
                 raise RuntimeError(
-                    f"The normals cannot be compute for t={t[np.any(nan_mask, axis=-1)]} because the spline is not differentiable at those positions. Consider using the `shift` to avoid this problem."
+                    f"The normals cannot be computed for t={t[np.any(nan_mask, axis=-1)]} because the spline is not differentiable at those positions. Consider using the `shift` to avoid this problem."
                 )
 
             normals = (np.array([[0, -1], [1, 0]]) @ first_deriv.T).T
@@ -1305,7 +1544,7 @@ class Spline:
 
         t, single_value = self._convert_to_array(t)
 
-        # Sort t and keep the indicies so the original order can be restored
+        # Sort t and keep the indices so the original order can be restored
         sort_indices = np.argsort(t)
         t = t[sort_indices]
 
@@ -1318,7 +1557,7 @@ class Spline:
         nan_mask = np.isnan(first_derivative)
         if np.any(nan_mask):
             raise RuntimeError(
-                f"The frame cannot be compute for t={t[np.any(nan_mask, axis=-1)]} because the spline is not differentiable at those positions. Consider using the `shift` to avoid this problem."
+                f"The frame cannot be computed for t={t[np.any(nan_mask, axis=-1)]} because the spline is not differentiable at those positions. Consider using the `shift` to avoid this problem."
             )
 
         frame = np.zeros((len(t), 3, 3))
@@ -1334,7 +1573,7 @@ class Spline:
             nan_mask = np.isnan(second_derivative)
             if np.any(nan_mask):
                 raise RuntimeError(
-                    f"The Frenet frame cannot be compute for t={t[np.any(nan_mask, axis=-1)]} because the spline is not twice differentiable at those positions. Consider using `shift` or the Bishop frame."
+                    f"The Frenet frame cannot be computed for t={t[np.any(nan_mask, axis=-1)]} because the spline is not twice differentiable at those positions. Consider using `shift` or the Bishop frame."
                 )
 
             frame[:, 2] = np.cross(first_derivative, second_derivative)
@@ -1394,7 +1633,7 @@ class Spline:
                         + n * np.dot(n, frame[i - 1, 2]) * (1 - np.cos(phi))
                     )
         else:
-            raise ValueError(f"Unkown method '{method}' for moving frame.")
+            raise ValueError(f"Unknown method '{method}' for moving frame.")
 
         # Restore to the original order of t
         frame = frame[0] if single_value else frame[np.argsort(sort_indices)]
@@ -1418,18 +1657,100 @@ class Spline:
         cache=True,
     )
     def _compute_tval_and_indices(t, shift, closed, M, pad, tval, indices):
+        """
+        Helper function for creating a csr sparse matrix.
+
+        Parameters
+        ----------
+        t : np.array
+            The t value at which the spline should be evaluated.
+        shift : np.array
+            The integer displacements that for the control points that affect
+            a given t value. This depends on the half support of the basis function.
+        closed : boolean
+            Whether the spline is closed or not.
+        M : int
+            The number of knots.
+        pad : int
+            The amount of padding the spline has.
+        tval : np.array
+            An empty array in which the t values are stored at which the basis
+            function have to be evaluated.
+        indices : np.array
+            An empty array in which the index of the control point is stored.
+        """
         t_mod_1 = t % 1
         tval[:] = t_mod_1[:, np.newaxis] - shift[np.newaxis, :]
         if closed:
             indices[:] = ((t - t_mod_1)[:, np.newaxis] + shift[np.newaxis, :]) % M
         else:
-            # The modulo prevents out of bounds errors and can be safely applied because
-            # the basis function values will be zero.
             indices[:] = (t - t_mod_1)[:, np.newaxis] + shift[np.newaxis, :] + pad
+
+    def basis_matrix(self, t, derivative=0):
+        r"""
+        Computes the basis matrix :math:`\mathbf{\Phi}` as defined in :ref:`theory/data_approximation:Data approximation`.
+        In some contexts this matrix is referred to as a collocation matrix.
+
+        Parameters
+        ----------
+        t : np.array
+            The t values where the spline should be evaluated.
+        derivative : int
+            The degree of the derivative to compute.
+
+        Returns
+        -------
+        bm : scipy.sparse.csr_array
+            The basis matrix.
+        """
+        t, single_value = self._convert_to_array(t)
+
+        minimum = np.min(t)
+        maximum = np.max(t)
+        if np.isnan(maximum):
+            raise ValueError("t should not contain any NaN values.")
+
+        bound = math.ceil(self.half_support)
+        shift = np.arange(-bound + 1, bound + 1)
+        n_control_points = self.M if self.closed else self.M + 2 * self.pad
+
+        tval = np.empty((len(t), len(shift)), dtype=float)
+        indices = np.empty((len(t), len(shift)), dtype=int)
+        self._compute_tval_and_indices(t, shift, self.closed, self.M, self.pad, tval, indices)
+        data = self.basis_function(tval, derivative=derivative)
+
+        if not self.closed and (minimum < 0 or maximum > self.M - 1):
+            mask = (indices >= 0) & (indices <= (self.M - 1 + 2 * self.pad))
+
+            # Mask rows that are completely empty
+            row_mask = np.any(mask, axis=1)
+            data = data[row_mask]
+            indices = indices[row_mask]
+
+            mask = mask[row_mask]
+            data[~mask] = 0
+
+            data = data.flatten()
+            indices = indices.flatten()
+
+            indptr = np.full(len(t) + 1, len(indices))
+            indptr[: len(indices) // len(shift) + 1] = np.arange(0, len(indices) + 1, len(shift))
+
+        else:
+            data = data.flatten()
+            indices = indices.flatten()
+            indptr = np.arange(0, len(indices) + 1, len(shift))
+
+        # This is necessary because there is not enough padding of the control points.
+        # When t=M-1 shift reaches past the last padded control point.
+        # The seems to be the limiting factor. An alternative solution should be found.
+        bm = scipy.sparse.csr_array((data, indices, indptr), shape=(len(t), n_control_points + 1), copy=False)
+        bm = bm[:, :n_control_points]
+        return bm
 
     def __call__(self, t, derivative=0):
         """
-        Evalute the spline or one of its derivatives at
+        Evaluate the spline or one of its derivatives at
         parameter value(s) `t`.
 
         Parameters
@@ -1452,7 +1773,7 @@ class Spline:
         >>> spline(2.3)
         array([2.349, 0.143])
 
-        Or we can evaluate it a multiple positions at once:
+        Or we can evaluate it at multiple positions at once:
         >>> t = np.linspace(0, spline.M - 1, 3)
         >>> spline(t)
         array([[-0. , -0. ],
@@ -1461,28 +1782,114 @@ class Spline:
         """
         self._check_control_points()
         t, single_value = self._convert_to_array(t)
-        if np.any(np.isnan(t)):
-            raise ValueError("t should not contain any NaN values.")
-        bound = math.ceil(self.half_support)
-        shift = np.arange(-bound + 1, bound + 1)
-        tval = np.empty((len(t), len(shift)), dtype=float)
-        indices = np.empty((len(t), len(shift)), dtype=int)
-        self._compute_tval_and_indices(t, shift, self.closed, self.M, self.pad, tval, indices)
 
-        basis_function_values = self.basis_function(tval, derivative=derivative)
-        control_points = self.control_points
-        if not self.closed:
-            before = -min(np.min(indices), 0)
-            after = max(np.max(indices) - self.M + 1 - self.pad, 0)
-            control_points = np.pad(control_points, ((before, after), (0, 0)))
-            indices += before
-        control_points = control_points[indices]
+        bm = self.basis_matrix(t, derivative=derivative)
 
-        values = np.einsum("ij,ijl->il", basis_function_values, control_points)
+        values = bm @ self.control_points
+
         if single_value:
             values = values[0]
 
         return values
+
+    def derivative_wrt_control_points(self, t, derivative=0):
+        r"""
+        Computes the partial derivatives of the spline or one of its derivatives with respect to the control points.
+
+        This is just a wrapper around the :meth:`splinebox.spline_curves.Spline.basis_matrix` since it can analytically be shown that
+        the derivatives with respect to the control points are equal to the basis matrix.
+        For details see :ref:`theory/active_contours:Active contour model`.
+        """
+        return self.basis_matrix(t, derivative=derivative)
+
+    def derivative_of_norm_squared_wrt_control_points(self, t, derivative=0):
+        r"""
+        Computes the partial derivatives of the squared norm with respect to the control points.
+        For an analytical derivation see :ref:`theory/active_contours:Active contour model`.
+
+        Returns the following matrix: :math:`A_{tly}=\frac{\partial |r(t)|^2}{\partial c[l]_y}`.
+        """
+        bm = self.basis_matrix(t, derivative=derivative)
+        return 2 * bm.todense()[:, :, np.newaxis] * self(t, derivative=derivative)[:, np.newaxis, :]
+
+    def derivative_of_curvilinear_reparametrisation_energy_wrt_control_points(self, c=None):
+        r"""
+        Gradient of the curvilinear reparametrisation energy with respect to the
+        control points.
+
+        The energy is defined in equation 25 of [Jacob2004]_ as
+
+        .. math::
+
+            E_{\text{reparam}} = \int_0^{M-1} \left(|\mathbf{r}'(t)|^2 - c\right)^2 dt
+                                = \int_0^{M-1} |\mathbf{r}'(t)|^4 - 2c|\mathbf{r}'(t)|^2 + c^2 dt.
+
+        The parameter :math:`c` represents the desired squared speed of the spline.
+        Minimising this energy encourages a uniform spacing of control points along
+        the curve.
+
+        Parameters
+        ----------
+        c : float
+            Desired squared speed. If not provided, it is derived from the arc
+            length as :math:`\left(\frac{\text{arc length}}{M}\right)^2`, matching
+            :meth:`splinebox.spline_curves.Spline.curvilinear_reparametrisation_energy`.
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of shape ``(n_control_points, ndim)`` containing the gradient
+            :math:`\frac{\partial E_{\text{reparam}}}{\partial c[l]_x}`.
+
+        When ``c`` is provided, the gradient of the unnormalised integral with
+        that fixed ``c`` is returned, which is the exact gradient of
+        :meth:`splinebox.spline_curves.Spline.curvilinear_reparametrisation_energy`
+        for the same ``c``. When ``c`` is not provided, the returned gradient is
+        the exact gradient of the scale invariant energy, accounting for the
+        dependence of ``c`` and the normalisation by the arc length to the fourth
+        power on the control points via the chain rule.
+
+        For an analytical derivation see :ref:`theory/active_contours:Active contour model`.
+        """
+        scale_invariant = c is None
+        if scale_invariant:
+            arc_length = self.arc_length()
+            c = (arc_length / self.M) ** 2
+        gradient = 4 * np.einsum(
+            "ky,my,nx,lkmn->lx", self.control_points, self.control_points, self.control_points, self._h1
+        ) - 4 * c * np.einsum("mx,lm->lx", self.control_points, self._h2)
+        if not scale_invariant:
+            return gradient
+        # The arc length enters through c = (arc length / M)**2 and the
+        # normalisation by (arc length)**-4. The chain rule adds two correction
+        # terms proportional to the gradient of the arc length.
+        integral, linear_term, arc_length_gradient = self._reparametrisation_quadrature(c)
+        gradient -= (4 * arc_length * linear_term / self.M**2 + 4 * integral / arc_length) * arc_length_gradient
+        return gradient / arc_length**4
+
+    def derivative_of_curvature_energy_wrt_control_points(self):
+        r"""
+        Gradient of the curvature energy with respect to the control points.
+
+        The curvature energy penalises the squared magnitude of the second
+        derivative:
+
+        .. math::
+
+            E_{\text{curvature}} = \int_0^{M-1} |\mathbf{r}''(t)|^2 dt.
+
+        For curves with small slopes this is a good approximation of the
+        integral over the squared curvature.
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of shape ``(n_control_points, ndim)`` containing the gradient
+            :math:`\frac{\partial E_{\text{curvature}}}{\partial c[l]_x}`.
+
+        For an analytical derivation see :ref:`theory/active_contours:Active contour model`.
+        """
+        return 2 * np.einsum("mx,lm->lx", self.control_points, self._h3)
 
     def _convert_to_array(self, t):
         """
@@ -1654,7 +2061,7 @@ class Spline:
         points : numpy.array
             Array with the coordinates of one or multiple point(s).
         return_t : bool
-            Whether to return the paramter t of the spline.
+            Whether to return the parameter t of the spline.
             `spline(t)` gives the location on the spline
             closest to the point.
 
@@ -1795,14 +2202,14 @@ class Spline:
             The frame to use for orientation of the mesh:
             - "frenet": Uses the Frenet-Serret frame.
             - "bishop": Uses the Bishop frame, requiring an `initial_vector`.
-            See :meth:`splinebox.spline_curves.moving_frame`. Default is "bishop".
+            See :meth:`splinebox.spline_curves.Spline.moving_frame`. Default is "bishop".
         initial_vector : numpy array or None, optional
             For the Bishop frame, an initial vector that defines the orientation of
             the frame at the start of the spline (`t[0]`). This vector must be
             orthogonal to the tangent at `t[0]`. Ignored for the Frenet frame. If
             None, a suitable initial vector is computed automatically. Default is None.
         shift : float or None
-            The shift applied to any t value that fall on non-differentiable positions.
+            The shift applied to any t value that falls on non-differentiable positions.
             Default is 1e-10.
 
         Returns
@@ -1821,7 +2228,7 @@ class Spline:
         NotImplementedError
             If the spline is not defined in 3D, as meshes are only supported for 3D splines.
         RuntimeError
-            If the the control points of the spline are not set.
+            If the control points of the spline are not set.
 
         Notes
         -----
@@ -1857,12 +2264,12 @@ class Spline:
 
         >>> points, connectivity = spline.mesh(radius=0.5, step_t=0.1, step_angle=10, mesh_type="surface")
 
-        The number of 3D point in the mesh depends on the steps in t and angle.
+        The number of 3D points in the mesh depends on the steps in t and angle.
 
         >>> points.shape
         (1116, 3)
 
-        The mesh consist of triangles all defined by three points.
+        The mesh consists of triangles all defined by three points.
 
         >>> connectivity.shape
         (2160, 3)
@@ -1898,10 +2305,7 @@ class Spline:
         self._check_control_points()
         if self.ndim != 3:
             raise NotImplementedError("Meshes are only implemented for splines in 3D.")
-        if mesh_type == "surface" and not self.closed:
-            cap_ends = self._normalize_cap_ends(cap_ends)
-        else:
-            cap_ends = None
+        cap_ends = self._normalize_cap_ends(cap_ends) if mesh_type == "surface" and not self.closed else None
         end_t = self.M if self.closed else self.M - 1
         t = np.arange(0, end_t, step_t)
         if len(t) == 0 or not np.isclose(t[-1], end_t):
@@ -1980,7 +2384,7 @@ class Spline:
             elif mesh_type == "volume":
                 phiphi, tt = np.meshgrid(phi, t)
                 rr = _radius(tt, phiphi)
-                # Add columns for the center points
+                # Add columns for the centre points
                 rr = np.hstack((np.zeros((rr.shape[0], 1)), rr))
                 tt = np.hstack((tt[:, 0][:, np.newaxis], tt))
                 phiphi = np.hstack((phiphi[:, 0][:, np.newaxis], phiphi))
@@ -2141,7 +2545,7 @@ class HermiteSpline(Spline):
     Class for the construction of a Hermite spline.
     It inherits from :class:`splinebox.spline_curves.Spline`.
     Here, we only document the additional methods and attributes.
-    For information on the inherited methods and attributes refere to the
+    For information on the inherited methods and attributes refer to the
     documentation of :class:`splinebox.spline_curves.Spline`.
 
     Parameters
@@ -2168,7 +2572,7 @@ class HermiteSpline(Spline):
     def _check_control_points_and_tangents(self):
         """
         Most methods require control points and tangents to be set before they
-        can be used. This helper function checks if control pointa and tangents have been
+        can be used. This helper function checks if control points and tangents have been
         set.
         """
         self._check_control_points()
@@ -2311,37 +2715,117 @@ class HermiteSpline(Spline):
         else:
             raise ValueError(f"Unknown boundary_conditions {boundary_condition}")
 
-    def __call__(self, t, derivative=0):
-        self._check_control_points_and_tangents()
+    def basis_matrix(self, t, derivative=0):
         t, single_value = self._convert_to_array(t)
-        if np.any(np.isnan(t)):
+
+        minimum = np.min(t)
+        maximum = np.max(t)
+        if np.isnan(maximum):
             raise ValueError("t should not contain any NaN values.")
+
         bound = math.ceil(self.half_support)
         shift = np.arange(-bound + 1, bound + 1)
+        n_control_points = self.M if self.closed else self.M + 2 * self.pad
+
         tval = np.empty((len(t), len(shift)), dtype=float)
         indices = np.empty((len(t), len(shift)), dtype=int)
         self._compute_tval_and_indices(t, shift, self.closed, self.M, self.pad, tval, indices)
+        data = self.basis_function(tval, derivative=derivative)
+        data0 = data[..., 0]
+        data1 = data[..., 1]
 
-        basis_function_values = self.basis_function(tval, derivative=derivative)
-        control_points = self.control_points
-        tangents = self.tangents
-        if not self.closed:
-            before = -min(np.min(indices), 0)
-            after = max(np.max(indices) - self.M + 1 - self.pad, 0)
-            control_points = np.pad(control_points, ((before, after), (0, 0)))
-            tangents = np.pad(tangents, ((before, after), (0, 0)))
-            indices += before
-        control_points = control_points[indices]
-        tangents = tangents[indices]
+        if not self.closed and (minimum < 0 or maximum > self.M - 1):
+            mask = (indices >= 0) & (indices <= (self.M - 1 + 2 * self.pad))
 
-        values = np.einsum("ij,ijl->il", basis_function_values[..., 0], control_points) + np.einsum(
-            "ij,ijl->il", basis_function_values[..., 1], tangents
-        )
+            # Mask rows that are completely empty
+            row_mask = np.any(mask, axis=1)
+            data0 = data0[row_mask]
+            data1 = data1[row_mask]
+            indices = indices[row_mask]
+
+            mask = mask[row_mask]
+            data0[~mask] = 0
+            data1[~mask] = 0
+
+            data0 = data0.flatten()
+            data1 = data1.flatten()
+            indices = indices.flatten()
+
+            indptr = np.full(len(t) + 1, len(indices))
+            indptr[: len(indices) // len(shift) + 1] = np.arange(0, len(indices) + 1, len(shift))
+
+        else:
+            data0 = data0.flatten()
+            data1 = data1.flatten()
+            indices = indices.flatten()
+            indptr = np.arange(0, len(indices) + 1, len(shift))
+
+        bm0 = scipy.sparse.csr_array((data0, indices, indptr), shape=(len(t), n_control_points + 1), copy=False)
+        bm0 = bm0[:, :n_control_points]
+        bm1 = scipy.sparse.csr_array((data1, indices, indptr), shape=(len(t), n_control_points + 1), copy=False)
+        bm1 = bm1[:, :n_control_points]
+        return bm0, bm1
+
+    def __call__(self, t, derivative=0):
+        self._check_control_points_and_tangents()
+        t, single_value = self._convert_to_array(t)
+
+        bm0, bm1 = self.basis_matrix(t, derivative=derivative)
+
+        values = bm0 @ self.control_points + bm1 @ self.tangents
 
         if single_value:
             values = values[0]
 
         return values
+
+    def derivative_wrt_control_points(self, t, derivative=0):
+        """
+        Computes the partial derivatives of the spline or one of its derivatives
+        with respect to the control points.
+
+        For a Hermite spline this returns the basis matrix for the control-point
+        component only (the tangent component is handled separately by
+        :meth:`splinebox.spline_curves.HermiteSpline.derivative_wrt_tangents`).
+        """
+        return self.basis_matrix(t, derivative=derivative)[0]
+
+    def derivative_wrt_tangents(self, t, derivative=0):
+        """
+        Computes the partial derivatives of the spline or one of its derivatives
+        with respect to the tangents.
+
+        Returns the basis matrix for the tangent component of a Hermite spline.
+        """
+        return self.basis_matrix(t, derivative=derivative)[1]
+
+    def derivative_of_norm_squared_wrt_control_points(self, t, derivative=0):
+        """
+        Computes the partial derivatives of the squared norm with respect to the
+        control points.
+
+        For an analytical derivation see :ref:`theory/active_contours:Active contour model`.
+        """
+        bm = self.derivative_wrt_control_points(t, derivative=derivative)
+        return 2 * bm.todense()[:, :, np.newaxis] * self(t, derivative=derivative)[:, np.newaxis, :]
+
+    def derivative_of_norm_squared_wrt_tangents(self, t, derivative=0):
+        """
+        Computes the partial derivatives of the squared norm with respect to the
+        tangents.
+        """
+        bm = self.derivative_wrt_tangents(t, derivative=derivative)
+        return 2 * bm.todense()[:, :, np.newaxis] * self(t, derivative=derivative)[:, np.newaxis, :]
+
+    def derivative_of_curvilinear_reparametrisation_energy_wrt_control_points(self, c=None):
+        raise NotImplementedError(
+            "The derivative of the curvilinear reparametrisation energy with respect to the control points is not implemented for Hermite splines."
+        )
+
+    def derivative_of_curvature_energy_wrt_control_points(self):
+        raise NotImplementedError(
+            "The derivative of the curvature energy with respect to the control points is not implemented for Hermite splines."
+        )
 
     def scale(self, scaling_factor):
         self._check_control_points_and_tangents()
@@ -2365,7 +2849,7 @@ class HermiteSpline(Spline):
 def _prepared_dict_for_constructor(data):
     """
     Helper function that processes the dictionaries loaded from
-    json files. It ensure all of the values are valid and prepares
+    json files. It ensures all of the values are valid and prepares
     a dictionary that can be passed to the constructor using `**`.
 
     Parameters
@@ -2426,7 +2910,7 @@ def splines_to_json(path, splines, version=1):
 
     >>> splinebox.splines_to_json("splines.json", [spline1, spline2])
 
-    Then we can load them back into python.
+    Then we can load them back into Python.
 
     >>> loaded_splines = splinebox.splines_from_json("splines.json")
     >>> loaded_splines[0] == spline1
@@ -2472,7 +2956,7 @@ def splines_from_json(path):
 
     >>> splinebox.splines_to_json("splines.json", [spline1, spline2])
 
-    Then we can load them back into python.
+    Then we can load them back into Python.
 
     >>> loaded_splines = splinebox.splines_from_json("splines.json")
     >>> loaded_splines[0] == spline1
