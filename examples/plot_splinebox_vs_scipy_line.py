@@ -76,7 +76,7 @@ initial_knots = spline.knots
 # Define the Loss Function for splinebox
 # --------------------------------------
 # Our loss function combines the image energy (to minimize pixel values along the spline) and an internal energy term that ensures smooth, equidistant knots to avoid sharp turns or loops.
-# Here, we use the curvilinear reparametrization energy as our internal energy.
+# Here, we use the curvilinear reparametrisation energy as our internal energy.
 # It promotes equidistant spacing of the knots in terms of arc length.
 # In practice, this avoids sharp bends and stops the spline from looping/folding back on itself.
 # Without it, the image energy would reward the spline for visiting the darkest pixels
@@ -88,7 +88,7 @@ def loss_function_splinebox(control_points, alpha):
     spline.control_points = control_points.reshape((-1, 2))
     coordinates = spline(t)
     image_energy = np.mean(interpolator(coordinates[:, 0], coordinates[:, 1], grid=False))
-    internal_energy = spline.curvilinear_reparametrization_energy()
+    internal_energy = spline.curvilinear_reparametrisation_energy()
     return image_energy + alpha * internal_energy
 
 
@@ -179,13 +179,13 @@ initial_knots = scipy_spline(scipy_spline.t)[k:-k]
 # %%
 # Define the Loss Function for scipy
 # ----------------------------------
-# Since scipy does not have a built-in curvilinear reparametrization energy, we calculate it manually.
+# Since scipy does not have a built-in curvilinear reparametrisation energy, we calculate it manually.
 def loss_function_scipy(control_points, alpha):
     scipy_spline.c = control_points.reshape((-1, 2))
     coordinates = scipy_spline(t)
     image_energy = np.mean(interpolator(coordinates[:, 0], coordinates[:, 1], grid=False))
 
-    # Compute internal energy (curvilinear reparametrization)
+    # Compute internal energy (curvilinear reparametrisation)
     derivative = scipy_spline.derivative()
     integral = scipy.integrate.quad(lambda t: np.linalg.norm(derivative(t)), 0, M - 1)
     length = integral[0]

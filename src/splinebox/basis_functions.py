@@ -4,7 +4,7 @@ The modular design enables users to easily explore different spline types, by sw
 
 All basis function classes inherit from the base class :class:`splinebox.basis_functions.BasisFunction`.
 The base class defines methods such as :code:`__call__`, :code:`filter_periodic`, and :code:`filter_symmetric`.
-The latter two methods should be overridden as appropriate in any subclass to ensure they align with the behavior of the specific basis function.
+The latter two methods should be overridden as appropriate in any subclass to ensure they align with the behaviour of the specific basis function.
 To enable the :code:`__call__` method, subclasses must implement :code:`_func(t)`, :code:`_derivative_1(t)`, and :code:`_derivative_2(t)`, which correspond to the function itself and its first and second derivatives, respectively.
 
 For more information on implementing a new basis function, see :class:`splinebox.basis_functions.BasisFunction`.
@@ -1476,7 +1476,7 @@ def basis_function_from_name(name, **kwargs):
     -------
     basis_function : Object of one of the subclasses of :class:`splinebox.basis_functions.BasisFunction`.
         An instance of a subclass of splinebox.basis_functions.BasisFunction,
-        initialized according to the provided name and keyword arguments.
+        initialised according to the provided name and keyword arguments.
 
     Examples
     --------

@@ -25,7 +25,7 @@ The basis function :math:`\varphi` has the following important properties.
      \end{cases}
 
   has a support of size :math:`1`.
-  If :math:`\varphi` has a support of size :math:`L`, then :math:`\varphi(t-k)` will be zero outside of :math:`[k-\frac{L}{2}, k+\frac{L}{2}]` and it will only occupy the :math:`\lceil \frac{L}{2} \rceil` intervals on each side of :math:`k`. The support thus dictates how many neighboring intervals each basis function acts upon. Relying on basis functions that have a small support size means that each control point "controls" only a very localized portion of the entire function.
+  If :math:`\varphi` has a support of size :math:`L`, then :math:`\varphi(t-k)` will be zero outside of :math:`[k-\frac{L}{2}, k+\frac{L}{2}]` and it will only occupy the :math:`\lceil \frac{L}{2} \rceil` intervals on each side of :math:`k`. The support thus dictates how many neighbouring intervals each basis function acts upon. Relying on basis functions that have a small support size means that each control point "controls" only a very localised portion of the entire function.
 
 * **Interpolatory behaviour.** The basis function :math:`\varphi` is said to be *interpolatory* if
 

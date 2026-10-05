@@ -97,7 +97,7 @@ SplineBox
        </svg>
        <p>
          <strong> Custom loss functions </strong> <br/>
-         Compatibility with Python optimization frameworks makes it easy to use custom loss functions for fitting.
+         Compatibility with Python optimisation frameworks makes it easy to use custom loss functions for fitting.
        </p>
      </div>
 

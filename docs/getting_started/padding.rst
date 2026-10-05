@@ -21,13 +21,13 @@ Despite the first and last control point, the spline curves inward toward the or
 .. plot:: pyplots/plot_no_padding.py
    :include-source: false
 
-By padding with two additional points on the circle, this behavior is corrected.
+By padding with two additional points on the circle, this behaviour is corrected.
 
 .. plot:: pyplots/plot_padding.py
    :include-source: false
 
 If you set the control points manually, you are responsible for handling the padding.
-This design choice allows full control over the spline's behavior at the ends.
+This design choice allows full control over the spline's behaviour at the ends.
 
 .. code-block:: python
 

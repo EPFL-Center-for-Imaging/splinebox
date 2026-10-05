@@ -49,7 +49,7 @@ with the basis matrix :math:`\mathbf{\Phi}` (size :math:`N \times M`), the contr
     p[N-1]
    \end{bmatrix}.
 
-The control points :math:`\mathbf{C}` can then be retrieved by finding the least-square best solution that minimizes
+The control points :math:`\mathbf{C}` can then be retrieved by finding the least-square best solution that minimises
 
 .. math::
    :name: approx:eq:6
@@ -62,7 +62,7 @@ Boundary conditions
 
 Open splines are padded with additional control points at the ends (:ref:`getting_started/padding:Padding`).
 They are located at parameter values :math:`t = -1, -2, \ldots` and :math:`t = M, M+1, \ldots`.
-Since the data points are only positions on the parameter interval :math:`[0, M-1]`, the additional control points can cause erratic behavior of the spline when fitting noisy data.
+Since the data points are only positions on the parameter interval :math:`[0, M-1]`, the additional control points can cause erratic behaviour of the spline when fitting noisy data.
 To control this behaviour, one of the following boundary conditions can be enforced:
 
 * *clamped*: :math:`r'(0)=0` and :math:`r'(M-1)=0`

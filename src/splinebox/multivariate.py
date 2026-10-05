@@ -85,7 +85,7 @@ class MultivariateSpline:
         to the control point grid, and the last axis is the codomain dimension.
         Control points can be supplied directly as a NumPy array, or built with
         helpers such as :func:`splinebox.multivariate.tensor_product` for
-        separable geometries. If ``None``, the spline must be initialized later
+        separable geometries. If ``None``, the spline must be initialised later
         via ``knots`` or ``fit``.
     padding_functions : callable or iterable of callables
         Function(s) used to pad knots for open splines. The default is

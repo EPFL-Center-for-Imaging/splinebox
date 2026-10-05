@@ -563,7 +563,7 @@ def test_scale(initialized_spline_curve, is_hermite_spline):
     assert np.allclose(spline(t), spline_copy(t))
 
 
-def test_curvilinear_reparametrization_energy():
+def test_curvilinear_reparametrisation_energy():
     M = 4
     spline = splinebox.spline_curves.Spline(M, splinebox.B1())
 
@@ -573,18 +573,18 @@ def test_curvilinear_reparametrization_energy():
     derivative_val = spline((spline.M - 1) / 2, derivative=1)
 
     # To compute the expected value we exploit the constant derivative.
-    # We can replace the integration in the definition of the curvilinear reparametrization energy with a multiplication because the derivative is constant.
+    # We can replace the integration in the definition of the curvilinear reparametrisation energy with a multiplication because the derivative is constant.
     length = spline.arc_length()
     c = (length / spline.M) ** 2
     e_curv = (np.linalg.norm(derivative_val) ** 2 - c) ** 2
     expected_val = e_curv * (spline.M - 1) / length**4
 
-    val = spline.curvilinear_reparametrization_energy()
+    val = spline.curvilinear_reparametrisation_energy()
 
     assert np.isclose(val, expected_val)
 
 
-def test_curvilinear_reparametrization_energy_user_c():
+def test_curvilinear_reparametrisation_energy_user_c():
     M = 4
     spline = splinebox.spline_curves.Spline(M, splinebox.B1())
 
@@ -597,31 +597,31 @@ def test_curvilinear_reparametrization_energy_user_c():
     c = 1.5
     expected_val = (np.linalg.norm(derivative_val) ** 2 - c) ** 2 * (spline.M - 1)
 
-    val = spline.curvilinear_reparametrization_energy(c=c)
+    val = spline.curvilinear_reparametrisation_energy(c=c)
 
     assert np.isclose(val, expected_val)
 
 
-def test_curvilinear_reparametrization_energy_translation(initialized_spline_curve, translation_vector):
+def test_curvilinear_reparametrisation_energy_translation(initialized_spline_curve, translation_vector):
     """
-    Test if the curvilinear reparametrization energy is invariant to translation.
+    Test if the curvilinear reparametrisation energy is invariant to translation.
     """
     atol = 1e-3
     spline = initialized_spline_curve
-    expected = spline.curvilinear_reparametrization_energy(atol=atol)
+    expected = spline.curvilinear_reparametrisation_energy(atol=atol)
     spline.translate(translation_vector)
-    val = spline.curvilinear_reparametrization_energy(atol=atol)
+    val = spline.curvilinear_reparametrisation_energy(atol=atol)
     assert np.isclose(val, expected, atol=atol)
 
 
-def test_curvilinear_reparametrization_energy_scale_invariance(initialized_spline_curve):
+def test_curvilinear_reparametrisation_energy_scale_invariance(initialized_spline_curve):
     """
-    The curvilinear reparametrization energy should not change when the entire spline is scaled.
+    The curvilinear reparametrisation energy should not change when the entire spline is scaled.
     """
     spline = initialized_spline_curve
-    expected = spline.curvilinear_reparametrization_energy()
+    expected = spline.curvilinear_reparametrisation_energy()
     spline.scale(0.1)
-    val = spline.curvilinear_reparametrization_energy()
+    val = spline.curvilinear_reparametrisation_energy()
     assert np.isclose(val, expected)
 
 
@@ -1399,7 +1399,7 @@ def _numerical_reparametrization_energy(spline, c, n=10000):
 
 
 def _numerical_normalized_reparametrization_energy(spline, n=10000):
-    # Mirrors curvilinear_reparametrization_energy with c derived from the arc
+    # Mirrors curvilinear_reparametrisation_energy with c derived from the arc
     # length, but uses a deterministic quadrature for the integral so that the
     # finite difference of two evaluations is not dominated by the noise of the
     # adaptive quadrature.
@@ -1520,7 +1520,7 @@ def test_derivative_of_curvilinear_reparametrisation_energy_wrt_control_points_d
         request.node.add_marker(pytest.mark.xfail)
 
     # When c is not provided, the gradient is the exact gradient of the scale
-    # invariant curvilinear_reparametrization_energy, including the dependence
+    # invariant curvilinear_reparametrisation_energy, including the dependence
     # of c and the normalisation on the arc length.
     delta = np.random.randn(*spline.control_points.shape) * 1e-5
     gradient = spline.derivative_of_curvilinear_reparametrisation_energy_wrt_control_points()

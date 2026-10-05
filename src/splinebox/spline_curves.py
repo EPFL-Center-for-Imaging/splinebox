@@ -200,7 +200,7 @@ class Spline:
     def __str__(self):
         closed_str = "closed" if self.closed else "open"
         if self.control_points is None:
-            return f"uninitialized {closed_str} {self.basis_function} spline with {self.M} knots"
+            return f"uninitialised {closed_str} {self.basis_function} spline with {self.M} knots"
         else:
             return f"{closed_str} {self.ndim}D {self.basis_function} spline with {self.M} knots"
 
@@ -390,7 +390,7 @@ class Spline:
         """
         if self.control_points is None:
             raise RuntimeError(
-                "The spline does not have a dimensionality yet because it has not been initialized. Set the control_points or knots or use the fit method."
+                "The spline does not have a dimensionality yet because it has not been initialised. Set the control_points or knots or use the fit method."
             )
         return self.control_points.shape[-1]
 
@@ -941,7 +941,7 @@ class Spline:
         >>> print(spline.control_points)
         None
 
-        The spline is not initialized yet, i.e. the control points haven't been set yet.
+        The spline is not initialised yet, i.e. the control points haven't been set yet.
         We fit the spline to some data to set them.
 
         >>> x = np.linspace(1, 8, 70)
@@ -1156,7 +1156,7 @@ class Spline:
             Upper limit in parameter space.
         intermediate_results : list
             A list where all computed length parameter pairs are stored.
-            This can be used to initialize subsequent conversions more efficiently.
+            This can be used to initialise subsequent conversions more efficiently.
         atol : float
             Absolute precision to which the length is matched.
 
@@ -1248,7 +1248,7 @@ class Spline:
             results = results[0]
         return results
 
-    def curvilinear_reparametrization_energy(self, atol=1e-6, rtol=1e-6, c=None):
+    def curvilinear_reparametrisation_energy(self, atol=1e-6, rtol=1e-6, c=None):
         """
         This energy can be used to enforce equal spacing of the knots.
 
@@ -1280,7 +1280,7 @@ class Spline:
         Returns
         -------
         energy : float
-            The curvilinear reparametrization energy of the spline.
+            The curvilinear reparametrisation energy of the spline.
 
         .. _scipy.integrate.quad: https://docs.scipy.org/doc/scipy-1.14.0/reference/generated/scipy.integrate.quad.html
         """
@@ -1301,6 +1301,20 @@ class Spline:
         if scale_invariant:
             return integral[0] / arc_length**4
         return integral[0]
+
+    def curvilinear_reparametrization_energy(self, atol=1e-6, rtol=1e-6, c=None):
+        """
+        Deprecated alias for :meth:`curvilinear_reparametrisation_energy`.
+
+        .. deprecated::
+            Use :meth:`curvilinear_reparametrisation_energy` instead.
+        """
+        warnings.warn(
+            "`curvilinear_reparametrization_energy` is deprecated, use `curvilinear_reparametrisation_energy` instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.curvilinear_reparametrisation_energy(atol=atol, rtol=rtol, c=c)
 
     def curvature(self, t):
         """
@@ -1819,7 +1833,7 @@ class Spline:
         c : float
             Desired squared speed. If not provided, it is derived from the arc
             length as :math:`\left(\frac{\text{arc length}}{M}\right)^2`, matching
-            :meth:`splinebox.spline_curves.Spline.curvilinear_reparametrization_energy`.
+            :meth:`splinebox.spline_curves.Spline.curvilinear_reparametrisation_energy`.
 
         Returns
         -------
@@ -1829,7 +1843,7 @@ class Spline:
 
         When ``c`` is provided, the gradient of the unnormalised integral with
         that fixed ``c`` is returned, which is the exact gradient of
-        :meth:`splinebox.spline_curves.Spline.curvilinear_reparametrization_energy`
+        :meth:`splinebox.spline_curves.Spline.curvilinear_reparametrisation_energy`
         for the same ``c``. When ``c`` is not provided, the returned gradient is
         the exact gradient of the scale invariant energy, accounting for the
         dependence of ``c`` and the normalisation by the arc length to the fourth
@@ -2370,7 +2384,7 @@ class Spline:
             elif mesh_type == "volume":
                 phiphi, tt = np.meshgrid(phi, t)
                 rr = _radius(tt, phiphi)
-                # Add columns for the center points
+                # Add columns for the centre points
                 rr = np.hstack((np.zeros((rr.shape[0], 1)), rr))
                 tt = np.hstack((tt[:, 0][:, np.newaxis], tt))
                 phiphi = np.hstack((phiphi[:, 0][:, np.newaxis], phiphi))

@@ -24,7 +24,7 @@ where
 * :math:`c[k] \in \mathbb{R}, k = 0,...,M-1` are coefficients referred to as **control points**
 * :math:`\varphi: \mathbb{R} \mapsto \mathbb{R}` is a function referred to as **basis**
 
-One can intuitively think of :math:`r` being built by summing :math:`M` copies of :math:`\varphi` centered at integer locations :math:`k=0,...,M-1`, each of them scaled by corresponding weights :math:`c[k]`.
+One can intuitively think of :math:`r` being built by summing :math:`M` copies of :math:`\varphi` centred at integer locations :math:`k=0,...,M-1`, each of them scaled by corresponding weights :math:`c[k]`.
 We refer to each :math:`t \in [k, k+1[, k=0,...,M-1` as **intervals**.
 
 We call junction points between the intervals knots :math:`n[k] = r(k)`. The relationship between knots and control points is discussed on the page about the :ref:`theory/basis_function:Basis function`.
