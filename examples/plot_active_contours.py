@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy
 import skimage
-
 import splinebox.basis_functions
 import splinebox.spline_curves
 
@@ -78,6 +77,10 @@ plt.show()
 # The energy function consist of two terms:
 #   (1) Image energy: measures the pixel values below the spline.
 #   (2) Internal energy: penalises curvy spline
+# Both energy terms can be differentiated analytically with respect to the
+# control points: the derivative of the spline itself is computed with
+# ``derivative_wrt_control_points`` and the gradient of the internal (curvature)
+# energy with ``derivative_of_curvature_energy_wrt_control_points``.
 # A detailed description of the math can be found in :ref:`theory/active_contour`.
 
 # Store intermediate contours
@@ -97,7 +100,10 @@ for _ in range(5000):
 
     image_energy_gradients = partial_derivs.T @ img_gradients
 
-    internal_energy_gradients = np.mean(spline.derivative_of_norm_squared_wrt_control_points(t, derivative=2), axis=0)
+    # The exact gradient of the continuous curvature energy; dividing by M turns
+    # the integral over the parameter range into an average, matching the scale
+    # of the image energy term above.
+    internal_energy_gradients = spline.derivative_of_curvature_energy_wrt_control_points() / spline.M
 
     gradients = -image_energy_gradients + internal_energy_gradients / 2
 
