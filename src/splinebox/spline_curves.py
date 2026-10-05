@@ -465,6 +465,50 @@ class Spline:
         res = math.fsum(function_values @ GAUSS_LEGENDRE_QUADRATURE_WEIGHTS / (2 / self.integration_segment_size))
         return res
 
+    def _reparametrisation_quadrature(self, c):
+        """
+        Computes the raw curvilinear reparametrisation energy integral
+        and related quantities using Gauss-Legendre quadrature over the
+        same parameter range as the curvilinear reparametrisation energy.
+
+        Parameters
+        ----------
+        c : float
+            Desired squared speed.
+
+        Returns
+        -------
+        integral : float
+            The raw integral int (|r'|**2 - c)**2 dt.
+        linear_term : float
+            The integral int (|r'|**2 - c) dt.
+        arc_length_gradient : numpy.ndarray
+            The gradient of the arc length with respect to the control
+            points, array of shape ``(n_control_points, ndim)``.
+        """
+        upper_bound = self.M if self.closed else self.M - 1
+        segments = np.arange(
+            0,
+            upper_bound + self.integration_segment_size / 10,
+            self.integration_segment_size,
+        )
+        tvals = np.add.outer(
+            (segments[:-1] + segments[1:]) / 2,
+            GAUSS_LEGENDRE_QUADRATURE_POINTS / (2 / self.integration_segment_size),
+        )
+        weights = GAUSS_LEGENDRE_QUADRATURE_WEIGHTS / (2 / self.integration_segment_size)
+        t = tvals.flatten()
+        r_prime = self(t, derivative=1).reshape(*tvals.shape, -1)
+        unit_tangents = np.nan_to_num(r_prime / np.linalg.norm(r_prime, axis=-1)[..., np.newaxis])
+        basis_derivatives = self.basis_matrix(t, derivative=1).todense().reshape(*tvals.shape, -1)
+        squared_speeds = np.sum(r_prime**2, axis=-1)
+        integral = math.fsum(np.sum((squared_speeds - c) ** 2 * weights, axis=-1))
+        linear_term = math.fsum(np.sum((squared_speeds - c) * weights, axis=-1))
+        arc_length_gradient = np.einsum(
+            "snl,snx->lx", basis_derivatives, unit_tangents * weights[np.newaxis, :, np.newaxis]
+        )
+        return integral, linear_term, arc_length_gradient
+
     def _periodicity(self, t):
         t[t > self.M - self.half_support] -= self.M
         t[t < -self.M + self.half_support] += self.M
@@ -1204,13 +1248,18 @@ class Spline:
             results = results[0]
         return results
 
-    def curvilinear_reparametrization_energy(self, atol=1e-6, rtol=1e-6):
+    def curvilinear_reparametrization_energy(self, atol=1e-6, rtol=1e-6, c=None):
         """
         This energy can be used to enforce equal spacing of the knots.
 
         Implements equation 25 from [Jacob2004]_.
-        In order to make the energy scale invariant,
-        we added a factor of (arc length)^-4 to the integral.
+        If no value for ``c`` is provided, it is derived from the arc length as
+        ``(arc length / M)**2`` and, in order to make the energy scale invariant,
+        a factor of (arc length)^-4 is added to the integral.
+        If a value for ``c`` is provided, the unnormalised integral
+        (equation 25) is returned.
+        The gradient of this energy with respect to the control points is
+        available from ``derivative_of_curvilinear_reparametrisation_energy_wrt_control_points``.
 
         Parameters
         ----------
@@ -1222,6 +1271,11 @@ class Spline:
             The relative accuracy for the integration.
             Default is 1e-6.
             For details see scipy.integrate.quad_.
+        c : float
+            The desired squared speed of the spline.
+            If not provided, it is derived from the arc length as
+            ``(arc length / M)**2`` and the energy is normalised by
+            (arc length)^-4 to make it scale invariant.
 
         Returns
         -------
@@ -1231,7 +1285,9 @@ class Spline:
         .. _scipy.integrate.quad: https://docs.scipy.org/doc/scipy-1.14.0/reference/generated/scipy.integrate.quad.html
         """
         arc_length = self.arc_length()
-        c = (arc_length / self.M) ** 2
+        scale_invariant = c is None
+        if scale_invariant:
+            c = (arc_length / self.M) ** 2
         upper_limit = self.M if self.closed else self.M - 1
         integral = scipy.integrate.quad(
             lambda t: (np.linalg.norm(np.nan_to_num(self(t, derivative=1))) ** 2 - c) ** 2,
@@ -1242,7 +1298,9 @@ class Spline:
             maxp1=50,
             limit=100,
         )
-        return integral[0] / arc_length**4
+        if scale_invariant:
+            return integral[0] / arc_length**4
+        return integral[0]
 
     def curvature(self, t):
         """
@@ -1740,7 +1798,7 @@ class Spline:
         bm = self.basis_matrix(t, derivative=derivative)
         return 2 * bm.todense()[:, :, np.newaxis] * self(t, derivative=derivative)[:, np.newaxis, :]
 
-    def derivative_of_curvilinear_reparametrisation_energy_wrt_control_points(self, c):
+    def derivative_of_curvilinear_reparametrisation_energy_wrt_control_points(self, c=None):
         r"""
         Gradient of the curvilinear reparametrisation energy with respect to the
         control points.
@@ -1752,14 +1810,16 @@ class Spline:
             E_{\text{reparam}} = \int_0^{M-1} \left(|\mathbf{r}'(t)|^2 - c\right)^2 dt
                                 = \int_0^{M-1} |\mathbf{r}'(t)|^4 - 2c|\mathbf{r}'(t)|^2 + c^2 dt.
 
-        The parameter :math:`c = \left(\frac{\text{desired arc length}}{M-1}\right)^2`
-        represents the desired squared speed of the spline. Minimising this energy
-        encourages a uniform spacing of control points along the curve.
+        The parameter :math:`c` represents the desired squared speed of the spline.
+        Minimising this energy encourages a uniform spacing of control points along
+        the curve.
 
         Parameters
         ----------
         c : float
-            Desired squared speed.
+            Desired squared speed. If not provided, it is derived from the arc
+            length as :math:`\left(\frac{\text{arc length}}{M}\right)^2`, matching
+            :meth:`splinebox.spline_curves.Spline.curvilinear_reparametrization_energy`.
 
         Returns
         -------
@@ -1767,11 +1827,31 @@ class Spline:
             Array of shape ``(n_control_points, ndim)`` containing the gradient
             :math:`\frac{\partial E_{\text{reparam}}}{\partial c[l]_x}`.
 
+        When ``c`` is provided, the gradient of the unnormalised integral with
+        that fixed ``c`` is returned, which is the exact gradient of
+        :meth:`splinebox.spline_curves.Spline.curvilinear_reparametrization_energy`
+        for the same ``c``. When ``c`` is not provided, the returned gradient is
+        the exact gradient of the scale invariant energy, accounting for the
+        dependence of ``c`` and the normalisation by the arc length to the fourth
+        power on the control points via the chain rule.
+
         For an analytical derivation see :ref:`theory/active_contours:Active contour model`.
         """
-        return 4 * np.einsum(
+        scale_invariant = c is None
+        if scale_invariant:
+            arc_length = self.arc_length()
+            c = (arc_length / self.M) ** 2
+        gradient = 4 * np.einsum(
             "ky,my,nx,lkmn->lx", self.control_points, self.control_points, self.control_points, self._h1
         ) - 4 * c * np.einsum("mx,lm->lx", self.control_points, self._h2)
+        if not scale_invariant:
+            return gradient
+        # The arc length enters through c = (arc length / M)**2 and the
+        # normalisation by (arc length)**-4. The chain rule adds two correction
+        # terms proportional to the gradient of the arc length.
+        integral, linear_term, arc_length_gradient = self._reparametrisation_quadrature(c)
+        gradient -= (4 * arc_length * linear_term / self.M**2 + 4 * integral / arc_length) * arc_length_gradient
+        return gradient / arc_length**4
 
     def derivative_of_curvature_energy_wrt_control_points(self):
         r"""
@@ -2723,7 +2803,7 @@ class HermiteSpline(Spline):
         bm = self.derivative_wrt_tangents(t, derivative=derivative)
         return 2 * bm.todense()[:, :, np.newaxis] * self(t, derivative=derivative)[:, np.newaxis, :]
 
-    def derivative_of_curvilinear_reparametrisation_energy_wrt_control_points(self, c):
+    def derivative_of_curvilinear_reparametrisation_energy_wrt_control_points(self, c=None):
         raise NotImplementedError(
             "The derivative of the curvilinear reparametrisation energy with respect to the control points is not implemented for Hermite splines."
         )

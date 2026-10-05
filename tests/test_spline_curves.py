@@ -584,6 +584,24 @@ def test_curvilinear_reparametrization_energy():
     assert np.isclose(val, expected_val)
 
 
+def test_curvilinear_reparametrization_energy_user_c():
+    M = 4
+    spline = splinebox.spline_curves.Spline(M, splinebox.B1())
+
+    spline.knots = np.array([[1, 0], [2, 0], [3, 0], [4, 0]])
+
+    # Because of the spacing of the knots the derivative should be constant so we can just compute one value in the middle of the spline.
+    derivative_val = spline((spline.M - 1) / 2, derivative=1)
+
+    # For a user provided c the unnormalised integral (equation 25) is returned.
+    c = 1.5
+    expected_val = (np.linalg.norm(derivative_val) ** 2 - c) ** 2 * (spline.M - 1)
+
+    val = spline.curvilinear_reparametrization_energy(c=c)
+
+    assert np.isclose(val, expected_val)
+
+
 def test_curvilinear_reparametrization_energy_translation(initialized_spline_curve, translation_vector):
     """
     Test if the curvilinear reparametrization energy is invariant to translation.
@@ -1380,6 +1398,20 @@ def _numerical_reparametrization_energy(spline, c, n=10000):
     return np.trapezoid((speed**2 - c) ** 2, t)
 
 
+def _numerical_normalized_reparametrization_energy(spline, n=10000):
+    # Mirrors curvilinear_reparametrization_energy with c derived from the arc
+    # length, but uses a deterministic quadrature for the integral so that the
+    # finite difference of two evaluations is not dominated by the noise of the
+    # adaptive quadrature.
+    t = np.linspace(0, spline.M if spline.closed else spline.M - 1, n)
+    r1 = spline(t, derivative=1)
+    r1 = np.nan_to_num(r1)
+    squared_speed = np.linalg.norm(r1, axis=1) ** 2
+    arc_length = spline.arc_length()
+    c = (arc_length / spline.M) ** 2
+    return np.trapezoid((squared_speed - c) ** 2, t) / arc_length**4
+
+
 def _numerical_curvature_energy(spline, n=10000):
     t = np.linspace(0, spline.M if spline.closed else spline.M - 1, n)
     r2 = spline(t, derivative=2)
@@ -1477,6 +1509,35 @@ def test_derivative_of_curvilinear_reparametrisation_energy_wrt_control_points_f
         spline, c, n=n
     )
     assert np.isclose(predicted, actual, atol=1e-5)
+
+
+def test_derivative_of_curvilinear_reparametrisation_energy_wrt_control_points_default_c(
+    initialized_spline_curve, is_hermite_spline, request
+):
+    spline = initialized_spline_curve
+    if is_hermite_spline(spline):
+        # Currently not implemented for Hermite spline curves
+        request.node.add_marker(pytest.mark.xfail)
+
+    # When c is not provided, the gradient is the exact gradient of the scale
+    # invariant curvilinear_reparametrization_energy, including the dependence
+    # of c and the normalisation on the arc length.
+    delta = np.random.randn(*spline.control_points.shape) * 1e-5
+    gradient = spline.derivative_of_curvilinear_reparametrisation_energy_wrt_control_points()
+    predicted = np.sum(gradient * delta)
+
+    spline_perturbed_plus = spline.copy()
+    spline_perturbed_plus.control_points = spline.control_points + delta
+    spline_perturbed_minus = spline.copy()
+    spline_perturbed_minus.control_points = spline.control_points - delta
+
+    n = 1000000 if isinstance(spline.basis_function, splinebox.basis_functions.B1) else 10000
+    actual = (
+        _numerical_normalized_reparametrization_energy(spline_perturbed_plus, n=n)
+        - _numerical_normalized_reparametrization_energy(spline_perturbed_minus, n=n)
+    ) / 2
+
+    assert np.isclose(predicted, actual, rtol=1e-3, atol=1e-9)
 
 
 # def test_derivative_of_curvilinear_reparametrisation_energy_not_implemented_for_hermite_spline(

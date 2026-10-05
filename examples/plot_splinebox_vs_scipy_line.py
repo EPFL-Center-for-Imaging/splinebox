@@ -38,9 +38,9 @@ plt.show()
 # interpolate the pixel values at non-integer position.
 # Since the line is black on a white background, our goal is to move the
 # spline in a way that minimises the average pixel value under it.
-# This is commonly refered to as the image energy.
+# This is commonly referred to as the image energy.
 # To be able to quickly interpolate the pixel values, we fit a bivariate spline to the pixel values.
-# The `interpolator` object is callable and can be querried for pixel coordinates.
+# The `interpolator` object is callable and can be queried for pixel coordinates.
 interpolator = scipy.interpolate.RectBivariateSpline(np.arange(img.shape[0]), np.arange(img.shape[1]), img, s=1)
 
 # %%
@@ -62,11 +62,11 @@ spline.knots = initial_knots
 
 # %%
 # Let's define the parameter values at which we want to sample the spline.
-# Here, we chose to sample 50 points inbetween knots.
+# Here, we chose to sample 50 points in between knots.
 t = np.linspace(0, M - 1, M * 50)
 
 # %%
-# In order to compar the fitted spline to the intial one,
+# In order to compare the fitted spline to the initial one,
 # we save it's positions and knots for plotting later on.
 initial_vals = spline(t)
 initial_knots = spline.knots
@@ -93,12 +93,49 @@ def loss_function_splinebox(control_points, alpha):
 
 
 # %%
+# Define the Jacobian for splinebox
+# ---------------------------------
+# Both energy terms can be differentiated analytically with respect to the control
+# points, which is much faster than the finite differences scipy would otherwise
+# use to estimate them.
+# The gradient of the image energy follows from the chain rule: the derivatives of
+# the interpolated pixel values (available directly from the ``interpolator``; its
+# ``dx=1`` refers to the first variable, i.e. the rows) are contracted with
+# ``derivative_wrt_control_points``.
+# The curvilinear reparametrisation energy is normalised by the arc length to the
+# fourth power, i.e. E = integral(|r'|^2 - c)^2 dt / L**4 with c = (L/M)**2, where
+# the arc length L also depends on the control points.
+# ``derivative_of_curvilinear_reparametrisation_energy_wrt_control_points``
+# computes the exact gradient of this energy with respect to the control points,
+# accounting for the dependence of c and the normalisation on the arc length.
+
+
+def jacobian_splinebox(control_points, alpha):
+    spline.control_points = control_points.reshape((-1, 2))
+    coordinates = spline(t)
+    img_dy = interpolator(coordinates[:, 0], coordinates[:, 1], dx=1, grid=False)
+    img_dx = interpolator(coordinates[:, 0], coordinates[:, 1], dy=1, grid=False)
+    img_gradients = np.stack([img_dy, img_dx], axis=-1)
+    image_energy_gradients = spline.derivative_wrt_control_points(t).T @ img_gradients / len(t)
+    internal_energy_gradients = spline.derivative_of_curvilinear_reparametrisation_energy_wrt_control_points()
+    return (image_energy_gradients + alpha * internal_energy_gradients).flatten()
+
+
+# %%
 # Fit the Spline (splinebox)
 # --------------------------
 # We use ``scipy.optimize.minimize`` to find the best-fitting spline by minimizing the total energy.
-# The parameter alpha controls the balance between image energy and internal energy (here emperically set to 500).
+# The parameter alpha controls the balance between image energy and internal energy (here empirically set to 500).
+# We pass the analytic ``jacobian_splinebox`` so that scipy does not have to
+# estimate the gradients numerically.
 initial_control_points = spline.control_points
-scipy.optimize.minimize(loss_function_splinebox, initial_control_points.flatten(), args=(500,))
+result = scipy.optimize.minimize(
+    loss_function_splinebox,
+    initial_control_points.flatten(),
+    args=(500,),
+    jac=jacobian_splinebox,
+)
+spline.control_points = result.x.reshape((-1, 2))
 
 # %%
 # Plot the Results (splinebox)
