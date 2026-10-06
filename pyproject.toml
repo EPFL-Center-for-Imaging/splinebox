@@ -94,6 +94,9 @@ test = [
     "tox",
     "pytest",
     "pytest-cov",
+    "array-api-compat",
+    "torch",
+    "jax"
 ]
 examples = [
     "matplotlib",

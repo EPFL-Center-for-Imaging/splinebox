@@ -5,25 +5,27 @@ import pytest
 import splinebox.basis_functions
 
 
-def test_base_class_call(derivative):
+def test_base_class_call(derivative, xp, as_xp_array):
     basis_function = splinebox.basis_functions.BasisFunction(False, 2)
-    x = np.arange(10)
+    x = as_xp_array(xp.linspace(-4, 4, 10))
+
     with pytest.raises(NotImplementedError):
-        basis_function(x, derivative=derivative)
+        # The pytorch compiler does not work for raised errors.
+        basis_function(x, derivative=derivative, jit=False)
 
 
-def test_base_class_filters_and_refinement_mask():
+def test_base_class_filters_and_refinement_mask(xp, as_xp_array):
     basis_function = splinebox.basis_functions.BasisFunction(False, 2)
-    s = np.arange(10)
+    s = as_xp_array(xp.linspace(0, 4, 10))
     with pytest.raises(NotImplementedError):
-        basis_function.filter_symmetric(s)
+        basis_function.filter_symmetric(s, jit=False)
     with pytest.raises(NotImplementedError):
-        basis_function.filter_periodic(s)
+        basis_function.filter_periodic(s, jit=False)
     with pytest.raises(NotImplementedError):
         basis_function.refinement_mask()
 
 
-def test_filters(basis_function, is_interpolating, knot_gen, request):
+def test_filters(basis_function, is_interpolating, knot_gen, xp, request):
     if isinstance(basis_function, splinebox.basis_functions.B2):
         # The filter_symmetric and filter_periodic are not implemented for B2
         request.node.add_marker(pytest.mark.xfail)
@@ -32,12 +34,19 @@ def test_filters(basis_function, is_interpolating, knot_gen, request):
     if is_interpolating(basis_function):
         # The filters should not do anything since knot and control points are
         # the same for interpolating splines.
-        assert np.allclose(basis_function.filter_symmetric(s), s)
-        assert np.allclose(basis_function.filter_periodic(s), s)
+        assert xp.allclose(basis_function.filter_symmetric(s), s)
+        assert xp.allclose(basis_function.filter_periodic(s), s)
     else:
         # Flipping the knot or the control points should give the same result
-        assert np.allclose(basis_function.filter_symmetric(s), basis_function.filter_symmetric(s[::-1])[::-1])
-        assert np.allclose(basis_function.filter_periodic(s), basis_function.filter_periodic(s[::-1])[::-1])
+        flipped = xp.flip(s, axis=0)
+        assert xp.allclose(
+            basis_function.filter_symmetric(s),
+            xp.flip(basis_function.filter_symmetric(flipped), axis=0),
+        )
+        assert xp.allclose(
+            basis_function.filter_periodic(s),
+            xp.flip(basis_function.filter_periodic(flipped), axis=0),
+        )
 
 
 def test_refinement_mask(basis_function, is_locally_refinable, request):

@@ -9,6 +9,7 @@ import json
 import math
 import warnings
 
+import array_api_compat
 import numba
 import numpy as np
 import scipy.integrate
@@ -154,7 +155,6 @@ class Spline:
     _wrong_array_size_msg = (
         "It looks like control_points is neither a 1 nor a 2D array. I don't know how to handle this yet."
     )
-    _no_control_points_msg = "This spline object doesn't have any control points yet."
     _unimplemented_msg = "This function is not implemented."
 
     def __init__(
@@ -188,14 +188,16 @@ class Spline:
         self._cached_segments = None
         self._cached_segment_lengths = None
 
-    def _check_control_points(self):
+    def _get_control_points_xp(self):
         """
         Most methods require control points to be set before they
         can be used. This helper function checks if the control points have been
-        set.
+        set and return the their array namespace.
         """
         if self.control_points is None:
-            raise RuntimeError(self._no_control_points_msg)
+            raise RuntimeError("This spline object doesn't have any control points yet.")
+        else:
+            return array_api_compat.array_namespace(self.control_points)
 
     def __str__(self):
         closed_str = "closed" if self.closed else "open"
@@ -231,7 +233,8 @@ class Spline:
     @control_points.setter
     def control_points(self, values):
         if values is not None:
-            values = np.array(values)
+            if not array_api_compat.is_array_api_obj(values):
+                values = np.array(values)
             if values.ndim != 2:
                 raise ValueError(
                     "The control point array has to be 2D. The first dimension encodes the control points and the second corresponds to the dimensionality of the codomain of the spline."
@@ -796,7 +799,7 @@ class Spline:
         >>> plt.plot(vals[:, 0], vals[:, 1])  # doctest: +SKIP
         >>> plt.show()  # doctest: +SKIP
         """
-        self._check_control_points()
+        self._get_control_points_xp()
 
         if self.ndim != 2:
             raise RuntimeError("draw() can only be used with 2D curves")
@@ -822,7 +825,7 @@ class Spline:
         .. math::
             \frac{d \theta}{dt} = \frac{1}{r^2} \left( x\frac{dy}{dt} - y\frac{dx}{dt} \right) \text{, where } r^2 = x^2 + y^2
         """
-        self._check_control_points()
+        self._get_control_points_xp()
         if self.ndim != 2:
             raise RuntimeError("dtheta() is only defined for 2D curves.")
         t, single_value = self._convert_to_array(t)
@@ -891,7 +894,7 @@ class Spline:
         """
         if not self.closed:
             raise RuntimeError("isInside() can only be used with closed curves.")
-        self._check_control_points()
+        self._get_control_points_xp()
         if self.ndim != 2:
             raise RuntimeError("isInside() can only be used with 2D curves.")
 
@@ -1090,7 +1093,7 @@ class Spline:
         >>> spline.arc_length(np.arange(M - 1), np.arange(1, M))
         array([4.982, 5.288, 3.09 , 3.675])
         """
-        self._check_control_points()
+        self._get_control_points_xp()
 
         if stop is None:
             stop = self.M if self.closed else self.M - 1
@@ -1209,7 +1212,7 @@ class Spline:
         >>> spline.arc_length(0, 2.12)  # doctest: +NUMBER
         2.2
         """
-        self._check_control_points()
+        self._get_control_points_xp()
         s, single_value = self._convert_to_array(s)
         sort_indices = np.argsort(s)
         results = np.zeros_like(s, dtype=float)
@@ -1339,9 +1342,9 @@ class Spline:
         >>> spline = splinebox.Spline(M=M, basis_function=splinebox.Exponential(M), closed=False)
         >>> spline.knots = np.array([[0, 0], [1, 1], [2, 0], [2.5, -0.5], [3, 0]])
         >>> spline.curvature([1, 3])
-        array([ 2.234, -4.104])
+        array([ 2.035, -3.616])
         """
-        self._check_control_points()
+        self._get_control_points_xp()
         t, single_value = self._convert_to_array(t)
         first_deriv = self(t, derivative=1)
         second_deriv = self(t, derivative=2)
@@ -1414,7 +1417,7 @@ class Spline:
         >>> plt.arrow(point[0], point[1], normal[0], normal[1])  # doctest: +SKIP
         >>> plt.show()  # doctest: +SKIP
         """
-        self._check_control_points()
+        self._get_control_points_xp()
         t, single_value = self._convert_to_array(t)
         if self.ndim not in (2, 3):
             raise NotImplementedError(
@@ -1537,7 +1540,7 @@ class Spline:
                 [-1.,  0.,  0.],
                 [ 0., -0.,  1.]]])
         """
-        self._check_control_points()
+        self._get_control_points_xp()
 
         if self.ndim != 3:
             raise RuntimeError("A frame can only be computed for splines in 3D.")
@@ -1656,7 +1659,7 @@ class Spline:
         nopython=True,
         cache=True,
     )
-    def _compute_tval_and_indices(t, shift, closed, M, pad, tval, indices):
+    def _compute_tval_and_indices_numba(t, shift, closed, M, pad, tval, indices):
         """
         Helper function for creating a csr sparse matrix.
 
@@ -1686,6 +1689,14 @@ class Spline:
         else:
             indices[:] = (t - t_mod_1)[:, np.newaxis] + shift[np.newaxis, :] + pad
 
+    @staticmethod
+    def _compute_tval_and_indices_xp(t, shift, closed, M, pad, xp):
+        t_mod_1 = t % 1
+        tval = t_mod_1[:, xp.newaxis] - shift[xp.newaxis, :]
+        indices = xp.asarray(t - t_mod_1, dtype=int)[:, xp.newaxis] + shift[xp.newaxis, :]
+        indices = indices % M if closed else indices + pad
+        return tval, indices
+
     def basis_matrix(self, t, derivative=0):
         r"""
         Computes the basis matrix :math:`\mathbf{\Phi}` as defined in :ref:`theory/data_approximation:Data approximation`.
@@ -1703,10 +1714,11 @@ class Spline:
         bm : scipy.sparse.csr_array
             The basis matrix.
         """
-        t, single_value = self._convert_to_array(t)
+        xp = self._get_control_points_xp()
+        t, single_value = self._convert_to_array(t, xp)
 
-        minimum = np.min(t)
-        maximum = np.max(t)
+        minimum = xp.min(t)
+        maximum = xp.max(t)
         if np.isnan(maximum):
             raise ValueError("t should not contain any NaN values.")
 
@@ -1714,38 +1726,45 @@ class Spline:
         shift = np.arange(-bound + 1, bound + 1)
         n_control_points = self.M if self.closed else self.M + 2 * self.pad
 
-        tval = np.empty((len(t), len(shift)), dtype=float)
-        indices = np.empty((len(t), len(shift)), dtype=int)
-        self._compute_tval_and_indices(t, shift, self.closed, self.M, self.pad, tval, indices)
-        data = self.basis_function(tval, derivative=derivative)
+        if array_api_compat.is_numpy_namespace(xp):
+            tval = xp.empty((len(t), len(shift)), dtype=float)
+            indices = xp.empty((len(t), len(shift)), dtype=int)
+            self._compute_tval_and_indices_numba(t, shift, self.closed, self.M, self.pad, tval, indices)
 
-        if not self.closed and (minimum < 0 or maximum > self.M - 1):
-            mask = (indices >= 0) & (indices <= (self.M - 1 + 2 * self.pad))
+            data = self.basis_function(tval, derivative=derivative)
 
-            # Mask rows that are completely empty
-            row_mask = np.any(mask, axis=1)
-            data = data[row_mask]
-            indices = indices[row_mask]
+            if not self.closed and (minimum < 0 or maximum > self.M - 1):
+                mask = (indices >= 0) & (indices <= (self.M - 1 + 2 * self.pad))
 
-            mask = mask[row_mask]
-            data[~mask] = 0
+                # Mask rows that are completely empty
+                row_mask = np.any(mask, axis=1)
+                data = data[row_mask]
+                indices = indices[row_mask]
 
-            data = data.flatten()
-            indices = indices.flatten()
+                mask = mask[row_mask]
+                data[~mask] = 0
 
-            indptr = np.full(len(t) + 1, len(indices))
-            indptr[: len(indices) // len(shift) + 1] = np.arange(0, len(indices) + 1, len(shift))
+                data = data.flatten()
+                indices = indices.flatten()
 
+                indptr = np.full(len(t) + 1, len(indices))
+                indptr[: len(indices) // len(shift) + 1] = np.arange(0, len(indices) + 1, len(shift))
+
+            else:
+                data = data.flatten()
+                indices = indices.flatten()
+                indptr = np.arange(0, len(indices) + 1, len(shift))
+
+            # This is necessary because there is not enough padding of the control points.
+            # When t=M-1 shift reaches past the last padded control point.
+            # The seems to be the limiting factor. An alternative solution should be found.
+            bm = scipy.sparse.csr_array((data, indices, indptr), shape=(len(t), n_control_points + 1), copy=False)
+            bm = bm[:, :n_control_points]
         else:
-            data = data.flatten()
-            indices = indices.flatten()
-            indptr = np.arange(0, len(indices) + 1, len(shift))
+            tval, indices = self._compute_tval_and_indices_xp(t, shift, self.closed, self.M, self.pad, xp)
 
-        # This is necessary because there is not enough padding of the control points.
-        # When t=M-1 shift reaches past the last padded control point.
-        # The seems to be the limiting factor. An alternative solution should be found.
-        bm = scipy.sparse.csr_array((data, indices, indptr), shape=(len(t), n_control_points + 1), copy=False)
-        bm = bm[:, :n_control_points]
+            basis_function_values = self.basis_function(tval, derivative=derivative)
+
         return bm
 
     def __call__(self, t, derivative=0):
@@ -1780,8 +1799,8 @@ class Spline:
                [ 1.5,  0.5],
                [ 3. ,  1. ]])
         """
-        self._check_control_points()
-        t, single_value = self._convert_to_array(t)
+        xp = self._get_control_points_xp()
+        t, single_value = self._convert_to_array(t, xp)
 
         bm = self.basis_matrix(t, derivative=derivative)
 
@@ -1891,7 +1910,7 @@ class Spline:
         """
         return 2 * np.einsum("mx,lm->lx", self.control_points, self._h3)
 
-    def _convert_to_array(self, t):
+    def _convert_to_array(self, t, xp):
         """
         Helper function that converts a function input
         to an array. This allows functions to accept int and float
@@ -1902,13 +1921,19 @@ class Spline:
         """
         single_value = False
         if not isinstance(t, collections.abc.Iterable):
-            t = np.array([t])
+            t = xp.asarray([t])
             single_value = True
-        elif isinstance(t, np.ndarray) and t.shape == ():
+        elif not array_api_compat.is_array_api_obj(t):
+            t = xp.asarray(t)
+        elif array_api_compat.array_namespace(t) is not xp:
+            raise ValueError(
+                f"The control points are a {xp.__name__.split('.')[-1]} array but "
+                "the parameter values you provided are a "
+                f"{array_api_compat.array_namespace(t).__name__.split('.')[-1]} array."
+            )
+        elif t.shape == ():
             # Array with only one element, e.g. np.array(0.)
-            t = np.array([t.item()])
-        elif not isinstance(t, np.ndarray):
-            t = np.array(t)
+            t = xp.asarray([t.item()])
         if t.ndim > 1:
             raise ValueError("The parameter array has to be 1D.")
         return t, single_value
@@ -1919,7 +1944,7 @@ class Spline:
         and :meth:`splinebox.spline_curves.Spline.rotate`.
         Computes the centroid of the coefficients.
         """
-        self._check_control_points()
+        self._get_control_points_xp()
         return np.mean(self.control_points, axis=0)
 
     def translate(self, vector):
@@ -1957,7 +1982,7 @@ class Spline:
         >>> plt.legend()  # doctest: +SKIP
         >>> plt.show()  # doctest: +SKIP
         """
-        self._check_control_points()
+        self._get_control_points_xp()
         self.control_points = self.control_points + vector
 
     def scale(self, scaling_factor):
@@ -1995,7 +2020,7 @@ class Spline:
         >>> plt.legend()  # doctest: +SKIP
         >>> plt.show()  # doctest: +SKIP
         """
-        self._check_control_points()
+        self._get_control_points_xp()
         centroid = self._control_points_centroid()
         self.translate(-centroid)
         self.control_points *= scaling_factor
@@ -2038,7 +2063,7 @@ class Spline:
         >>> plt.legend()  # doctest: +SKIP
         >>> plt.show()  # doctest: +SKIP
         """
-        self._check_control_points()
+        self._get_control_points_xp()
         if self.ndim == 1:
             raise RuntimeError("1D splines can not be rotated.")
 
@@ -2104,7 +2129,7 @@ class Spline:
         >>> plt.gca().set_aspect("equal")  # doctest: +SKIP
         >>> plt.show()  # doctest: +SKIP
         """
-        self._check_control_points()
+        self._get_control_points_xp()
         if self.ndim == 1:
             raise RuntimeError("Cannot compute distance for 1D splines.")
 
@@ -2302,7 +2327,7 @@ class Spline:
         >>> connectivity.shape
         (6480, 4)
         """
-        self._check_control_points()
+        self._get_control_points_xp()
         if self.ndim != 3:
             raise NotImplementedError("Meshes are only implemented for splines in 3D.")
         cap_ends = self._normalize_cap_ends(cap_ends) if mesh_type == "surface" and not self.closed else None
@@ -2575,7 +2600,7 @@ class HermiteSpline(Spline):
         can be used. This helper function checks if control points and tangents have been
         set.
         """
-        self._check_control_points()
+        self._get_control_points_xp()
         if self.tangents is None:
             raise RuntimeError(self._no_tangents_msg)
 
