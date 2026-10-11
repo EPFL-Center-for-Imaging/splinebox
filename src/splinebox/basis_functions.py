@@ -14,6 +14,7 @@ import collections
 import contextlib
 import inspect
 import math
+import numbers
 import sys
 import warnings
 
@@ -189,7 +190,7 @@ class BasisFunction:
             and other.support == self.support
         )
 
-    def __call__(self, t, derivative=0, jit=True):
+    def __call__(self, t, derivative=0, jit=False):
         """
         Evaluate the function at position(s) t. You can optionally
         pass derivative=1 or 2 to obtain the respective derivative(s).
@@ -222,7 +223,8 @@ class BasisFunction:
         """
         xp = array_api_compat.numpy if isinstance(t, (int, float)) else array_api_compat.array_namespace(t)
 
-        use_numba = jit and array_api_compat.is_numpy_namespace(xp)
+        # The xp functions can only accept arrays to for single value we use the numba version
+        use_numba = (jit and array_api_compat.is_numpy_namespace(xp)) or isinstance(t, numbers.Number)
 
         # Select the function that should be run
         if derivative == 0:
@@ -238,9 +240,10 @@ class BasisFunction:
         if use_numba:
             return func(t)
         elif jit and array_api_compat.is_torch_namespace(xp):
-            return _cached_compiled(
-                func, "torch", lambda fn: xp.compile(fullgraph=True, dynamic=True, mode="reduce-overhead")(fn)
-            )(t, xp)
+            with _torch_compile_recompile_limit():
+                return _cached_compiled(
+                    func, "torch", lambda fn: xp.compile(fullgraph=True, dynamic=True, mode="reduce-overhead")(fn)
+                )(t, xp)
         elif jit and array_api_compat.is_jax_namespace(xp):
             import jax
 
@@ -512,8 +515,8 @@ class B1(BasisFunction):
     def _func_xp(t, xp):  # pragma: no cover
         return xp.where(
             xp.abs(t) < 1,
-            1 - xp.abs(t),
-            0,
+            1.0 - xp.abs(t),
+            0.0,
         )
 
     @staticmethod
@@ -533,7 +536,7 @@ class B1(BasisFunction):
         abs_t = xp.abs(t)
         result = -xp.sign(t)
         result = xp.where((t == 0) | (abs_t == 1), xp.nan, result)
-        return xp.where(abs_t > 1, 0, result)
+        return xp.where(abs_t > 1, 0.0, result)
 
     @staticmethod
     @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
@@ -542,7 +545,7 @@ class B1(BasisFunction):
 
     @staticmethod
     def _derivative_2_xp(t, xp):
-        return xp.where((t == -1) | (t == 0) | (t == 1), xp.nan, 0)
+        return xp.where((t == -1) | (t == 0) | (t == 1), xp.nan, xp.asarray(0.0, dtype=t.dtype))
 
     @staticmethod
     def _filter_symmetric_numba(s):
@@ -669,7 +672,7 @@ class B2(BasisFunction):
                 xp.where(
                     (t > 0.5) & (t <= 1.5),
                     0.5 * (t**2) - 1.5 * t + 1.125,
-                    0,
+                    0.0,
                 ),
             ),
         )
@@ -685,7 +688,7 @@ class B2(BasisFunction):
                 xp.where(
                     (t > 0.5) & (t <= 1.5),
                     t - 1.5,
-                    0,
+                    0.0,
                 ),
             ),
         )
@@ -694,19 +697,19 @@ class B2(BasisFunction):
     def _derivative_2_xp(t, xp):  # pragma: no cover
         return xp.where(
             t < -1.5,
-            0,
+            0.0,
             xp.where(
                 (t > -1.5) & (t < -0.5),
-                1,
+                1.0,
                 xp.where(
                     (t > -0.5) & (t < 0.5),
-                    -2,
+                    -2.0,
                     xp.where(
                         (t > 0.5) & (t < 1.5),
-                        1,
+                        1.0,
                         xp.where(
                             t > 1.5,
-                            0,
+                            xp.asarray(0.0, dtype=t.dtype),
                             xp.nan,
                         ),
                     ),
@@ -819,7 +822,7 @@ class B3(BasisFunction):
             xp.where(
                 (abs_t >= 1) & (abs_t <= 2),
                 ((2 - abs_t) ** 3) / 6,
-                0,
+                0.0,
             ),
         )
 
@@ -837,7 +840,7 @@ class B3(BasisFunction):
                     xp.where(
                         (t >= -2) & (t <= -1),
                         0.5 * ((2 + t) ** 2),
-                        0,
+                        0.0,
                     ),
                 ),
             ),
@@ -857,7 +860,7 @@ class B3(BasisFunction):
                     xp.where(
                         (t >= -2) & (t <= -1),
                         2 + t,
-                        0,
+                        0.0,
                     ),
                 ),
             ),
@@ -1126,7 +1129,8 @@ class Exponential(BasisFunction):
         half_support = self.support / 2
         t = t + half_support
 
-        alpha = xp.asarray(xp.pi / self.M)
+        alpha = xp.pi / self.M
+        alpha = xp.asarray(alpha, dtype=xp.result_type(t, alpha), device=array_api_compat.device(t))
         L = 1 / (4 * xp.sin(alpha) ** 2)
 
         val = xp.where(
@@ -1138,7 +1142,7 @@ class Exponential(BasisFunction):
                 xp.where(
                     (t >= 2) & (t <= 3),
                     2 * xp.sin(alpha * (t - 3)) ** 2,
-                    0,
+                    0.0,
                 ),
             ),
         )
@@ -1148,7 +1152,8 @@ class Exponential(BasisFunction):
         half_support = self.support / 2
         t = t + half_support
 
-        alpha = xp.asarray(xp.pi / self.M)
+        alpha = xp.pi / self.M
+        alpha = xp.asarray(alpha, dtype=xp.result_type(t, alpha), device=array_api_compat.device(t))
         L = 1 / (4 * xp.sin(alpha) ** 2)
 
         val = xp.where(
@@ -1160,7 +1165,7 @@ class Exponential(BasisFunction):
                 xp.where(
                     (t > 2) & (t <= 3),
                     4 * alpha * xp.sin(alpha * (t - 3)) * xp.cos(alpha * (t - 3)),
-                    0,
+                    0.0,
                 ),
             ),
         )
@@ -1170,12 +1175,13 @@ class Exponential(BasisFunction):
         half_support = self.support / 2
         t = t + half_support
 
-        alpha = xp.asarray(xp.pi / self.M)
+        alpha = xp.pi / self.M
+        alpha = xp.asarray(alpha, dtype=xp.result_type(t, alpha), device=array_api_compat.device(t))
         L = 1 / (4 * xp.sin(alpha) ** 2)
 
         val = xp.where(
             t < 0,
-            0,
+            0.0,
             xp.where(
                 (t > 0) & (t < 1),
                 4 * alpha**2 * (xp.cos(alpha * t) ** 2 - xp.sin(alpha * t) ** 2),
@@ -1187,7 +1193,7 @@ class Exponential(BasisFunction):
                         4 * alpha**2 * (xp.cos(alpha * (t - 3)) ** 2 - xp.sin(alpha * (t - 3)) ** 2),
                         xp.where(
                             t > 3,
-                            0,
+                            0.0,
                             xp.nan,
                         ),
                     ),
@@ -1473,7 +1479,7 @@ class CatmullRom(BasisFunction):
             xp.where(
                 (abs_t > 1) & (abs_t <= 2),
                 (-1 / 2) * (abs_t**3) + (5 / 2) * (abs_t**2) - 4 * abs_t + 2,
-                0,
+                0.0,
             ),
         )
 
@@ -1491,7 +1497,7 @@ class CatmullRom(BasisFunction):
                     xp.where(
                         (t >= -2) & (t < -1),
                         1.5 * t * t + 5 * t + 4,
-                        0,
+                        0.0,
                     ),
                 ),
             ),
@@ -1517,7 +1523,7 @@ class CatmullRom(BasisFunction):
                             xp.where(
                                 (t > -2) & (t < -1),
                                 3 * t + 5,
-                                0,
+                                0.0,
                             ),
                         ),
                     ),
@@ -1681,7 +1687,7 @@ class CubicHermite(BasisFunction):
             xp.where(
                 (t < 0) & (t >= -1),
                 (1 - (2 * t)) * (t + 1) * (t + 1),
-                0,
+                0.0,
             ),
         )
 
@@ -1693,7 +1699,7 @@ class CubicHermite(BasisFunction):
             xp.where(
                 (t < 0) & (t >= -1),
                 t * (t + 1) * (t + 1),
-                0,
+                0.0,
             ),
         )
 
@@ -1708,7 +1714,7 @@ class CubicHermite(BasisFunction):
             xp.where(
                 (t < 0) & (t >= -1),
                 -6 * t * (t + 1),
-                0,
+                0.0,
             ),
         )
 
@@ -1720,7 +1726,7 @@ class CubicHermite(BasisFunction):
             xp.where(
                 (t < 0) & (t >= -1),
                 3 * t * t + 4 * t + 1,
-                0,
+                0.0,
             ),
         )
 
@@ -1735,7 +1741,7 @@ class CubicHermite(BasisFunction):
             xp.where(
                 (t < 0) & (t >= -1),
                 -12 * t - 6,
-                0,
+                0.0,
             ),
         )
 
@@ -1747,7 +1753,7 @@ class CubicHermite(BasisFunction):
             xp.where(
                 (t < 0) & (t >= -1),
                 6 * t + 4,
-                0,
+                0.0,
             ),
         )
 
@@ -2062,19 +2068,21 @@ class ExponentialHermite(BasisFunction):
     @staticmethod
     def _he31_xp(t, M, xp):  # pragma: no cover
         abs_t = xp.abs(t)
-        alpha = xp.asarray(xp.pi / M)
+        alpha = xp.pi / M
+        alpha = xp.asarray(alpha, dtype=xp.result_type(t, alpha), device=array_api_compat.device(t))
         denom = (alpha * xp.cos(alpha)) - xp.sin(alpha)
         num = (
             (0.5 * (2 * alpha * xp.cos(alpha) - xp.sin(alpha)))
             - (alpha * xp.cos(alpha) * abs_t)
             - (0.5 * xp.sin(alpha - (2 * alpha * abs_t)))
         )
-        return xp.where((abs_t >= 0) & (abs_t <= 1), num / denom, 0)
+        return xp.where((abs_t >= 0) & (abs_t <= 1), num / denom, 0.0)
 
     @staticmethod
     def _he32_xp(t, M, xp):  # pragma: no cover
         abs_t = xp.abs(t)
-        alpha = xp.asarray(xp.pi / M)
+        alpha = xp.pi / M
+        alpha = xp.asarray(alpha, dtype=xp.result_type(t, alpha), device=array_api_compat.device(t))
         denom = ((alpha * xp.cos(alpha)) - xp.sin(alpha)) * 8 * alpha * xp.sin(alpha)
         num = (
             -((2 * alpha * xp.cos(2 * alpha)) - xp.sin(2 * alpha))
@@ -2082,7 +2090,7 @@ class ExponentialHermite(BasisFunction):
             - (2 * xp.sin(alpha) * xp.cos(2 * alpha * (abs_t - 0.5)))
             + (2 * alpha * xp.cos(2 * alpha * (abs_t - 1)))
         )
-        val = xp.where((abs_t >= 0) & (abs_t <= 1), num / denom, 0)
+        val = xp.where((abs_t >= 0) & (abs_t <= 1), num / denom, 0.0)
         return xp.where(t >= 0, val, -val)
 
     def _derivative_1_xp(self, t, xp):  # pragma: no cover
@@ -2091,23 +2099,25 @@ class ExponentialHermite(BasisFunction):
     @staticmethod
     def _he31prime_xp(t, M, xp):  # pragma: no cover
         abs_t = xp.abs(t)
-        alpha = xp.asarray(xp.pi / M)
+        alpha = xp.pi / M
+        alpha = xp.asarray(alpha, dtype=xp.result_type(t, alpha), device=array_api_compat.device(t))
         denom = (alpha * xp.cos(alpha)) - xp.sin(alpha)
         num = -(alpha * xp.cos(alpha)) + (alpha * xp.cos(alpha - (2 * alpha * abs_t)))
-        val = xp.where((abs_t >= 0) & (abs_t <= 1), num / denom, 0)
+        val = xp.where((abs_t >= 0) & (abs_t <= 1), num / denom, 0.0)
         return xp.where(t >= 0, val, -val)
 
     @staticmethod
     def _he32prime_xp(t, M, xp):  # pragma: no cover
         abs_t = xp.abs(t)
-        alpha = xp.asarray(xp.pi / M)
+        alpha = xp.pi / M
+        alpha = xp.asarray(alpha, dtype=xp.result_type(t, alpha), device=array_api_compat.device(t))
         denom = ((alpha * xp.cos(alpha)) - xp.sin(alpha)) * 8 * alpha * xp.sin(alpha)
         num = (
             -(4 * alpha * xp.sin(alpha) * xp.sin(alpha))
             + (4 * alpha * xp.sin(alpha) * xp.sin(2 * alpha * (abs_t - 0.5)))
             - (4 * alpha**2 * xp.sin(2 * alpha * (abs_t - 1)))
         )
-        return xp.where((abs_t >= 0) & (abs_t <= 1), num / denom, 0)
+        return xp.where((abs_t >= 0) & (abs_t <= 1), num / denom, 0.0)
 
     def _derivative_2_xp(self, t, xp):  # pragma: no cover
         return xp.stack([self._he31primeprime_xp(t, self.M, xp), self._he32primeprime_xp(t, self.M, xp)], axis=-1)
@@ -2115,20 +2125,22 @@ class ExponentialHermite(BasisFunction):
     @staticmethod
     def _he31primeprime_xp(t, M, xp):  # pragma: no cover
         abs_t = xp.abs(t)
-        alpha = xp.asarray(xp.pi / M)
+        alpha = xp.pi / M
+        alpha = xp.asarray(alpha, dtype=xp.result_type(t, alpha), device=array_api_compat.device(t))
         denom = (alpha * xp.cos(alpha)) - xp.sin(alpha)
         num = 2 * alpha**2 * xp.sin(alpha - (2 * alpha * abs_t))
-        return xp.where((abs_t >= 0) & (abs_t <= 1), num / denom, 0)
+        return xp.where((abs_t >= 0) & (abs_t <= 1), num / denom, 0.0)
 
     @staticmethod
     def _he32primeprime_xp(t, M, xp):  # pragma: no cover
         abs_t = xp.abs(t)
-        alpha = xp.asarray(xp.pi / M)
+        alpha = xp.pi / M
+        alpha = xp.asarray(alpha, dtype=xp.result_type(t, alpha), device=array_api_compat.device(t))
         denom = ((alpha * xp.cos(alpha)) - xp.sin(alpha)) * 8 * alpha * xp.sin(alpha)
         num = +(8 * alpha**2 * xp.sin(alpha) * xp.cos(2 * alpha * (abs_t - 0.5))) - (
             8 * alpha**3 * xp.cos(2 * alpha * (abs_t - 1))
         )
-        val = xp.where((abs_t >= 0) & (abs_t <= 1), num / denom, 0)
+        val = xp.where((abs_t >= 0) & (abs_t <= 1), num / denom, 0.0)
         return xp.where(t >= 0, val, -val)
 
     @staticmethod

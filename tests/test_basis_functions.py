@@ -1,5 +1,7 @@
+import collections
 import math
 
+import array_api_compat
 import numpy as np
 import pytest
 import splinebox.basis_functions
@@ -53,7 +55,7 @@ def test_refinement_mask(basis_function, is_locally_refinable, request):
     if isinstance(basis_function, splinebox.basis_functions.Exponential):
         # The refinement mask of the exponential basis function fails.
         # This might be because the value of M has to be changed after
-        # refinement. Since we don't have an imidiate need for the refinement
+        # refinement. Since we don't have an immediate need for the refinement
         # mask, we xfail the tests for now and will revisit this later.
         request.node.add_marker(pytest.mark.xfail)
     if is_locally_refinable(basis_function):
@@ -79,32 +81,37 @@ def test_refinement_mask(basis_function, is_locally_refinable, request):
             basis_function.refinement_mask()
 
 
-def test_call_output_type(basis_function, derivative, is_hermite_basis_function):
+def test_call_output_type(
+    basis_function, derivative, basis_function_call_positions, is_hermite_basis_function, as_xp_array, xp
+):
     """
     If a single value is provided, a single value should be returned.
-    Otherwise, a numpy array should be returned.
+    Otherwise, an array should be returned.
     """
-    for t in [
-        0.5,
-        np.array([0.5]),
-        np.array([-0.5, 0.0, 0.5]),
-        np.array([[-0.7, -0.2, 0.3], [-0.6, -0.1, 0.4], [-0.5, 0.0, 0.5], [-0.4, 0.1, 0.6]]),
-    ]:
+    t = basis_function_call_positions
 
-        vals = basis_function(t, derivative=derivative)
+    vals = basis_function(t, derivative=derivative)
+
+    if not isinstance(t, collections.abc.Iterable):
 
         if is_hermite_basis_function(basis_function):
-            assert isinstance(vals, np.ndarray)
-            assert vals.shape[-1] == 2
-            if isinstance(t, float):
-                assert vals.ndim == 1
-            else:
-                assert np.all(vals.shape[:-1] == t.shape)
-
+            assert vals.ndim == 1
+            assert vals.shape[0] == 2
         else:
-            assert isinstance(vals, type(t))
-            if isinstance(t, np.ndarray):
-                assert np.all(vals.shape == t.shape)
+            assert isinstance(vals, float)
+
+    else:
+
+        # Check that the output is an array from the xp namespace
+        assert array_api_compat.is_array_api_obj(vals)
+        assert array_api_compat.array_namespace(vals) is xp
+
+        if is_hermite_basis_function(basis_function):
+            assert np.all(vals.shape[:-1] == t.shape)
+        else:
+            assert np.all(vals.shape == t.shape)
+
+        assert xp.isdtype(vals.dtype, kind="real floating")
 
 
 def test_filter_output_type(basis_function, request):
