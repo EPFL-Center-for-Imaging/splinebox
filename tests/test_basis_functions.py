@@ -82,11 +82,15 @@ def test_refinement_mask(basis_function, is_locally_refinable, request):
 
 
 def test_call_output_type(
-    basis_function, derivative, basis_function_call_positions, is_hermite_basis_function, as_xp_array, xp
+    basis_function, derivative, basis_function_call_positions, dtype, is_hermite_basis_function, as_xp_array, xp
 ):
     """
     If a single value is provided, a single value should be returned.
     Otherwise, an array should be returned.
+
+    The value returned should be a float. For integer input the returned
+    value should have the default floating point dtype of the array namespace
+    while float32 and float64 input should be returned unchanged.
     """
     t = basis_function_call_positions
 
@@ -106,12 +110,16 @@ def test_call_output_type(
         assert array_api_compat.is_array_api_obj(vals)
         assert array_api_compat.array_namespace(vals) is xp
 
+        # Integer input should be cast to the default floating point dtype of
+        # the array namespace while float32 and float64 input keeps its dtype.
+        assert xp.isdtype(vals.dtype, kind="real floating")
+        expected_dtype = xp.asarray(1.0).dtype if dtype is int else dtype
+        assert vals.dtype == expected_dtype
+
         if is_hermite_basis_function(basis_function):
             assert np.all(vals.shape[:-1] == t.shape)
         else:
             assert np.all(vals.shape == t.shape)
-
-        assert xp.isdtype(vals.dtype, kind="real floating")
 
 
 def test_filter_output_type(basis_function, request):

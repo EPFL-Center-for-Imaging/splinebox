@@ -1194,7 +1194,7 @@ class Exponential(BasisFunction):
                         xp.where(
                             t > 3,
                             0.0,
-                            xp.nan,
+                            xp.asarray(xp.nan, dtype=t.dtype),
                         ),
                     ),
                 ),

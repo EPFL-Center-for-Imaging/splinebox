@@ -61,6 +61,19 @@ def device(xp_device):
     return xp_device[1]
 
 
+@pytest.fixture(params=["int", "float32", "float64"])
+def dtype(request, xp):
+    """
+    The dtype of the input array.
+
+    The output is expected to be of dtype float32 or
+    float64 if the input is of dtype float32 or float64 respectively and the
+    default floating point dtype of the array namespace if the input is of an
+    integer dtype.
+    """
+    return int if request.param == "int" else getattr(xp, request.param)
+
+
 @pytest.fixture
 def as_xp_array(xp, device):
     def _as_xp_array(obj, **kwargs):
@@ -259,15 +272,16 @@ def call_positions(request, as_xp_array):
     params=[
         0.5,
         1,
+        4,
         [0.5],
-        [0, 1],
-        [-0.5, 0.0, 0.5],
+        [0, 1, 4],
+        [-0.5, 0.0, 0.5, 4.1],
         [[-0.7, -0.2, 0.3], [-0.6, -0.1, 0.4], [-0.5, 0.0, 0.5], [-0.4, 0.1, 0.6]],
     ]
 )
-def basis_function_call_positions(request, as_xp_array):
+def basis_function_call_positions(request, as_xp_array, dtype):
     if isinstance(request.param, collections.abc.Iterable):
-        return as_xp_array(request.param)
+        return as_xp_array(request.param, dtype=dtype)
     return request.param
 
 
