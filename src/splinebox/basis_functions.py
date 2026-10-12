@@ -269,7 +269,7 @@ class BasisFunction:
     def _derivative_2_xp(self, t, xp):
         raise NotImplementedError(BasisFunction._unimplemented_message)
 
-    def filter_symmetric(self, s, jit=True):
+    def filter_symmetric(self, s, jit=False):
         """
         Returns a filtered version of the input s,
         used to convert knots into control points for an **open spline**.
@@ -316,7 +316,9 @@ class BasisFunction:
         """
         xp = array_api_compat.array_namespace(s)
 
-        s = xp.astype(s, float)
+        if not xp.isdtype(s.dtype, kind="real floating"):
+            # Convert to default floating type
+            s = xp.astype(s, xp.asarray(1.0).dtype)
 
         use_numba = jit and array_api_compat.is_numpy_namespace(xp)
 
@@ -351,7 +353,7 @@ class BasisFunction:
     def _filter_symmetric_xp(self, s, xp):
         raise NotImplementedError(BasisFunction._unimplemented_message)
 
-    def filter_periodic(self, s, jit=True):
+    def filter_periodic(self, s, jit=False):
         """
         Returns a filtered version of the input s, used to convert
         knots into control points for a **closed spline**.
@@ -404,7 +406,9 @@ class BasisFunction:
         """
         xp = array_api_compat.array_namespace(s)
 
-        s = xp.astype(s, float)
+        if not xp.isdtype(s.dtype, kind="real floating"):
+            # Convert to default floating type
+            s = xp.astype(s, xp.asarray(1.0).dtype)
 
         use_numba = jit and array_api_compat.is_numpy_namespace(xp)
 

@@ -122,20 +122,37 @@ def test_call_output_type(
             assert np.all(vals.shape == t.shape)
 
 
-def test_filter_output_type(basis_function, request):
+def test_filter_output_type(basis_function, as_xp_array, dtype, xp, request):
 
     if isinstance(basis_function, splinebox.basis_functions.B2):
         # The filter_symmetric and filter_periodic are not implemented for B2
         request.node.add_marker(pytest.mark.xfail)
 
     for s in [np.array([1, 2, 3, 4, 5]), np.array([[1, 1], [2, 2], [3, 3], [4, 4], [5, 5]])]:
+        s = as_xp_array(s, dtype=dtype)
+        print(s.dtype)
         output = basis_function.filter_periodic(s)
-        assert isinstance(output, np.ndarray)
-        assert np.issubdtype(output.dtype, np.floating)
+        print(output.dtype)
+
+        assert array_api_compat.is_array_api_obj(output)
+        assert array_api_compat.array_namespace(output) is xp
+        # Integer input should be cast to the default floating point dtype of
+        # the array namespace while float32 and float64 input keeps its dtype.
+        assert xp.isdtype(output.dtype, kind="real floating")
+        expected_dtype = xp.asarray(1.0).dtype if dtype is int else dtype
+        print(expected_dtype)
+        assert output.dtype == expected_dtype
         assert np.all(output.shape == s.shape)
+
+        # Same test for the symmetric filter
         output = basis_function.filter_symmetric(s)
-        assert isinstance(output, np.ndarray)
-        assert np.issubdtype(output.dtype, np.floating)
+        assert array_api_compat.is_array_api_obj(output)
+        assert array_api_compat.array_namespace(output) is xp
+        # Integer input should be cast to the default floating point dtype of
+        # the array namespace while float32 and float64 input keeps its dtype.
+        assert xp.isdtype(output.dtype, kind="real floating")
+        expected_dtype = xp.asarray(1.0).dtype if dtype is int else dtype
+        assert output.dtype == expected_dtype
         assert np.all(output.shape == s.shape)
 
 
