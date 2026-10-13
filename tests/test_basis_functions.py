@@ -130,9 +130,7 @@ def test_filter_output_type(basis_function, as_xp_array, dtype, xp, request):
 
     for s in [np.array([1, 2, 3, 4, 5]), np.array([[1, 1], [2, 2], [3, 3], [4, 4], [5, 5]])]:
         s = as_xp_array(s, dtype=dtype)
-        print(s.dtype)
         output = basis_function.filter_periodic(s)
-        print(output.dtype)
 
         assert array_api_compat.is_array_api_obj(output)
         assert array_api_compat.array_namespace(output) is xp
@@ -140,7 +138,6 @@ def test_filter_output_type(basis_function, as_xp_array, dtype, xp, request):
         # the array namespace while float32 and float64 input keeps its dtype.
         assert xp.isdtype(output.dtype, kind="real floating")
         expected_dtype = xp.asarray(1.0).dtype if dtype is int else dtype
-        print(expected_dtype)
         assert output.dtype == expected_dtype
         assert np.all(output.shape == s.shape)
 
