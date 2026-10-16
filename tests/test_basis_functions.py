@@ -27,7 +27,7 @@ def test_base_class_filters_and_refinement_mask(xp, as_xp_array):
         basis_function.refinement_mask()
 
 
-def test_filters(basis_function, is_interpolating, knot_gen, xp, request):
+def test_filters(basis_function, is_interpolating, knot_gen, xp, dtype, request):
     if isinstance(basis_function, splinebox.basis_functions.B2):
         # The filter_symmetric and filter_periodic are not implemented for B2
         request.node.add_marker(pytest.mark.xfail)
@@ -36,19 +36,24 @@ def test_filters(basis_function, is_interpolating, knot_gen, xp, request):
     if is_interpolating(basis_function):
         # The filters should not do anything since knot and control points are
         # the same for interpolating splines.
-        assert xp.allclose(basis_function.filter_symmetric(s), s)
-        assert xp.allclose(basis_function.filter_periodic(s), s)
-    else:
-        # Flipping the knot or the control points should give the same result
-        flipped = xp.flip(s, axis=0)
-        assert xp.allclose(
-            basis_function.filter_symmetric(s),
-            xp.flip(basis_function.filter_symmetric(flipped), axis=0),
-        )
-        assert xp.allclose(
-            basis_function.filter_periodic(s),
-            xp.flip(basis_function.filter_periodic(flipped), axis=0),
-        )
+        filtered = basis_function.filter_symmetric(s)
+        assert xp.allclose(filtered, xp.astype(s, filtered.dtype))
+        filtered = basis_function.filter_periodic(s)
+        assert xp.allclose(filtered, xp.astype(s, filtered.dtype))
+
+    # Flipping the knot or the control points should give the same result
+    flipped = xp.flip(s, axis=0)
+    atol = 1e-5 if s.dtype is int or s.dtype == xp.float32 else 1e-8
+    assert xp.allclose(
+        basis_function.filter_symmetric(s),
+        xp.flip(basis_function.filter_symmetric(flipped), axis=0),
+        atol=atol,
+    )
+    assert xp.allclose(
+        basis_function.filter_periodic(s),
+        xp.flip(basis_function.filter_periodic(flipped), axis=0),
+        atol=atol,
+    )
 
 
 def test_refinement_mask(basis_function, is_locally_refinable, request):

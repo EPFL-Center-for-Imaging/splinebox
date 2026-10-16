@@ -190,7 +190,7 @@ class BasisFunction:
             and other.support == self.support
         )
 
-    def __call__(self, t, derivative=0, jit=False):
+    def __call__(self, t, derivative=0, jit=True):
         """
         Evaluate the function at position(s) t. You can optionally
         pass derivative=1 or 2 to obtain the respective derivative(s).
@@ -508,7 +508,7 @@ class B1(BasisFunction):
         return "splinebox.basis_functions.B1()"
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
+    @numba.vectorize([numba.float32(numba.float32), numba.float64(numba.float64)], nopython=True, cache=True)
     def _func_numba(t):  # pragma: no cover
         val = 0
         if abs(t) >= 0 and abs(t) < 1:
@@ -524,7 +524,7 @@ class B1(BasisFunction):
         )
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
+    @numba.vectorize([numba.float32(numba.float32), numba.float64(numba.float64)], nopython=True, cache=True)
     def _derivative_1_numba(t):  # pragma: no cover
         val = 0
         if t > -1 and t < 0:
@@ -543,7 +543,7 @@ class B1(BasisFunction):
         return xp.where(abs_t > 1, 0.0, result)
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
+    @numba.vectorize([numba.float32(numba.float32), numba.float64(numba.float64)], nopython=True, cache=True)
     def _derivative_2_numba(t):
         return np.nan if t in (-1, 0, 1) else 0
 
@@ -626,7 +626,7 @@ class B2(BasisFunction):
         return "splinebox.basis_functions.B2()"
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
+    @numba.vectorize([numba.float32(numba.float32), numba.float64(numba.float64)], nopython=True, cache=True)
     def _func_numba(t):  # pragma: no cover
         val = 0
         if t >= -1.5 and t <= -0.5:
@@ -638,7 +638,7 @@ class B2(BasisFunction):
         return val
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
+    @numba.vectorize([numba.float32(numba.float32), numba.float64(numba.float64)], nopython=True, cache=True)
     def _derivative_1_numba(t):  # pragma: no cover
         val = 0
         if t >= -1.5 and t <= -0.5:
@@ -650,7 +650,7 @@ class B2(BasisFunction):
         return val
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
+    @numba.vectorize([numba.float32(numba.float32), numba.float64(numba.float64)], nopython=True, cache=True)
     def _derivative_2_numba(t):  # pragma: no cover
         val = np.nan
         if t < -1.5:
@@ -780,7 +780,7 @@ class B3(BasisFunction):
         return "splinebox.basis_functions.B3()"
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
+    @numba.vectorize([numba.float32(numba.float32), numba.float64(numba.float64)], nopython=True, cache=True)
     def _func_numba(t):  # pragma: no cover
         val = 0
         if abs(t) >= 0 and abs(t) < 1:
@@ -790,7 +790,7 @@ class B3(BasisFunction):
         return val
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
+    @numba.vectorize([numba.float32(numba.float32), numba.float64(numba.float64)], nopython=True, cache=True)
     def _derivative_1_numba(t):  # pragma: no cover
         val = 0
         if t >= 0 and t < 1:
@@ -804,7 +804,7 @@ class B3(BasisFunction):
         return val
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
+    @numba.vectorize([numba.float32(numba.float32), numba.float64(numba.float64)], nopython=True, cache=True)
     def _derivative_2_numba(t):  # pragma: no cover
         val = 0
         if t >= 0 and t < 1:
@@ -1066,7 +1066,14 @@ class Exponential(BasisFunction):
         return self.__func_numba(t, self.support / 2, self.M)
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64, numba.float64, numba.float64)], nopython=True, cache=True)
+    @numba.vectorize(
+        [
+            numba.float32(numba.float32, numba.float32, numba.float32),
+            numba.float64(numba.float64, numba.float64, numba.float64),
+        ],
+        nopython=True,
+        cache=True,
+    )
     def __func_numba(t, half_support, M):  # pragma: no cover
         t += half_support
 
@@ -1087,7 +1094,14 @@ class Exponential(BasisFunction):
         return self.__derivative_1_numba(t, self.support / 2, self.M)
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64, numba.float64, numba.float64)], nopython=True, cache=True)
+    @numba.vectorize(
+        [
+            numba.float32(numba.float32, numba.float32, numba.float32),
+            numba.float64(numba.float64, numba.float64, numba.float64),
+        ],
+        nopython=True,
+        cache=True,
+    )
     def __derivative_1_numba(t, half_support, M):  # pragma: no cover
         t += half_support
 
@@ -1108,7 +1122,14 @@ class Exponential(BasisFunction):
         return self.__derivative_2_numba(t, self.support / 2, self.M)
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64, numba.float64, numba.float64)], nopython=True, cache=True)
+    @numba.vectorize(
+        [
+            numba.float32(numba.float32, numba.float32, numba.float32),
+            numba.float64(numba.float64, numba.float64, numba.float64),
+        ],
+        nopython=True,
+        cache=True,
+    )
     def __derivative_2_numba(t, half_support, M):  # pragma: no cover
         t += half_support
 
@@ -1134,7 +1155,9 @@ class Exponential(BasisFunction):
         t = t + half_support
 
         alpha = xp.pi / self.M
-        alpha = xp.asarray(alpha, dtype=xp.result_type(t, alpha), device=array_api_compat.device(t))
+        dtype = xp.asarray(1.0).dtype if xp.isdtype(t.dtype, kind="integral") else t.dtype
+        device = t.device if hasattr(t, "device") else None
+        alpha = xp.asarray(alpha, dtype=dtype, device=device)
         L = 1 / (4 * xp.sin(alpha) ** 2)
 
         val = xp.where(
@@ -1157,7 +1180,9 @@ class Exponential(BasisFunction):
         t = t + half_support
 
         alpha = xp.pi / self.M
-        alpha = xp.asarray(alpha, dtype=xp.result_type(t, alpha), device=array_api_compat.device(t))
+        dtype = xp.asarray(1.0).dtype if xp.isdtype(t.dtype, kind="integral") else t.dtype
+        device = t.device if hasattr(t, "device") else None
+        alpha = xp.asarray(alpha, dtype=dtype, device=device)
         L = 1 / (4 * xp.sin(alpha) ** 2)
 
         val = xp.where(
@@ -1180,7 +1205,9 @@ class Exponential(BasisFunction):
         t = t + half_support
 
         alpha = xp.pi / self.M
-        alpha = xp.asarray(alpha, dtype=xp.result_type(t, alpha), device=array_api_compat.device(t))
+        dtype = xp.asarray(1.0).dtype if xp.isdtype(t.dtype, kind="integral") else t.dtype
+        device = t.device if hasattr(t, "device") else None
+        alpha = xp.asarray(alpha, dtype=dtype, device=device)
         L = 1 / (4 * xp.sin(alpha) ** 2)
 
         val = xp.where(
@@ -1435,7 +1462,7 @@ class CatmullRom(BasisFunction):
         return "splinebox.basis_functions.CatmullRom()"
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
+    @numba.vectorize([numba.float32(numba.float32), numba.float64(numba.float64)], nopython=True, cache=True)
     def _func_numba(t):  # pragma: no cover
         val = 0
         if np.abs(t) >= 0 and np.abs(t) <= 1:
@@ -1445,7 +1472,7 @@ class CatmullRom(BasisFunction):
         return val
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
+    @numba.vectorize([numba.float32(numba.float32), numba.float64(numba.float64)], nopython=True, cache=True)
     def _derivative_1_numba(t):  # pragma: no cover
         val = 0
         if t >= 0 and t <= 1:
@@ -1459,7 +1486,7 @@ class CatmullRom(BasisFunction):
         return val
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
+    @numba.vectorize([numba.float32(numba.float32), numba.float64(numba.float64)], nopython=True, cache=True)
     def _derivative_2_numba(t):  # pragma: no cover
         val = 0
         if t >= 0 and t < 1:
@@ -1615,7 +1642,7 @@ class CubicHermite(BasisFunction):
         return np.stack([self.h31_numba(t), self.h32_numba(t)], axis=-1)
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
+    @numba.vectorize([numba.float32(numba.float32), numba.float64(numba.float64)], nopython=True, cache=True)
     def h31_numba(t):  # pragma: no cover
         val = 0
         if t >= 0 and t <= 1:
@@ -1625,7 +1652,7 @@ class CubicHermite(BasisFunction):
         return val
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
+    @numba.vectorize([numba.float32(numba.float32), numba.float64(numba.float64)], nopython=True, cache=True)
     def h32_numba(t):  # pragma: no cover
         val = 0
         if t >= 0 and t <= 1:
@@ -1638,7 +1665,7 @@ class CubicHermite(BasisFunction):
         return np.stack([self.h31prime_numba(t), self.h32prime_numba(t)], axis=-1)
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
+    @numba.vectorize([numba.float32(numba.float32), numba.float64(numba.float64)], nopython=True, cache=True)
     def h31prime_numba(t):  # pragma: no cover
         val = 0
         if t >= 0 and t <= 1:
@@ -1648,7 +1675,7 @@ class CubicHermite(BasisFunction):
         return val
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
+    @numba.vectorize([numba.float32(numba.float32), numba.float64(numba.float64)], nopython=True, cache=True)
     def h32prime_numba(t):  # pragma: no cover
         val = 0
         if t >= 0 and t <= 1:
@@ -1661,7 +1688,7 @@ class CubicHermite(BasisFunction):
         return np.stack([self.h31primeprime_numba(t), self.h32primeprime_numba(t)], axis=-1)
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
+    @numba.vectorize([numba.float32(numba.float32), numba.float64(numba.float64)], nopython=True, cache=True)
     def h31primeprime_numba(t):  # pragma: no cover
         val = 0
         if t >= 0 and t <= 1:
@@ -1671,7 +1698,7 @@ class CubicHermite(BasisFunction):
         return val
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64)], nopython=True, cache=True)
+    @numba.vectorize([numba.float32(numba.float32), numba.float64(numba.float64)], nopython=True, cache=True)
     def h32primeprime_numba(t):  # pragma: no cover
         val = 0
         if t >= 0 and t <= 1:
@@ -1956,7 +1983,11 @@ class ExponentialHermite(BasisFunction):
         return np.stack([self._he31_numba(t, self.M), self._he32_numba(t, self.M)], axis=-1)
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
+    @numba.vectorize(
+        [numba.float32(numba.float32, numba.float32), numba.float64(numba.float64, numba.float64)],
+        nopython=True,
+        cache=True,
+    )
     def _he31_numba(t, M):  # pragma: no cover
         def _g1(t, M):
             val = 0
@@ -1975,7 +2006,11 @@ class ExponentialHermite(BasisFunction):
         return val
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
+    @numba.vectorize(
+        [numba.float32(numba.float32, numba.float32), numba.float64(numba.float64, numba.float64)],
+        nopython=True,
+        cache=True,
+    )
     def _he32_numba(t, M):  # pragma: no cover
         def _g2(t, M):
             val = 0
@@ -1998,7 +2033,11 @@ class ExponentialHermite(BasisFunction):
         return np.stack([self._he31prime_numba(t, self.M), self._he32prime_numba(t, self.M)], axis=-1)
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
+    @numba.vectorize(
+        [numba.float32(numba.float32, numba.float32), numba.float64(numba.float64, numba.float64)],
+        nopython=True,
+        cache=True,
+    )
     def _he31prime_numba(t, M):  # pragma: no cover
         def _g1prime(t, M):
             val = 0
@@ -2013,7 +2052,11 @@ class ExponentialHermite(BasisFunction):
         return val
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
+    @numba.vectorize(
+        [numba.float32(numba.float32, numba.float32), numba.float64(numba.float64, numba.float64)],
+        nopython=True,
+        cache=True,
+    )
     def _he32prime_numba(t, M):  # pragma: no cover
         def _g2prime(t, M):
             val = 0
@@ -2035,7 +2078,11 @@ class ExponentialHermite(BasisFunction):
         return np.stack([self._he31primeprime_numba(t, self.M), self._he32primeprime_numba(t, self.M)], axis=-1)
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
+    @numba.vectorize(
+        [numba.float32(numba.float32, numba.float32), numba.float64(numba.float64, numba.float64)],
+        nopython=True,
+        cache=True,
+    )
     def _he31primeprime_numba(t, M):  # pragma: no cover
         def _g1primeprime(t, M):
             val = 0
@@ -2050,7 +2097,11 @@ class ExponentialHermite(BasisFunction):
         return val
 
     @staticmethod
-    @numba.vectorize([numba.float64(numba.float64, numba.float64)], nopython=True, cache=True)
+    @numba.vectorize(
+        [numba.float32(numba.float32, numba.float32), numba.float64(numba.float64, numba.float64)],
+        nopython=True,
+        cache=True,
+    )
     def _he32primeprime_numba(t, M):  # pragma: no cover
         def _g2primeprime(t, M):
             val = 0
@@ -2073,7 +2124,9 @@ class ExponentialHermite(BasisFunction):
     def _he31_xp(t, M, xp):  # pragma: no cover
         abs_t = xp.abs(t)
         alpha = xp.pi / M
-        alpha = xp.asarray(alpha, dtype=xp.result_type(t, alpha), device=array_api_compat.device(t))
+        dtype = xp.asarray(1.0).dtype if xp.isdtype(t.dtype, kind="integral") else t.dtype
+        device = t.device if hasattr(t, "device") else None
+        alpha = xp.asarray(alpha, dtype=dtype, device=device)
         denom = (alpha * xp.cos(alpha)) - xp.sin(alpha)
         num = (
             (0.5 * (2 * alpha * xp.cos(alpha) - xp.sin(alpha)))
@@ -2086,7 +2139,9 @@ class ExponentialHermite(BasisFunction):
     def _he32_xp(t, M, xp):  # pragma: no cover
         abs_t = xp.abs(t)
         alpha = xp.pi / M
-        alpha = xp.asarray(alpha, dtype=xp.result_type(t, alpha), device=array_api_compat.device(t))
+        dtype = xp.asarray(1.0).dtype if xp.isdtype(t.dtype, kind="integral") else t.dtype
+        device = t.device if hasattr(t, "device") else None
+        alpha = xp.asarray(alpha, dtype=dtype, device=device)
         denom = ((alpha * xp.cos(alpha)) - xp.sin(alpha)) * 8 * alpha * xp.sin(alpha)
         num = (
             -((2 * alpha * xp.cos(2 * alpha)) - xp.sin(2 * alpha))
@@ -2104,7 +2159,9 @@ class ExponentialHermite(BasisFunction):
     def _he31prime_xp(t, M, xp):  # pragma: no cover
         abs_t = xp.abs(t)
         alpha = xp.pi / M
-        alpha = xp.asarray(alpha, dtype=xp.result_type(t, alpha), device=array_api_compat.device(t))
+        dtype = xp.asarray(1.0).dtype if xp.isdtype(t.dtype, kind="integral") else t.dtype
+        device = t.device if hasattr(t, "device") else None
+        alpha = xp.asarray(alpha, dtype=dtype, device=device)
         denom = (alpha * xp.cos(alpha)) - xp.sin(alpha)
         num = -(alpha * xp.cos(alpha)) + (alpha * xp.cos(alpha - (2 * alpha * abs_t)))
         val = xp.where((abs_t >= 0) & (abs_t <= 1), num / denom, 0.0)
@@ -2114,7 +2171,9 @@ class ExponentialHermite(BasisFunction):
     def _he32prime_xp(t, M, xp):  # pragma: no cover
         abs_t = xp.abs(t)
         alpha = xp.pi / M
-        alpha = xp.asarray(alpha, dtype=xp.result_type(t, alpha), device=array_api_compat.device(t))
+        dtype = xp.asarray(1.0).dtype if xp.isdtype(t.dtype, kind="integral") else t.dtype
+        device = t.device if hasattr(t, "device") else None
+        alpha = xp.asarray(alpha, dtype=dtype, device=device)
         denom = ((alpha * xp.cos(alpha)) - xp.sin(alpha)) * 8 * alpha * xp.sin(alpha)
         num = (
             -(4 * alpha * xp.sin(alpha) * xp.sin(alpha))
@@ -2130,7 +2189,9 @@ class ExponentialHermite(BasisFunction):
     def _he31primeprime_xp(t, M, xp):  # pragma: no cover
         abs_t = xp.abs(t)
         alpha = xp.pi / M
-        alpha = xp.asarray(alpha, dtype=xp.result_type(t, alpha), device=array_api_compat.device(t))
+        dtype = xp.asarray(1.0).dtype if xp.isdtype(t.dtype, kind="integral") else t.dtype
+        device = t.device if hasattr(t, "device") else None
+        alpha = xp.asarray(alpha, dtype=dtype, device=device)
         denom = (alpha * xp.cos(alpha)) - xp.sin(alpha)
         num = 2 * alpha**2 * xp.sin(alpha - (2 * alpha * abs_t))
         return xp.where((abs_t >= 0) & (abs_t <= 1), num / denom, 0.0)
@@ -2139,7 +2200,9 @@ class ExponentialHermite(BasisFunction):
     def _he32primeprime_xp(t, M, xp):  # pragma: no cover
         abs_t = xp.abs(t)
         alpha = xp.pi / M
-        alpha = xp.asarray(alpha, dtype=xp.result_type(t, alpha), device=array_api_compat.device(t))
+        dtype = xp.asarray(1.0).dtype if xp.isdtype(t.dtype, kind="integral") else t.dtype
+        device = t.device if hasattr(t, "device") else None
+        alpha = xp.asarray(alpha, dtype=dtype, device=device)
         denom = ((alpha * xp.cos(alpha)) - xp.sin(alpha)) * 8 * alpha * xp.sin(alpha)
         num = +(8 * alpha**2 * xp.sin(alpha) * xp.cos(2 * alpha * (abs_t - 0.5))) - (
             8 * alpha**3 * xp.cos(2 * alpha * (abs_t - 1))
