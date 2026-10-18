@@ -912,7 +912,9 @@ class B3(BasisFunction):
 
         ndim = 1 if s.ndim == 1 else s.shape[1]
 
-        cp = xp.zeros((M, ndim), dtype=s.dtype)
+        dtype = xp.asarray(1.0).dtype if xp.isdtype(s.dtype, kind="integral") else s.dtype
+        device = s.device if hasattr(s, "device") else None
+        cp = xp.zeros((M, ndim), dtype=dtype, device=device)
         eps = 1e-8
         k0 = min(((2 * M) - 2, int(math.ceil(math.log(eps) / math.log(abs(pole))))))
         for k in range(k0):
@@ -924,7 +926,7 @@ class B3(BasisFunction):
         for k in range(1, M):
             cp = _item_set(cp, k, s[k] + pole * cp[k - 1], xp)
 
-        cm = xp.zeros((M, ndim), dtype=s.dtype)
+        cm = xp.zeros((M, ndim), dtype=dtype, device=device)
         cm = _item_set(cm, M - 1, cp[M - 1] + (pole * cp[M - 2]), xp)
         cm = _item_set(cm, M - 1, cm[M - 1] * (pole / ((pole**2) - 1)), xp)
 
@@ -943,7 +945,8 @@ class B3(BasisFunction):
 
         ndim = 1 if s.ndim == 1 else s.shape[1]
 
-        cp = np.zeros((M, ndim))
+        device = s.device if hasattr(s, "device") else None
+        cp = np.zeros((M, ndim), device=device)
         for k in range(M):
             cp[0] += s[(M - k) % M] * (pole**k)
         cp[0] *= 1 / (1 - (pole**M))
@@ -977,7 +980,9 @@ class B3(BasisFunction):
 
         ndim = 1 if s.ndim == 1 else s.shape[1]
 
-        cp = xp.zeros((M, ndim), dtype=s.dtype)
+        dtype = xp.asarray(1.0).dtype if xp.isdtype(s.dtype, kind="integral") else s.dtype
+        device = s.device if hasattr(s, "device") else None
+        cp = xp.zeros((M, ndim), dtype=dtype, device=device)
         for k in range(M):
             cp = _item_add(cp, 0, s[(M - k) % M] * (pole**k), xp)
         cp = _item_set(cp, 0, cp[0] * (1 / (1 - (pole**M))), xp)
@@ -985,7 +990,7 @@ class B3(BasisFunction):
         for k in range(1, M):
             cp = _item_set(cp, k, s[k] + pole * cp[k - 1], xp)
 
-        cm = xp.zeros((M, ndim), dtype=s.dtype)
+        cm = xp.zeros((M, ndim), dtype=dtype, device=device)
         for k in range(M):
             cm = _item_add(cm, M - 1, (pole**k) * cp[k], xp)
         cm = _item_set(cm, M - 1, cm[M - 1] * (pole / (1 - (pole**M))), xp)
@@ -1295,7 +1300,9 @@ class Exponential(BasisFunction):
 
         ndim = 1 if s.ndim == 1 else s.shape[1]
 
-        cp = xp.zeros((M, ndim), dtype=s.dtype)
+        dtype = xp.asarray(1.0).dtype if xp.isdtype(s.dtype, kind="integral") else s.dtype
+        device = s.device if hasattr(s, "device") else None
+        cp = xp.zeros((M, ndim), dtype=dtype, device=device)
         eps = 1e-8
         k0 = min(((2 * M) - 2, int(math.ceil(math.log(eps) / math.log(abs(pole))))))
         for k in range(k0):
@@ -1307,7 +1314,7 @@ class Exponential(BasisFunction):
         for k in range(1, M):
             cp = _item_set(cp, k, s[k] + pole * cp[k - 1], xp)
 
-        cm = xp.zeros((M, ndim), dtype=s.dtype)
+        cm = xp.zeros((M, ndim), dtype=dtype, device=device)
         cm = _item_set(cm, M - 1, cp[M - 1] + (pole * cp[M - 2]), xp)
         cm = _item_set(cm, M - 1, cm[M - 1] * (pole / ((pole * pole) - 1)), xp)
 
@@ -1365,7 +1372,9 @@ class Exponential(BasisFunction):
 
         ndim = 1 if s.ndim == 1 else s.shape[1]
 
-        cp = xp.zeros((M, ndim), dtype=s.dtype)
+        dtype = xp.asarray(1.0).dtype if xp.isdtype(s.dtype, kind="integral") else s.dtype
+        device = s.device if hasattr(s, "device") else None
+        cp = xp.zeros((M, ndim), dtype=dtype, device=device)
         cp = _item_set(cp, 0, s[0], xp)
         for k in range(1, M):
             cp = _item_add(cp, 0, s[k] * (pole ** (M - k)), xp)
@@ -1374,7 +1383,7 @@ class Exponential(BasisFunction):
         for k in range(1, M):
             cp = _item_set(cp, k, s[k] + (pole * cp[k - 1]), xp)
 
-        cm = xp.zeros((M, ndim), dtype=s.dtype)
+        cm = xp.zeros((M, ndim), dtype=dtype, device=device)
         cm = _item_set(cm, M - 1, cp[M - 1], xp)
         for k in range(M - 1):
             cm = _item_add(cm, M - 1, cp[k] * (pole ** (k + 1)), xp)
