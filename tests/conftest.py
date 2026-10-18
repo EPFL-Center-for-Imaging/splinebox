@@ -3,7 +3,6 @@ import contextlib
 import functools
 import itertools
 import math
-import unittest.mock
 
 import pytest
 import splinebox.basis_functions
@@ -196,18 +195,15 @@ def padding_function(request):
 
 
 @pytest.fixture
-def spline_curve(basis_function, M, closed, padding_function, xp, device):
+def spline_curve(basis_function, M, closed, padding_function):
     if isinstance(
         basis_function, (splinebox.basis_functions.CubicHermite, splinebox.basis_functions.ExponentialHermite)
     ):
         spline = splinebox.spline_curves.HermiteSpline(
             M, basis_function, closed=closed, padding_function=padding_function
         )
-        spline._get_control_points_and_tangents_xp_and_device = unittest.mock.MagicMock(return_value=(xp, device))
-        spline._get_control_points_xp_and_device = unittest.mock.MagicMock(return_value=(xp, device))
     else:
         spline = splinebox.spline_curves.Spline(M, basis_function, closed=closed, padding_function=padding_function)
-        spline._get_control_points_xp_and_device = unittest.mock.MagicMock(return_value=(xp, device))
     return spline
 
 

@@ -1,6 +1,5 @@
 import json
 import math
-import unittest.mock
 
 import array_api_compat
 import numpy as np
@@ -81,11 +80,23 @@ def test_call(spline_curve, coeff_gen, derivative, call_positions, is_hermite_sp
     else:
         spline_curve(call_positions, derivative=derivative)
 
-    # Check that the presence of the coefficients and tangents was verified
-    if is_hermite_spline(spline_curve):
-        spline_curve._get_control_points_and_tangents_xp_and_device.assert_called()
-    else:
-        spline_curve._get_control_points_xp_and_device.assert_called()
+
+def test_raises_without_control_points(spline_curve, call_positions, translation_vector):
+    """
+    Methods that rely on the control points raise a RuntimeError
+    if they are called before the control points (and tangents) are set.
+    """
+    # The spline_curve fixture returns splines without control points set
+    with pytest.raises(RuntimeError):
+        spline_curve(call_positions)
+    with pytest.raises(RuntimeError):
+        spline_curve.arc_length(1.0)
+    with pytest.raises(RuntimeError):
+        spline_curve._control_points_centroid()
+    with pytest.raises(RuntimeError):
+        spline_curve.translate(translation_vector)
+    with pytest.raises(RuntimeError):
+        spline_curve.scale(1.5)
 
 
 def test_set_control_points(spline_curve, is_hermite_spline):
@@ -179,17 +190,7 @@ def test_draw(closed, xp, device):
             expected[5:11, 5] = 0.5
             expected[5:11, 10] = 0.5
 
-        # Patching is required instead of using the MagicMock
-        # because the deep copy inside spline.draw fails otherwise.
-        # This is because the return value xp cannot be pickeled.
-        with unittest.mock.patch.object(
-            splinebox.spline_curves.Spline,
-            "_get_control_points_xp_and_device",
-            return_value=(xp, device),
-        ) as mock:
-            output = spline.draw(x, y)
-            # Check that the presence of the coefficients was verified
-            mock.assert_called()
+        output = spline.draw(x, y)
 
         assert xp.allclose(output, expected)
 
@@ -230,21 +231,14 @@ def test_arc_length(xp, device):
     M = 10
     basis_function = splinebox.basis_functions.Exponential(M)
     spline = splinebox.spline_curves.Spline(M=M, basis_function=basis_function, closed=True)
-    spline._get_control_points_xp_and_device = unittest.mock.MagicMock(return_value=(xp, device))
     phi = xp.linspace(0, 2 * np.pi, M + 1, device=device)[:-1]
     knots = xp.stack([xp.cos(phi), xp.sin(phi)], axis=-1)
     spline.knots = knots
 
     ts = xp.linspace(0, M, 100, device=device)
 
-    # Reset mock in case it was called by any of the methods before
-    spline._get_control_points_xp_and_device.reset_mock()
-
     arc_lengths = [spline.arc_length(t.item()) for t in ts]
     arc_lengths = xp.asarray(arc_lengths, device=device)
-
-    # Check that the presence of the coefficients was verified
-    spline._get_control_points_xp_and_device.assert_called()
 
     expected = xp.linspace(0, 2 * xp.pi, 100, device=device)
     assert xp.allclose(arc_lengths, expected)
@@ -265,7 +259,6 @@ def test_arc_length_to_parameter(xp, device):
     M = 100
     basis_function = splinebox.basis_functions.Exponential(M)
     spline = splinebox.spline_curves.Spline(M=M, basis_function=basis_function, closed=True)
-    spline._get_control_points_xp_and_device = unittest.mock.MagicMock(return_value=(xp, device))
     knots = []
     for t in xp.linspace(0, 2 * xp.pi, M + 1, device=device)[:-1]:
         knots.append([xp.cos(t), xp.sin(t)])
@@ -276,13 +269,7 @@ def test_arc_length_to_parameter(xp, device):
     expected = xp.linspace(0, M, 15, device=device)  # ls / 2 / xp.pi * M
     atol = 1e-5
 
-    # Reset mock in case it was called by any of the methods befor
-    spline._get_control_points_xp_and_device.reset_mock()
-
     results = spline.arc_length_to_parameter(ls, atol=atol)
-
-    # Check that the presence of the coefficients was verified
-    spline._get_control_points_xp_and_device.assert_called()
 
     assert xp.allclose(results, expected, atol=1e-3, rtol=0)
 
@@ -297,7 +284,6 @@ def test_arc_length_to_parameter(xp, device):
     M = 7
     basis_function = splinebox.basis_functions.B1()
     spline = splinebox.spline_curves.Spline(M=M, basis_function=basis_function, closed=False)
-    spline._get_control_points_xp_and_device = unittest.mock.MagicMock(return_value=(xp, device))
     spline.knots = xp.asarray([[0, 0], [1, 1], [1, 0], [2, 1], [2, 0], [3, 1], [3, 0]], device=device)
 
     rising_length = math.sqrt(2)
@@ -315,13 +301,7 @@ def test_arc_length_to_parameter(xp, device):
     expected = xp.asarray(list(map(to_param, ls)), device=device)
     atol = 1e-4
 
-    # Reset mock in case it was called by any of the methods befor
-    spline._get_control_points_xp_and_device.reset_mock()
-
     results = spline.arc_length_to_parameter(ls, atol=atol)
-
-    # Check that the presence of the coefficients was verified
-    spline._get_control_points_xp_and_device.assert_called()
 
     assert xp.allclose(results, expected, atol=atol)
 
@@ -337,13 +317,10 @@ def test_arc_length_to_parameter(xp, device):
         spline.arc_length_to_parameter(total_length + 0.01)
 
 
-def test_translate(initialised_spline_curve, translation_vector, xp, device):
+def test_translate(initialised_spline_curve, translation_vector):
     spline = initialised_spline_curve
     spline_copy = spline.copy()
-    spline_copy._get_control_points_xp_and_device = unittest.mock.MagicMock(return_value=(xp, device))
     spline_copy.translate(translation_vector)
-    # Check that the presence of the coefficients was verified
-    spline_copy._get_control_points_xp_and_device.assert_called()
     t = np.linspace(0, spline.M, 100) if spline.closed else np.linspace(0, spline.M - 1, 100)
     expected = spline(t) + translation_vector
 
@@ -356,15 +333,8 @@ def test_rotate(initialised_spline_curve, rotation_matrix, is_hermite_spline, xp
         with pytest.raises(RuntimeError):
             spline.rotate(rotation_matrix)
     else:
-        with unittest.mock.patch.object(
-            splinebox.spline_curves.Spline,
-            "_get_control_points_xp_and_device",
-            return_value=(xp, device),
-        ) as mock:
-            spline_copy = spline.copy()
-            spline_copy.rotate(rotation_matrix, centred=False)
-            # Check that the presence of the coefficients was verified
-            mock.assert_called()
+        spline_copy = spline.copy()
+        spline_copy.rotate(rotation_matrix, centred=False)
         t = (
             xp.linspace(0, spline.M, 100, device=device)
             if spline.closed
@@ -374,15 +344,19 @@ def test_rotate(initialised_spline_curve, rotation_matrix, is_hermite_spline, xp
         expected = (rotation_matrix @ vals.T).T
         assert xp.allclose(spline_copy(t), expected)
 
-        with unittest.mock.patch.object(
-            splinebox.spline_curves.Spline,
-            "_get_control_points_xp_and_device",
-            return_value=(xp, device),
-        ) as mock:
-            spline_copy = spline.copy()
-            spline_copy.rotate(rotation_matrix, centred=True)
-            # Check that the presence of the coefficients was verified
-            mock.assert_called()
+        spline_copy = spline.copy()
+        spline_copy.rotate(rotation_matrix, centred=True)
+        t = (
+            xp.linspace(0, spline.M, 100, device=device)
+            if spline.closed
+            else xp.linspace(0, spline.M - 1, 100, device=device)
+        )
+        vals = spline(t)
+        expected = (rotation_matrix @ vals.T).T
+        assert xp.allclose(spline_copy(t), expected)
+
+        spline_copy = spline.copy()
+        spline_copy.rotate(rotation_matrix, centred=True)
         t = (
             xp.linspace(0, spline.M, 100, device=device)
             if spline.closed
@@ -415,21 +389,6 @@ def test_fit(spline_curve, points, is_hermite_spline, xp, device):
         spline_curve.control_points = np.array(spline_curve.control_points)
         if hermite:
             spline_curve.tangents = np.array(spline_curve.tangents)
-
-        # Change the mock to return numpy
-        spline_curve._get_control_points_xp_and_device = unittest.mock.MagicMock(
-            return_value=(
-                array_api_compat.array_namespace(spline_curve.control_points),
-                array_api_compat.device(spline_curve.control_points),
-            )
-        )
-        if hermite:
-            spline_curve._get_control_points_and_tangents_xp_and_device = unittest.mock.MagicMock(
-                return_value=(
-                    array_api_compat.array_namespace(spline_curve.control_points),
-                    array_api_compat.device(spline_curve.control_points),
-                )
-            )
 
         # Keep a copy of the result of fit
         control_points_fit = spline_curve.control_points.copy()
@@ -612,8 +571,6 @@ def test_centroid(spline_curve, coeff_gen, is_hermite_spline, xp, dtype):
     expected = xp.mean(control_points, axis=0, dtype=output_dtype)
     assert xp.allclose(spline_curve._control_points_centroid(), expected)
 
-    spline_curve._get_control_points_xp_and_device.assert_called()
-
 
 def test_scale(initialised_spline_curve, is_hermite_spline, xp):
     spline = initialised_spline_curve
@@ -631,19 +588,7 @@ def test_scale(initialised_spline_curve, is_hermite_spline, xp):
 
     t = xp.linspace(0, spline.M, 100) if spline.closed else xp.linspace(0, spline.M - 1, 100)
 
-    # Reset mocks in case they were called by another method already
-    if is_hermite_spline(spline_copy):
-        spline._get_control_points_and_tangents_xp_and_device.reset_mock()
-    else:
-        spline._get_control_points_xp_and_device.reset_mock()
-
     spline.scale(factor)
-
-    # Check that coefficients and tangents were checked
-    if is_hermite_spline(spline_copy):
-        spline._get_control_points_and_tangents_xp_and_device.assert_called()
-    else:
-        spline._get_control_points_xp_and_device.assert_called()
 
     assert xp.allclose(spline(t), spline_copy(t))
 
@@ -802,9 +747,15 @@ def test_repr(initialised_spline_curve, is_hermite_spline, xp, dtype):
 def test_eq_spline(spline_curve, basis_function, closed, coeff_gen, is_hermite_spline):
     spline = spline_curve
     basis_function = basis_function
+    spline.control_points = coeff_gen(spline.M, spline.basis_function.support, spline.closed)
     if is_hermite_spline(spline):
+        spline.tangents = coeff_gen(spline.M, spline.basis_function.support, spline.closed)
         other = splinebox.spline_curves.HermiteSpline(
-            M=spline.M, basis_function=basis_function, closed=closed, control_points=spline.control_points
+            M=spline.M,
+            basis_function=basis_function,
+            closed=closed,
+            control_points=spline.control_points,
+            tangents=spline.tangents,
         )
     else:
         other = splinebox.spline_curves.Spline(
@@ -816,8 +767,6 @@ def test_eq_spline(spline_curve, basis_function, closed, coeff_gen, is_hermite_s
         assert spline == other
 
         spline.control_points = coeff_gen(spline.M, spline.basis_function.support, spline.closed)
-        if is_hermite_spline(spline):
-            spline.tangents = coeff_gen(spline.M, spline.basis_function.support, spline.closed)
         assert spline != other
 
         other.control_points = spline.control_points
