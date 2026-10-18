@@ -24,7 +24,7 @@ jobs:
     strategy:
       matrix:
         platform: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
+        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
 
     steps:
       - uses: actions/checkout@v4
@@ -43,11 +43,18 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install setuptools tox tox-gh-actions
 
+      - name: Set up MSVC
+        if: runner.os == 'Windows'
+        uses: TheMrMilchmann/setup-msvc-dev@v4
+        with:
+          arch: x64
+
       # this runs the platform-specific tests declared in tox.ini
       - name: Test with tox
-        run: python -m tox
         env:
           PLATFORM: ${{ matrix.platform }}
+          TORCHINDUCTOR_CACHE_DIR: ${{ runner.temp }}/torchinductor
+        run: python -m tox
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4

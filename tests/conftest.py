@@ -1,12 +1,94 @@
+import collections
+import contextlib
 import functools
 import itertools
 import math
-import unittest.mock
 
-import numpy as np
 import pytest
 import splinebox.basis_functions
 import splinebox.spline_curves
+
+ARRAY_BACKENDS_AND_DEVICES = []
+
+# NumPy
+with contextlib.suppress(ImportError):
+
+    import array_api_compat.numpy as np
+
+    ARRAY_BACKENDS_AND_DEVICES.append(pytest.param((np, "cpu"), id="numpy-cpu"))
+
+# PyTorch
+with contextlib.suppress(ImportError):
+
+    import array_api_compat.torch as torch
+    import torch as _torch
+
+    ARRAY_BACKENDS_AND_DEVICES.append(pytest.param((torch, torch.device("cpu")), id="torch-cpu"))
+
+    if _torch.cuda.is_available():
+        ARRAY_BACKENDS_AND_DEVICES.append(pytest.param((torch, torch.device("cuda", index=0)), id="torch-cuda"))
+
+# JAX
+with contextlib.suppress(ImportError):
+
+    import jax
+    import jax.numpy
+
+    # Enable 64-bit floats so that jax matches the float64 semantics of the
+    # other array backends (jax silently truncates float64 data otherwise).
+    jax.config.update("jax_enable_x64", True)
+
+    ARRAY_BACKENDS_AND_DEVICES.append(pytest.param((jax.numpy, jax.devices("cpu")[0]), id="jax-cpu"))
+
+    if any(device.platform == "gpu" for device in jax.devices()):
+        gpus = jax.devices("gpu")
+        ARRAY_BACKENDS_AND_DEVICES.append(pytest.param((jax.numpy, gpus[0]), id="jax-gpu"))
+
+
+@pytest.fixture(params=ARRAY_BACKENDS_AND_DEVICES)
+def xp_device(request):
+    return request.param
+
+
+@pytest.fixture
+def xp(xp_device):
+    return xp_device[0]
+
+
+@pytest.fixture
+def device(xp_device):
+    return xp_device[1]
+
+
+@pytest.fixture(params=["int", "float32", "float64"])
+def dtype(request, xp):
+    """
+    The dtype of the input array.
+
+    The output is expected to be of dtype float32 or
+    float64 if the input is of dtype float32 or float64 respectively and the
+    default floating point dtype of the array namespace if the input is of an
+    integer dtype.
+    """
+    return int if request.param == "int" else getattr(xp, request.param)
+
+
+@pytest.fixture
+def as_xp_array(xp, device):
+    def _as_xp_array(obj, **kwargs):
+        return xp.asarray(obj, device=device, **kwargs)
+
+    return _as_xp_array
+
+
+@pytest.fixture(
+    params=[
+        # pytest.param(True, id="jit"),
+        pytest.param(False, id="no-jit"),
+    ]
+)
+def jit(request):
+    return request.param
 
 
 @pytest.fixture(
@@ -97,12 +179,12 @@ def is_locally_refinable():
     return _is_locally_refinable
 
 
-@pytest.fixture(params=[4, 5, 8])
+@pytest.fixture(params=[4, 5, 8], ids=["M=4", "M=5", "M=8"])
 def M(request):
     return request.param
 
 
-@pytest.fixture(params=[True, False])
+@pytest.fixture(params=[True, False], ids=["closed", "open"])
 def closed(request):
     return request.param
 
@@ -120,11 +202,8 @@ def spline_curve(basis_function, M, closed, padding_function):
         spline = splinebox.spline_curves.HermiteSpline(
             M, basis_function, closed=closed, padding_function=padding_function
         )
-        spline._check_control_points_and_tangents = unittest.mock.MagicMock()
-        spline._check_control_points = unittest.mock.MagicMock()
     else:
         spline = splinebox.spline_curves.Spline(M, basis_function, closed=closed, padding_function=padding_function)
-        spline._check_control_points = unittest.mock.MagicMock()
     return spline
 
 
@@ -173,17 +252,36 @@ def curvature_energy_compatible_spline_curve(curvature_energy_compatible_basis_f
     return splinebox.spline_curves.Spline(M, curvature_energy_compatible_basis_function, closed=False)
 
 
-@pytest.fixture(params=[0, 1, 2])
+@pytest.fixture(params=[0, 1, 2], ids=["derivative=0", "derivative=1", "derivative=2"])
 def derivative(request):
     return request.param
 
 
 @pytest.fixture(params=[1.5, np.array(0.0), np.linspace(0, 10, 1000)])
-def call_positions(request):
+def call_positions(request, as_xp_array):
+    if isinstance(request.param, collections.abc.Iterable):
+        return as_xp_array(request.param)
     return request.param
 
 
-@pytest.fixture(params=[1, 2, 3, 5])
+@pytest.fixture(
+    params=[
+        0.5,
+        1,
+        4,
+        [0.5],
+        [0, 1, 4],
+        [-0.5, 0.0, 0.5, 4.1],
+        [[-0.7, -0.2, 0.3], [-0.6, -0.1, 0.4], [-0.5, 0.0, 0.5], [-0.4, 0.1, 0.6]],
+    ]
+)
+def basis_function_call_positions(request, as_xp_array, dtype):
+    if isinstance(request.param, collections.abc.Iterable):
+        return as_xp_array(request.param, dtype=dtype)
+    return request.param
+
+
+@pytest.fixture(params=[1, 2, 3, 5], ids=["ndim=1", "ndim=2", "ndim=3", "ndim=5"])
 def codomain_dimensionality(request):
     """
     The number of dimensions the spline output
@@ -194,37 +292,43 @@ def codomain_dimensionality(request):
     return request.param
 
 
-def _control_point_gen(M, support, closed, ndim, rng=None):
-    if rng is None:
-        rng = np.random.default_rng(seed=42)
-    points = rng.random((M, ndim)) * 100 if closed else rng.random((M + 2 * (math.ceil(support / 2) - 1), ndim)) * 100
-    return points
+def _control_point_gen(_M, _support, _closed, _ndim, _as_xp_array, _dtype, _rng=None):
+    if _rng is None:
+        _rng = np.random.default_rng(seed=42)
+    points = (
+        _rng.random((_M, _ndim)) * 100
+        if _closed
+        else _rng.random((_M + 2 * (math.ceil(_support / 2) - 1), _ndim)) * 100
+    )
+    return _as_xp_array(points, dtype=_dtype)
 
 
 @pytest.fixture
-def coeff_gen(codomain_dimensionality):
+def coeff_gen(codomain_dimensionality, as_xp_array, dtype):
     rng = np.random.default_rng(seed=1492)
-    return functools.partial(_control_point_gen, ndim=codomain_dimensionality, rng=rng)
+    return functools.partial(
+        _control_point_gen, _ndim=codomain_dimensionality, _as_xp_array=as_xp_array, _dtype=dtype, _rng=rng
+    )
 
 
 @pytest.fixture
-def control_point_gen_2D():
+def control_point_gen_2D(as_xp_array, dtype):
     rng = np.random.default_rng(seed=9052)
-    return functools.partial(_control_point_gen, ndim=2, rng=rng)
+    return functools.partial(_control_point_gen, _ndim=2, _as_xp_array=as_xp_array, _dtype=dtype, _rng=rng)
 
 
 @pytest.fixture
-def control_point_gen_3D():
+def control_point_gen_3D(as_xp_array, dtype):
     rng = np.random.default_rng(seed=7755)
-    return functools.partial(_control_point_gen, ndim=3, rng=rng)
+    return functools.partial(_control_point_gen, _ndim=3, _as_xp_array=as_xp_array, _dtype=dtype, _rng=rng)
 
 
 @pytest.fixture
-def knot_gen(codomain_dimensionality):
+def knot_gen(codomain_dimensionality, as_xp_array, dtype):
     rng = np.random.default_rng(seed=2657)
 
     def _knot_gen(M=100):
-        return rng.random((M, codomain_dimensionality))
+        return as_xp_array(rng.random((M, codomain_dimensionality)), dtype=dtype)
 
     return _knot_gen
 
@@ -259,11 +363,11 @@ def is_hermite_spline():
 
 
 @pytest.fixture
-def translation_vector(codomain_dimensionality):
-    return np.random.rand(codomain_dimensionality) * 10 - 5
+def translation_vector(codomain_dimensionality, as_xp_array, dtype):
+    return as_xp_array(np.random.rand(codomain_dimensionality) * 10 - 5, dtype=dtype)
 
 
-def _initialize_spline_curve(spline, control_point_gen):
+def _initialise_spline_curve(spline, control_point_gen):
     support = spline.basis_function.support
     closed = spline.closed
     M = spline.M
@@ -276,58 +380,63 @@ def _initialize_spline_curve(spline, control_point_gen):
 
 
 @pytest.fixture
-def initialize_spline_curve(is_hermite_spline, coeff_gen):
-    return functools.partial(_initialize_spline_curve, control_point_gen=coeff_gen)
+def initialise_spline_curve(is_hermite_spline, coeff_gen):
+    return functools.partial(_initialise_spline_curve, control_point_gen=coeff_gen)
 
 
 @pytest.fixture
-def initialize_2D_spline_curve(is_hermite_spline, control_point_gen_2D):
-    return functools.partial(_initialize_spline_curve, control_point_gen=control_point_gen_2D)
+def initialise_2D_spline_curve(is_hermite_spline, control_point_gen_2D):
+    return functools.partial(_initialise_spline_curve, control_point_gen=control_point_gen_2D)
 
 
 @pytest.fixture
-def initialize_3D_spline_curve(is_hermite_spline, control_point_gen_3D):
-    return functools.partial(_initialize_spline_curve, control_point_gen=control_point_gen_3D)
+def initialise_3D_spline_curve(is_hermite_spline, control_point_gen_3D):
+    return functools.partial(_initialise_spline_curve, control_point_gen=control_point_gen_3D)
 
 
 @pytest.fixture
-def initialized_spline_curve(spline_curve, initialize_spline_curve):
-    return initialize_spline_curve(spline_curve)
+def initialised_spline_curve(spline_curve, initialise_spline_curve):
+    return initialise_spline_curve(spline_curve)
 
 
 @pytest.fixture
-def initialized_twice_differentiable_spline_curve(twice_differentiable_spline_curve, initialize_spline_curve):
-    return initialize_spline_curve(twice_differentiable_spline_curve)
+def initialised_twice_differentiable_spline_curve(twice_differentiable_spline_curve, initialise_spline_curve):
+    return initialise_spline_curve(twice_differentiable_spline_curve)
 
 
 @pytest.fixture
-def initialized_2D_spline_curve(spline_curve, initialize_2D_spline_curve):
-    return initialize_2D_spline_curve(spline_curve)
+def initialised_2D_spline_curve(spline_curve, initialise_2D_spline_curve):
+    return initialise_2D_spline_curve(spline_curve)
 
 
 @pytest.fixture
-def initialized_3D_spline_curve(spline_curve, initialize_3D_spline_curve):
-    return initialize_3D_spline_curve(spline_curve)
+def initialised_3D_spline_curve(spline_curve, initialise_3D_spline_curve):
+    return initialise_3D_spline_curve(spline_curve)
 
 
 @pytest.fixture
-def initialized_twice_differentiable_2D_spline_curve(twice_differentiable_spline_curve, initialize_2D_spline_curve):
-    return initialize_2D_spline_curve(twice_differentiable_spline_curve)
+def initialised_twice_differentiable_2D_spline_curve(twice_differentiable_spline_curve, initialise_2D_spline_curve):
+    return initialise_2D_spline_curve(twice_differentiable_spline_curve)
 
 
 @pytest.fixture
-def initialized_twice_differentiable_3D_spline_curve(twice_differentiable_spline_curve, initialize_3D_spline_curve):
-    return initialize_3D_spline_curve(twice_differentiable_spline_curve)
+def initialised_twice_differentiable_3D_spline_curve(twice_differentiable_spline_curve, initialise_3D_spline_curve):
+    return initialise_3D_spline_curve(twice_differentiable_spline_curve)
 
 
 @pytest.fixture
-def initialized_non_hermite_spline_curve(non_hermite_spline_curve, initialize_spline_curve):
-    return initialize_spline_curve(non_hermite_spline_curve)
+def initialised_non_hermite_spline_curve(non_hermite_spline_curve, initialise_spline_curve):
+    return initialise_spline_curve(non_hermite_spline_curve)
 
 
 @pytest.fixture
-def initialized_hermite_spline_curve(hermite_spline_curve, initialize_spline_curve):
-    return initialize_spline_curve(hermite_spline_curve)
+def initialised_hermite_spline_curve(hermite_spline_curve, initialise_spline_curve):
+    return initialise_spline_curve(hermite_spline_curve)
+
+
+@pytest.fixture
+def initialised_closed_spline_curve(closed_spline_curve, initialise_spline_curve):
+    return initialise_spline_curve(closed_spline_curve)
 
 
 @pytest.fixture
@@ -356,15 +465,18 @@ def boundary_condition(request):
     return request.param
 
 
-@pytest.fixture(params=[2, 5, 20, 50])
+@pytest.fixture(
+    params=[2, 5, 20, 50],
+    ids=["2 data points", "5 data points", "20 data points", "50 data points"],
+)
 def n_points(request):
     return request.param
 
 
 @pytest.fixture
-def points(codomain_dimensionality, n_points):
+def points(codomain_dimensionality, n_points, as_xp_array):
     rng = np.random.default_rng(seed=5544)
-    return rng.random((n_points, codomain_dimensionality))
+    return as_xp_array(rng.random((n_points, codomain_dimensionality)))
 
 
 @pytest.fixture(params=[False, True])
@@ -427,5 +539,5 @@ def single_value_t(request):
         np.array([1, 2, 3], dtype=int),
     ]
 )
-def array_t(request):
-    return request.param
+def array_t(request, as_xp_array, dtype):
+    return as_xp_array(request.param, dtype=dtype)
