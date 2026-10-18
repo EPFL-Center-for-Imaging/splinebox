@@ -296,37 +296,43 @@ def codomain_dimensionality(request):
     return request.param
 
 
-def _control_point_gen(M, support, closed, ndim, as_xp_array, rng=None):
-    if rng is None:
-        rng = np.random.default_rng(seed=42)
-    points = rng.random((M, ndim)) * 100 if closed else rng.random((M + 2 * (math.ceil(support / 2) - 1), ndim)) * 100
-    return as_xp_array(points)
+def _control_point_gen(_M, _support, _closed, _ndim, _as_xp_array, _dtype, _rng=None):
+    if _rng is None:
+        _rng = np.random.default_rng(seed=42)
+    points = (
+        _rng.random((_M, _ndim)) * 100
+        if _closed
+        else _rng.random((_M + 2 * (math.ceil(_support / 2) - 1), _ndim)) * 100
+    )
+    return _as_xp_array(points, dtype=_dtype)
 
 
 @pytest.fixture
-def coeff_gen(codomain_dimensionality, as_xp_array):
+def coeff_gen(codomain_dimensionality, as_xp_array, dtype):
     rng = np.random.default_rng(seed=1492)
-    return functools.partial(_control_point_gen, ndim=codomain_dimensionality, as_xp_array=as_xp_array, rng=rng)
+    return functools.partial(
+        _control_point_gen, _ndim=codomain_dimensionality, _as_xp_array=as_xp_array, _dtype=dtype, _rng=rng
+    )
 
 
 @pytest.fixture
-def control_point_gen_2D(as_xp_array):
+def control_point_gen_2D(as_xp_array, dtype):
     rng = np.random.default_rng(seed=9052)
-    return functools.partial(_control_point_gen, ndim=2, as_xp_array=as_xp_array, rng=rng)
+    return functools.partial(_control_point_gen, _ndim=2, _as_xp_array=as_xp_array, _dtype=dtype, _rng=rng)
 
 
 @pytest.fixture
-def control_point_gen_3D(as_xp_array):
+def control_point_gen_3D(as_xp_array, dtype):
     rng = np.random.default_rng(seed=7755)
-    return functools.partial(_control_point_gen, ndim=3, as_xp_array=as_xp_array, rng=rng)
+    return functools.partial(_control_point_gen, _ndim=3, _as_xp_array=as_xp_array, _dtype=dtype, _rng=rng)
 
 
 @pytest.fixture
-def knot_gen(codomain_dimensionality, as_xp_array):
+def knot_gen(codomain_dimensionality, as_xp_array, dtype):
     rng = np.random.default_rng(seed=2657)
 
     def _knot_gen(M=100):
-        return as_xp_array(rng.random((M, codomain_dimensionality)))
+        return as_xp_array(rng.random((M, codomain_dimensionality)), dtype=dtype)
 
     return _knot_gen
 
@@ -361,8 +367,8 @@ def is_hermite_spline():
 
 
 @pytest.fixture
-def translation_vector(codomain_dimensionality):
-    return np.random.rand(codomain_dimensionality) * 10 - 5
+def translation_vector(codomain_dimensionality, as_xp_array, dtype):
+    return as_xp_array(np.random.rand(codomain_dimensionality) * 10 - 5, dtype=dtype)
 
 
 def _initialise_spline_curve(spline, control_point_gen):
@@ -430,6 +436,11 @@ def initialised_non_hermite_spline_curve(non_hermite_spline_curve, initialise_sp
 @pytest.fixture
 def initialised_hermite_spline_curve(hermite_spline_curve, initialise_spline_curve):
     return initialise_spline_curve(hermite_spline_curve)
+
+
+@pytest.fixture
+def initialised_closed_spline_curve(closed_spline_curve, initialise_spline_curve):
+    return initialise_spline_curve(closed_spline_curve)
 
 
 @pytest.fixture
@@ -532,5 +543,5 @@ def single_value_t(request):
         np.array([1, 2, 3], dtype=int),
     ]
 )
-def array_t(request, as_xp_array):
-    return as_xp_array(request.param)
+def array_t(request, as_xp_array, dtype):
+    return as_xp_array(request.param, dtype=dtype)
