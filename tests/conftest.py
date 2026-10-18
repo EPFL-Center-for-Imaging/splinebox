@@ -26,7 +26,7 @@ with contextlib.suppress(ImportError):
     ARRAY_BACKENDS_AND_DEVICES.append(pytest.param((torch, torch.device("cpu")), id="torch-cpu"))
 
     if _torch.cuda.is_available():
-        ARRAY_BACKENDS_AND_DEVICES.append(pytest.param((torch, torch.device("cuda")), id="torch-cuda"))
+        ARRAY_BACKENDS_AND_DEVICES.append(pytest.param((torch, torch.device("cuda", index=0)), id="torch-cuda"))
 
 # JAX
 with contextlib.suppress(ImportError):
