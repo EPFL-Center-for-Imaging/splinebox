@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-
 import splinebox
 import splinebox.basis_functions
 import splinebox.multivariate
@@ -451,6 +450,25 @@ def test_fit_scalar_field_with_explicit_t():
     )
     spline.fit(points, t=t)
     assert spline.control_points.shape == (6, 6, 1)
+
+
+def test_vector_field_with_explicit_t(codomain_dimensionality):
+    M = (4, 4)
+    spline = splinebox.multivariate.MultivariateSpline(
+        M=M,
+        basis_functions=splinebox.B3(),
+        closed=(False, False),
+    )
+    points = np.random.rand(10, 10, codomain_dimensionality)
+    t = np.stack(
+        np.meshgrid(np.linspace(0, M[0] - 1, 10), np.linspace(0, M[1] - 1, 10), indexing="ij"),
+        axis=-1,
+    )
+    spline.fit(points, t=t)
+    assert spline.control_points.shape == (6, 6, codomain_dimensionality)
+
+    spline.fit(points.reshape(-1, codomain_dimensionality), t=t.reshape(-1, len(M)))
+    assert spline.control_points.shape == (6, 6, codomain_dimensionality)
 
 
 def test_mesh_closed():

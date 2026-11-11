@@ -517,12 +517,16 @@ class MultivariateSpline:
             else:
                 control_points_shape[variate] = self.M[variate] + 2 * self.pad[variate]
 
-        # Scalar fields have no codomain axis; add one so the rest of the
-        # pipeline can treat all inputs uniformly.
-        if points.ndim == self.nvariate:
-            points = points[..., np.newaxis]
-
         if t is None:
+            if points.ndim == self.nvariate:
+                # Scalar fields have no codomain axis; add one so the rest of the
+                # pipeline can treat all inputs uniformly.
+                points = points[..., np.newaxis]
+            elif points.ndim != self.nvariate + 1:
+                raise ValueError(
+                    "If `t` is not given, the `points` need to have self.nvariate or self.nvariate + 1 dimensions for a scalar field and a vector field respectively"
+                )
+
             t = []
             for variate in range(self.nvariate):
                 t.append(
@@ -531,6 +535,18 @@ class MultivariateSpline:
                     else np.linspace(0, self.M[variate] - 1, points.shape[variate])
                 )
             t = np.stack(np.meshgrid(*t, indexing="ij"), axis=-1)
+        else:
+            if not t.shape[-1] == self.nvariate:
+                raise ValueError("The last dimension of `t` must encode the variate, i.e. t.shape[-1] == self.nvariate")
+            if t.shape[:-1] == points.shape:
+                # Scalar fields have no codomain axis; add one so the rest of the
+                # pipeline can treat all inputs uniformly.
+                points = points[..., np.newaxis]
+            elif t.shape[:-1] != points.shape[:-1]:
+                raise ValueError(
+                    "The t.shape[:-1] has to match points.shape of points.shape[:-1] for a scalar or vector field respectively."
+                )
+
         basis_function_values = []
         for variate in range(self.nvariate):
             tval = self._get_tval(t, variate)
