@@ -452,6 +452,46 @@ def test_fit_scalar_field_with_explicit_t():
     assert spline.control_points.shape == (6, 6, 1)
 
 
+def test_fit_input_valitation():
+    M = (4, 4)
+    spline = splinebox.multivariate.MultivariateSpline(
+        M=M,
+        basis_functions=splinebox.B3(),
+        closed=(False, False),
+    )
+
+    points = np.random.rand(10, 10, 10, 3)
+    # Bivariate spline but 3D grid of 3D vectors
+    with pytest.raises(ValueError):
+        spline.fit(points)
+
+
+def test_fit_input_valitation_with_explicit_t():
+    M = (4, 4)
+    spline = splinebox.multivariate.MultivariateSpline(
+        M=M,
+        basis_functions=splinebox.B3(),
+        closed=(False, False),
+    )
+
+    points = np.random.rand(10, 3)
+
+    # 1D t without t value for each variate
+    t = np.linspace(0, 4, 10)
+    with pytest.raises(ValueError):
+        spline.fit(points, t=t)
+
+    # 2D t with too many variate
+    t = np.tile(np.linspace(0, 4, 10), (1, 3))
+    with pytest.raises(ValueError):
+        spline.fit(points, t=t)
+
+    # Mismatch between shape of t and points
+    t = np.random.rand(10, 10, 2)
+    with pytest.raises(ValueError):
+        spline.fit(points, t=t)
+
+
 def test_vector_field_with_explicit_t(codomain_dimensionality):
     M = (4, 4)
     spline = splinebox.multivariate.MultivariateSpline(
