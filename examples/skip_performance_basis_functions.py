@@ -32,7 +32,7 @@ for length in [10, 100, 1000, 10000, 100000]:
 
                         results["length"].append(length)
                         results["Replicate"].append(replicate)
-                        # results["Array namespace"].append(array_namespace)
+                        results["Array namespace"].append(array_namespace)
                         results["Basis function"].append(basis_function_name)
                         results["Derivative"].append(deriv)
                         results["JIT"].append(jit)
