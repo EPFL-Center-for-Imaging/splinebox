@@ -1,29 +1,33 @@
+import collections
 import math
 
+import array_api_compat
 import numpy as np
 import pytest
 import splinebox.basis_functions
 
 
-def test_base_class_call(derivative):
+def test_base_class_call(derivative, xp, as_xp_array):
     basis_function = splinebox.basis_functions.BasisFunction(False, 2)
-    x = np.arange(10)
+    x = as_xp_array(xp.linspace(-4, 4, 10))
+
     with pytest.raises(NotImplementedError):
-        basis_function(x, derivative=derivative)
+        # The pytorch compiler does not work for raised errors.
+        basis_function(x, derivative=derivative, jit=False)
 
 
-def test_base_class_filters_and_refinement_mask():
+def test_base_class_filters_and_refinement_mask(xp, as_xp_array):
     basis_function = splinebox.basis_functions.BasisFunction(False, 2)
-    s = np.arange(10)
+    s = as_xp_array(xp.linspace(0, 4, 10))
     with pytest.raises(NotImplementedError):
-        basis_function.filter_symmetric(s)
+        basis_function.filter_symmetric(s, jit=False)
     with pytest.raises(NotImplementedError):
-        basis_function.filter_periodic(s)
+        basis_function.filter_periodic(s, jit=False)
     with pytest.raises(NotImplementedError):
         basis_function.refinement_mask()
 
 
-def test_filters(basis_function, is_interpolating, knot_gen, request):
+def test_filters(basis_function, is_interpolating, knot_gen, xp, dtype, request):
     if isinstance(basis_function, splinebox.basis_functions.B2):
         # The filter_symmetric and filter_periodic are not implemented for B2
         request.node.add_marker(pytest.mark.xfail)
@@ -32,19 +36,31 @@ def test_filters(basis_function, is_interpolating, knot_gen, request):
     if is_interpolating(basis_function):
         # The filters should not do anything since knot and control points are
         # the same for interpolating splines.
-        assert np.allclose(basis_function.filter_symmetric(s), s)
-        assert np.allclose(basis_function.filter_periodic(s), s)
-    else:
-        # Flipping the knot or the control points should give the same result
-        assert np.allclose(basis_function.filter_symmetric(s), basis_function.filter_symmetric(s[::-1])[::-1])
-        assert np.allclose(basis_function.filter_periodic(s), basis_function.filter_periodic(s[::-1])[::-1])
+        filtered = basis_function.filter_symmetric(s)
+        assert xp.allclose(filtered, xp.astype(s, filtered.dtype))
+        filtered = basis_function.filter_periodic(s)
+        assert xp.allclose(filtered, xp.astype(s, filtered.dtype))
+
+    # Flipping the knot or the control points should give the same result
+    flipped = xp.flip(s, axis=0)
+    atol = 1e-5 if s.dtype is int or s.dtype == xp.float32 else 1e-8
+    assert xp.allclose(
+        basis_function.filter_symmetric(s),
+        xp.flip(basis_function.filter_symmetric(flipped), axis=0),
+        atol=atol,
+    )
+    assert xp.allclose(
+        basis_function.filter_periodic(s),
+        xp.flip(basis_function.filter_periodic(flipped), axis=0),
+        atol=atol,
+    )
 
 
 def test_refinement_mask(basis_function, is_locally_refinable, request):
     if isinstance(basis_function, splinebox.basis_functions.Exponential):
         # The refinement mask of the exponential basis function fails.
         # This might be because the value of M has to be changed after
-        # refinement. Since we don't have an imidiate need for the refinement
+        # refinement. Since we don't have an immediate need for the refinement
         # mask, we xfail the tests for now and will revisit this later.
         request.node.add_marker(pytest.mark.xfail)
     if is_locally_refinable(basis_function):
@@ -70,48 +86,75 @@ def test_refinement_mask(basis_function, is_locally_refinable, request):
             basis_function.refinement_mask()
 
 
-def test_call_output_type(basis_function, derivative, is_hermite_basis_function):
+def test_call_output_type(
+    basis_function, derivative, basis_function_call_positions, dtype, is_hermite_basis_function, as_xp_array, xp
+):
     """
     If a single value is provided, a single value should be returned.
-    Otherwise, a numpy array should be returned.
-    """
-    for t in [
-        0.5,
-        np.array([0.5]),
-        np.array([-0.5, 0.0, 0.5]),
-        np.array([[-0.7, -0.2, 0.3], [-0.6, -0.1, 0.4], [-0.5, 0.0, 0.5], [-0.4, 0.1, 0.6]]),
-    ]:
+    Otherwise, an array should be returned.
 
-        vals = basis_function(t, derivative=derivative)
+    The value returned should be a float. For integer input the returned
+    value should have the default floating point dtype of the array namespace
+    while float32 and float64 input should be returned unchanged.
+    """
+    t = basis_function_call_positions
+
+    vals = basis_function(t, derivative=derivative)
+
+    if not isinstance(t, collections.abc.Iterable):
 
         if is_hermite_basis_function(basis_function):
-            assert isinstance(vals, np.ndarray)
-            assert vals.shape[-1] == 2
-            if isinstance(t, float):
-                assert vals.ndim == 1
-            else:
-                assert np.all(vals.shape[:-1] == t.shape)
-
+            assert vals.ndim == 1
+            assert vals.shape[0] == 2
         else:
-            assert isinstance(vals, type(t))
-            if isinstance(t, np.ndarray):
-                assert np.all(vals.shape == t.shape)
+            assert isinstance(vals, float)
+
+    else:
+
+        # Check that the output is an array from the xp namespace
+        assert array_api_compat.is_array_api_obj(vals)
+        assert array_api_compat.array_namespace(vals) is xp
+
+        # Integer input should be cast to the default floating point dtype of
+        # the array namespace while float32 and float64 input keeps its dtype.
+        assert xp.isdtype(vals.dtype, kind="real floating")
+        expected_dtype = xp.asarray(1.0).dtype if dtype is int else dtype
+        assert vals.dtype == expected_dtype
+
+        if is_hermite_basis_function(basis_function):
+            assert np.all(vals.shape[:-1] == t.shape)
+        else:
+            assert np.all(vals.shape == t.shape)
 
 
-def test_filter_output_type(basis_function, request):
+def test_filter_output_type(basis_function, as_xp_array, dtype, xp, request):
 
     if isinstance(basis_function, splinebox.basis_functions.B2):
         # The filter_symmetric and filter_periodic are not implemented for B2
         request.node.add_marker(pytest.mark.xfail)
 
     for s in [np.array([1, 2, 3, 4, 5]), np.array([[1, 1], [2, 2], [3, 3], [4, 4], [5, 5]])]:
+        s = as_xp_array(s, dtype=dtype)
         output = basis_function.filter_periodic(s)
-        assert isinstance(output, np.ndarray)
-        assert np.issubdtype(output.dtype, np.floating)
+
+        assert array_api_compat.is_array_api_obj(output)
+        assert array_api_compat.array_namespace(output) is xp
+        # Integer input should be cast to the default floating point dtype of
+        # the array namespace while float32 and float64 input keeps its dtype.
+        assert xp.isdtype(output.dtype, kind="real floating")
+        expected_dtype = xp.asarray(1.0).dtype if dtype is int else dtype
+        assert output.dtype == expected_dtype
         assert np.all(output.shape == s.shape)
+
+        # Same test for the symmetric filter
         output = basis_function.filter_symmetric(s)
-        assert isinstance(output, np.ndarray)
-        assert np.issubdtype(output.dtype, np.floating)
+        assert array_api_compat.is_array_api_obj(output)
+        assert array_api_compat.array_namespace(output) is xp
+        # Integer input should be cast to the default floating point dtype of
+        # the array namespace while float32 and float64 input keeps its dtype.
+        assert xp.isdtype(output.dtype, kind="real floating")
+        expected_dtype = xp.asarray(1.0).dtype if dtype is int else dtype
+        assert output.dtype == expected_dtype
         assert np.all(output.shape == s.shape)
 
 
