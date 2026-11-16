@@ -4,6 +4,7 @@ import matplotlib
 import numpy as np
 import pyvista
 import splinebox
+import tqdm
 
 DEVICE = jax.devices("gpu")[0] if any(device.platform == "gpu" for device in jax.devices()) else jax.devices("cpu")[0]
 
@@ -17,27 +18,28 @@ IMG_SIZE = 128
 UU, VV = jax.numpy.meshgrid(
     jax.numpy.arange(IMG_SIZE, device=DEVICE), jax.numpy.arange(IMG_SIZE, device=DEVICE), indexing="ij"
 )
-ORIGINS_ZX = jax.numpy.stack([UU, jax.numpy.full(UU.shape, -3 * IMG_SIZE, device=DEVICE), VV], axis=-1)
-ORIGINS_ZY = jax.numpy.stack([jax.numpy.full(UU.shape, -3 * IMG_SIZE, device=DEVICE), VV, UU], axis=-1)
-TARGETS_ZX = jax.numpy.stack([UU, jax.numpy.full(UU.shape, 3 * IMG_SIZE, device=DEVICE), VV], axis=-1)
-TARGETS_ZY = jax.numpy.stack([jax.numpy.full(UU.shape, 3 * IMG_SIZE, device=DEVICE), VV, UU], axis=-1)
+POSITION_CAM_1 = jax.numpy.array([IMG_SIZE / 2, -350.0, IMG_SIZE / 2], device=DEVICE)
+POSITION_CAM_2 = jax.numpy.array([-350.0, IMG_SIZE / 2, IMG_SIZE / 2], device=DEVICE)
+IMG_PLANE_CAM_1 = jax.numpy.stack([UU, jax.numpy.full(UU.shape, 2.0 * IMG_SIZE, device=DEVICE), VV], axis=-1)
+IMG_PLANE_CAM_2 = jax.numpy.stack([jax.numpy.full(UU.shape, 2.0 * IMG_SIZE, device=DEVICE), VV, UU], axis=-1)
 
-# Epsilon for the Carbonnier norm
+# Epsilon for the Charbonnier norm
 EPSILON = 1e-8
 
 
 @jax.jit
-def ray_casting(coords, origins, targets):
+@jax.checkpoint
+def ray_casting(coords, camera_position, img_plane):
     """
     coords : points along the spline
     origins : the origins of the rays (IMG_SIZE, IMG_SIZE, 3)
     targets : the targets of the rays (IMG_SIZE, IMG_SIZE, 3)
     """
-    directions = targets - origins
+    directions = img_plane - camera_position
     alpha = (
-        jax.numpy.einsum("ij,klj->ikl", coords, directions) - jax.numpy.sum(directions * origins, axis=-1)
+        jax.numpy.einsum("ij,klj->ikl", coords, directions) - jax.numpy.sum(directions * camera_position, axis=-1)
     ) / jax.numpy.linalg.norm(directions, axis=-1) ** 2
-    closest_points = alpha[..., None] * directions + origins
+    closest_points = alpha[..., None] * directions + camera_position
     distance_vectors = closest_points - coords[:, None, None]
     # Use differentiable Charbonnier norm to compute the distance
     distances = jax.numpy.sqrt(jax.numpy.sum(distance_vectors * distance_vectors, axis=-1) + EPSILON**2)
@@ -68,8 +70,8 @@ def render(spline):
     t = jax.numpy.linspace(0, spline.M - 1, 10000)
     coords = spline(t)
 
-    zx_image = ray_casting(coords, ORIGINS_ZX, TARGETS_ZX)
-    zy_image = ray_casting(coords, ORIGINS_ZY, TARGETS_ZY)
+    zx_image = ray_casting(coords, POSITION_CAM_1, IMG_PLANE_CAM_1)
+    zy_image = ray_casting(coords, POSITION_CAM_2, IMG_PLANE_CAM_2)
 
     return coords, zx_image, zy_image
 
@@ -82,18 +84,18 @@ def to_texture(image):
     return pyvista.Texture((rgba * 255).astype(np.uint8))
 
 
-def loss_func(control_points, target_zx_image, target_zy_image):
+def loss_func(control_points, target_img_cam_1, target_img_cam_2):
     spline = splinebox.Spline(
         M=M,
         basis_function=BASIS_FUNCTION,
         closed=CLOSED,
         control_points=control_points,
     )
-    _, zx_image, zy_image = render(spline)
-    return jax.numpy.sum((target_zx_image - zx_image) ** 2) + jax.numpy.sum((target_zy_image - zy_image) ** 2)
+    _, img_cam_1, img_cam_2 = render(spline)
+    return jax.numpy.sum((target_img_cam_1 - img_cam_1) ** 2) + jax.numpy.sum((target_img_cam_2 - img_cam_2) ** 2)
 
 
-grad_func = jax.grad(loss_func)
+value_and_grad_of_loss = jax.value_and_grad(loss_func)
 
 
 # %%
@@ -115,31 +117,31 @@ target_spline = splinebox.Spline(
     M=M, basis_function=BASIS_FUNCTION, closed=CLOSED, control_points=target_control_points
 )
 
-target_coords, target_zx_image, target_zy_image = render(target_spline)
-target_zx_image.block_until_ready()
-target_zy_image.block_until_ready()
+target_coords, target_img_cam_1, target_img_cam_2 = render(target_spline)
+target_img_cam_1.block_until_ready()
+target_img_cam_2.block_until_ready()
 target_spline_mesh = pyvista.MultipleLines(points=np.array(target_coords)).tube(radius=RADIUS, absolute=True)
 target_control_point_mesh = pyvista.PolyData(np.array(target_spline.control_points))
 
 DISTANCE = 3 * IMG_SIZE
-ZX_PLANE_CORNERS = np.array(
-    [[0, DISTANCE, 0], [IMG_SIZE, DISTANCE, 0], [IMG_SIZE, DISTANCE, IMG_SIZE], [0, DISTANCE, IMG_SIZE]], dtype=float
+img_plane_cam_1_corners = np.array(
+    [IMG_PLANE_CAM_1[0, 0], IMG_PLANE_CAM_1[-1, 0], IMG_PLANE_CAM_1[-1, -1], IMG_PLANE_CAM_1[0, -1]]
 )
-ZY_PLANE_CORNERS = np.array(
-    [[DISTANCE, 0, 0], [DISTANCE, IMG_SIZE, 0], [DISTANCE, IMG_SIZE, IMG_SIZE], [DISTANCE, 0, IMG_SIZE]], dtype=float
+img_plane_cam_2_corners = np.array(
+    [IMG_PLANE_CAM_2[0, 0], IMG_PLANE_CAM_2[-1, 0], IMG_PLANE_CAM_2[-1, -1], IMG_PLANE_CAM_2[0, -1]]
 )
-zx_plane = pyvista.PolyData(ZX_PLANE_CORNERS).delaunay_2d()
-zy_plane = pyvista.PolyData(ZY_PLANE_CORNERS).delaunay_2d()
-zx_plane.texture_map_to_plane(
-    origin=(IMG_SIZE, DISTANCE, 0),
-    point_u=(IMG_SIZE, DISTANCE, IMG_SIZE),
-    point_v=(0, DISTANCE, 0),
+img_plane_cam_1 = pyvista.PolyData(img_plane_cam_1_corners).delaunay_2d()
+img_plane_cam_2 = pyvista.PolyData(img_plane_cam_2_corners).delaunay_2d()
+img_plane_cam_1.texture_map_to_plane(
+    origin=img_plane_cam_1_corners[1],
+    point_u=img_plane_cam_1_corners[2],
+    point_v=img_plane_cam_1_corners[0],
     inplace=True,
 )
-zy_plane.texture_map_to_plane(
-    origin=(DISTANCE, 0, IMG_SIZE),
-    point_u=(DISTANCE, IMG_SIZE, IMG_SIZE),
-    point_v=(DISTANCE, 0, 0),
+img_plane_cam_2.texture_map_to_plane(
+    origin=img_plane_cam_2_corners[1],
+    point_u=img_plane_cam_2_corners[2],
+    point_v=img_plane_cam_2_corners[0],
     inplace=True,
 )
 
@@ -148,11 +150,11 @@ spline = splinebox.Spline(M=M, basis_function=BASIS_FUNCTION, closed=CLOSED, con
 
 losses = []
 lr = 0.5
-for i in range(85):
+for i in tqdm.tqdm(np.arange(85)):
     if (i % 1) == 0:
-        coords, zx_image, zy_image = render(spline)
-        zx_texture = to_texture(zx_image - target_zx_image)
-        zy_texture = to_texture(zy_image - target_zy_image)
+        coords, img_cam_1, img_cam_2 = render(spline)
+        zx_texture = to_texture(img_cam_1 - target_img_cam_1)
+        zy_texture = to_texture(img_cam_2 - target_img_cam_2)
 
         spline_mesh = pyvista.MultipleLines(points=np.array(coords)).tube(radius=RADIUS, absolute=True)
         control_point_mesh = pyvista.PolyData(np.array(spline.control_points))
@@ -173,19 +175,43 @@ for i in range(85):
             render_points_as_spheres=True,
             label="target control points",
         )
-        plotter.add_mesh(zx_plane, texture=zx_texture, label="z-x projection")
-        plotter.add_mesh(zy_plane, texture=zy_texture, label="z-y projection")
+        plotter.add_mesh(img_plane_cam_1, texture=zx_texture, label="z-x projection")
+        plotter.add_mesh(img_plane_cam_2, texture=zy_texture, label="z-y projection")
+        plotter.add_lines(
+            np.array(
+                [
+                    POSITION_CAM_1,
+                    img_plane_cam_1_corners[0],
+                    POSITION_CAM_1,
+                    img_plane_cam_1_corners[1],
+                    POSITION_CAM_1,
+                    img_plane_cam_1_corners[2],
+                    POSITION_CAM_1,
+                    img_plane_cam_1_corners[3],
+                    POSITION_CAM_2,
+                    img_plane_cam_2_corners[0],
+                    POSITION_CAM_2,
+                    img_plane_cam_2_corners[1],
+                    POSITION_CAM_2,
+                    img_plane_cam_2_corners[2],
+                    POSITION_CAM_2,
+                    img_plane_cam_2_corners[3],
+                ]
+            ),
+            color="black",
+            width=1,
+        )
         plotter.add_legend()
         plotter.add_axes()
         # plotter.show()
         plotter.screenshot(f"differential_rendering/{i}.png")
         plotter.close()
 
-    loss = loss_func(spline.control_points, target_zx_image, target_zy_image)
+    loss, grad_jax = value_and_grad_of_loss(spline.control_points, target_img_cam_1, target_img_cam_2)
+    spline.control_points -= lr * grad_jax
+
     losses.append(loss)
     if len(losses) > 2 and losses[-2] < losses[-1]:
         lr /= 2
         print(f"{lr = }")
     print(f"{i}: {loss}")
-    grad_jax = grad_func(spline.control_points, target_zx_image, target_zy_image)
-    spline.control_points -= lr * grad_jax
