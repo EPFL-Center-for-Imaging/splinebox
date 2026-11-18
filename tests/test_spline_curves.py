@@ -57,10 +57,14 @@ def test_minimum_number_of_knots(basis_function):
         splinebox.spline_curves.Spline(M, basis_function)
 
 
-def test_call(spline_curve, coeff_gen, derivative, call_positions, is_hermite_spline, is_interpolating, xp):
+def test_call(
+    spline_curve, coeff_gen, derivative, call_positions, is_hermite_spline, is_interpolating, xp, device, dtype
+):
     support = spline_curve.basis_function.support
     half_support = support / 2
     closed = spline_curve.closed
+
+    expected_dtype = xp.asarray(1.0).dtype if dtype is int else dtype
 
     # Set coefficients and tangents
     spline_curve.control_points = coeff_gen(spline_curve.M, support, closed)
@@ -68,17 +72,27 @@ def test_call(spline_curve, coeff_gen, derivative, call_positions, is_hermite_sp
         spline_curve.tangents = coeff_gen(spline_curve.M, support, closed)
 
     if is_interpolating(spline_curve) and derivative == 0:
-        t = xp.arange(spline_curve.M, dtype=spline_curve.control_points.dtype)
+        t = xp.arange(spline_curve.M, dtype=dtype, device=device)
         values = spline_curve(t, derivative=derivative)
-        expected = spline_curve.control_points
+
+        assert array_api_compat.is_array_api_obj(values)
+        assert array_api_compat.array_namespace(values) is xp
+        assert xp.isdtype(values.dtype, kind="real floating")
+        assert values.dtype == expected_dtype
+
+        expected = xp.astype(spline_curve.control_points, expected_dtype)
         if not closed:
             pad = math.ceil(half_support) - 1
             if pad != 0:
                 expected = expected[pad:-pad]
-        assert np.allclose(values, expected)
+        assert xp.allclose(values, expected)
 
     else:
-        spline_curve(call_positions, derivative=derivative)
+        output = spline_curve(call_positions, derivative=derivative)
+        assert array_api_compat.is_array_api_obj(output)
+        assert array_api_compat.array_namespace(output) is xp
+        assert xp.isdtype(output.dtype, kind="real floating")
+        assert output.dtype == expected_dtype
 
 
 def test_raises_without_control_points(spline_curve, call_positions, translation_vector):
@@ -250,7 +264,7 @@ def test_arc_length(xp, device):
     assert xp.allclose(arc_lengths, expected[permutation])
 
     # Check that is works with vectors for start and stop
-    arc_lengths = spline.arc_length(ts[permutation], xp.zeros(len(ts)))
+    arc_lengths = spline.arc_length(ts[permutation], xp.zeros(len(ts), device=device))
     assert xp.allclose(arc_lengths, expected[permutation])
 
 
@@ -317,18 +331,28 @@ def test_arc_length_to_parameter(xp, device):
         spline.arc_length_to_parameter(total_length + 0.01)
 
 
-def test_translate(initialised_spline_curve, translation_vector):
+def test_translate(initialised_spline_curve, translation_vector, xp, dtype, device):
     spline = initialised_spline_curve
     spline_copy = spline.copy()
     spline_copy.translate(translation_vector)
-    t = np.linspace(0, spline.M, 100) if spline.closed else np.linspace(0, spline.M - 1, 100)
+    t_dtype = xp.asarray(1.0).dtype if dtype is int else dtype
+    t = (
+        xp.linspace(0, spline.M, 100, dtype=t_dtype, device=device)
+        if spline.closed
+        else xp.linspace(0, spline.M - 1, 100, dtype=t_dtype, device=device)
+    )
     expected = spline(t) + translation_vector
-
-    assert np.allclose(spline_copy(t), expected)
+    atol = 1e-5 if expected.dtype == xp.float32 else 1e-8
+    assert xp.allclose(spline_copy(t), expected, atol=atol)
 
 
 def test_rotate(initialised_spline_curve, rotation_matrix, is_hermite_spline, xp, device):
     spline = initialised_spline_curve
+    dtype = (
+        xp.asarray(1.0).dtype
+        if xp.isdtype(spline.control_points.dtype, kind="integral")
+        else spline.control_points.dtype
+    )
     if spline.ndim == 1:
         with pytest.raises(RuntimeError):
             spline.rotate(rotation_matrix)
@@ -336,38 +360,30 @@ def test_rotate(initialised_spline_curve, rotation_matrix, is_hermite_spline, xp
         spline_copy = spline.copy()
         spline_copy.rotate(rotation_matrix, centred=False)
         t = (
-            xp.linspace(0, spline.M, 100, device=device)
+            xp.linspace(0, spline.M, 100, dtype=dtype, device=device)
             if spline.closed
-            else xp.linspace(0, spline.M - 1, 100, device=device)
+            else xp.linspace(0, spline.M - 1, 100, dtype=dtype, device=device)
         )
         vals = spline(t)
         expected = (rotation_matrix @ vals.T).T
-        assert xp.allclose(spline_copy(t), expected)
+        atol = 1e-4 if expected.dtype == xp.float32 else 1e-8
+        assert xp.allclose(spline_copy(t), expected, atol=atol)
 
         spline_copy = spline.copy()
         spline_copy.rotate(rotation_matrix, centred=True)
         t = (
-            xp.linspace(0, spline.M, 100, device=device)
+            xp.linspace(0, spline.M, 100, dtype=dtype, device=device)
             if spline.closed
-            else xp.linspace(0, spline.M - 1, 100, device=device)
+            else xp.linspace(0, spline.M - 1, 100, dtype=dtype, device=device)
         )
         vals = spline(t)
-        expected = (rotation_matrix @ vals.T).T
-        assert xp.allclose(spline_copy(t), expected)
-
-        spline_copy = spline.copy()
-        spline_copy.rotate(rotation_matrix, centred=True)
-        t = (
-            xp.linspace(0, spline.M, 100, device=device)
-            if spline.closed
-            else xp.linspace(0, spline.M - 1, 100, device=device)
-        )
-        vals = spline(t)
-        centring_vector = xp.mean(spline.control_points, axis=0)
+        # torch mean only works for floating point arrays
+        centring_vector = xp.mean(xp.asarray(spline.control_points, dtype=dtype), axis=0)
         vals = vals - centring_vector
         expected = (rotation_matrix @ vals.T).T
         expected = expected + centring_vector
-        assert xp.allclose(spline_copy(t), expected)
+        atol = 1e-3 if expected.dtype == xp.float32 else 1e-8
+        assert xp.allclose(spline_copy(t), expected, atol=atol)
 
 
 def test_fit(spline_curve, points, is_hermite_spline, xp, device):
@@ -386,9 +402,16 @@ def test_fit(spline_curve, points, is_hermite_spline, xp, device):
         assert array_api_compat.device(spline_curve.control_points) == device
 
         # To compare to the reference we use numpy
-        spline_curve.control_points = np.array(spline_curve.control_points)
+        if array_api_compat.is_jax_namespace(xp):
+            import jax
+
+            cpu_device = jax.devices("cpu")[0]
+        else:
+            cpu_device = "cpu"
+        points = np.array(array_api_compat.to_device(points, cpu_device))
+        spline_curve.control_points = np.array(array_api_compat.to_device(spline_curve.control_points, cpu_device))
         if hermite:
-            spline_curve.tangents = np.array(spline_curve.tangents)
+            spline_curve.tangents = np.array(array_api_compat.to_device(spline_curve.tangents, cpu_device))
 
         # Keep a copy of the result of fit
         control_points_fit = spline_curve.control_points.copy()
@@ -438,7 +461,7 @@ def test_fit(spline_curve, points, is_hermite_spline, xp, device):
             assert np.allclose(tangents_expected, tangents_fit)
 
 
-def test_fit_clamped(open_spline_curve, points, is_hermite_spline, xp):
+def test_fit_clamped(open_spline_curve, points, is_hermite_spline, xp, device):
     spline = open_spline_curve
 
     # Bool indicating whether spline is a hermite spline or not
@@ -458,11 +481,11 @@ def test_fit_clamped(open_spline_curve, points, is_hermite_spline, xp):
         spline.fit(points, "clamped")
 
         # Check that the boundary conditions are fulfilled
-        assert xp.allclose(spline(0, derivative=1), xp.asarray([0], dtype=points.dtype))
-        assert xp.allclose(spline(spline.M - 1, derivative=1), xp.asarray([0], dtype=points.dtype))
+        assert xp.allclose(spline(0, derivative=1), xp.asarray([0], dtype=points.dtype, device=device))
+        assert xp.allclose(spline(spline.M - 1, derivative=1), xp.asarray([0], dtype=points.dtype, device=device))
 
 
-def test_fit_natural(open_spline_curve, points, is_hermite_spline):
+def test_fit_natural(open_spline_curve, points, is_hermite_spline, xp, device):
     spline = open_spline_curve
 
     # Bool indicating whether spline is a hermite spline or not
@@ -487,11 +510,11 @@ def test_fit_natural(open_spline_curve, points, is_hermite_spline):
         spline.fit(points, "natural")
 
         # Check that the boundary conditions are fulfilled
-        assert np.allclose(spline(0, derivative=2), 0)
-        assert np.allclose(spline(spline.M - 1, derivative=2), 0)
+        assert xp.allclose(spline(0, derivative=2), xp.asarray([0], dtype=points.dtype, device=device))
+        assert xp.allclose(spline(spline.M - 1, derivative=2), xp.asarray([0], dtype=points.dtype, device=device))
 
 
-def test_knots(spline_curve, knot_gen, is_hermite_spline, request, xp, dtype):
+def test_knots(spline_curve, knot_gen, is_hermite_spline, request, xp, dtype, device):
     if isinstance(spline_curve.basis_function, splinebox.basis_functions.B2):
         # The filter_symmetric and filter_periodic are not implemented for B2
         request.node.add_marker(pytest.mark.xfail)
@@ -509,13 +532,13 @@ def test_knots(spline_curve, knot_gen, is_hermite_spline, request, xp, dtype):
                 diff = xp.diff(knots, axis=0, append=knots[0])
             else:
                 diff = xp.diff(knots, axis=0, append=knots[0][np.newaxis, :])
-            tangents = (diff + np.roll(diff, 1)) / 2
+            tangents = (diff + xp.roll(diff, 1)) / 2
         else:
             diff = xp.diff(knots, axis=0)
             pad = math.ceil(spline_curve.basis_function.support / 2) - 1
             if diff.ndim == 1:
-                diff = diff[:, np.newaxis]
-            padding = xp.tile(xp.zeros(diff.shape[1], dtype=diff.dtype), (pad + 1, 1))
+                diff = diff[:, xp.newaxis]
+            padding = xp.tile(xp.zeros(diff.shape[1], dtype=diff.dtype, device=device), (pad + 1, 1))
             diff = xp.concat((padding, diff, padding), axis=0)
             tangents = (diff[:-1] + diff[1:]) / 2
         spline_curve.tangents = xp.astype(tangents, dtype)
@@ -572,7 +595,7 @@ def test_centroid(spline_curve, coeff_gen, is_hermite_spline, xp, dtype):
     assert xp.allclose(spline_curve._control_points_centroid(), expected)
 
 
-def test_scale(initialised_spline_curve, is_hermite_spline, xp):
+def test_scale(initialised_spline_curve, is_hermite_spline, xp, device):
     spline = initialised_spline_curve
     spline_copy = spline.copy()
 
@@ -586,14 +609,22 @@ def test_scale(initialised_spline_curve, is_hermite_spline, xp):
     if is_hermite_spline(spline_copy):
         spline_copy.tangents = spline_copy.tangents * factor
 
-    t = xp.linspace(0, spline.M, 100) if spline.closed else xp.linspace(0, spline.M - 1, 100)
+    t = (
+        xp.linspace(0, spline.M, 100, device=device)
+        if spline.closed
+        else xp.linspace(0, spline.M - 1, 100, device=device)
+    )
 
     spline.scale(factor)
 
     assert xp.allclose(spline(t), spline_copy(t))
 
 
-def test_curvilinear_reparametrisation_energy(as_xp_array, xp):
+def test_curvilinear_reparametrisation_energy(as_xp_array, xp, device, request):
+    if hasattr(device, "type") and device.type in ("cuda", "xpu", "mps"):
+        # Currently not working for torch tensors on gpu
+        request.node.add_marker(pytest.mark.xfail)
+
     M = 4
     spline = splinebox.spline_curves.Spline(M, splinebox.B1())
 
@@ -614,7 +645,11 @@ def test_curvilinear_reparametrisation_energy(as_xp_array, xp):
     assert xp.isclose(val, expected_val)
 
 
-def test_curvilinear_reparametrisation_energy_user_c(as_xp_array, xp):
+def test_curvilinear_reparametrisation_energy_user_c(as_xp_array, xp, device, request):
+    if hasattr(device, "type") and device.type in ("cuda", "xpu", "mps"):
+        # Currently not working for torch tensors on gpu
+        request.node.add_marker(pytest.mark.xfail)
+
     M = 4
     spline = splinebox.spline_curves.Spline(M, splinebox.B1())
 
@@ -629,13 +664,19 @@ def test_curvilinear_reparametrisation_energy_user_c(as_xp_array, xp):
 
     val = spline.curvilinear_reparametrisation_energy(c=c)
 
-    assert xp.isclose(val, expected_val)
+    assert np.isclose(val, expected_val)
 
 
-def test_curvilinear_reparametrisation_energy_translation(initialised_spline_curve, translation_vector, xp):
+def test_curvilinear_reparametrisation_energy_translation(
+    initialised_spline_curve, translation_vector, xp, device, request
+):
     """
     Test if the curvilinear reparametrisation energy is invariant to translation.
     """
+    if hasattr(device, "type") and device.type in ("cuda", "xpu", "mps"):
+        # Currently not for torch tensors on gpu
+        request.node.add_marker(pytest.mark.xfail)
+
     atol = 1e-3
     spline = initialised_spline_curve
     expected = spline.curvilinear_reparametrisation_energy(atol=atol)
@@ -644,10 +685,14 @@ def test_curvilinear_reparametrisation_energy_translation(initialised_spline_cur
     assert xp.isclose(val, expected, atol=atol)
 
 
-def test_curvilinear_reparametrisation_energy_scale_invariance(initialised_spline_curve, xp):
+def test_curvilinear_reparametrisation_energy_scale_invariance(initialised_spline_curve, xp, device, request):
     """
     The curvilinear reparametrisation energy should not change when the entire spline is scaled.
     """
+    if hasattr(device, "type") and device.type in ("cuda", "xpu", "mps"):
+        # Currently not for torch tensors on gpu
+        request.node.add_marker(pytest.mark.xfail)
+
     spline = initialised_spline_curve
     expected = spline.curvilinear_reparametrisation_energy()
     spline.scale(0.1)
@@ -655,26 +700,26 @@ def test_curvilinear_reparametrisation_energy_scale_invariance(initialised_splin
     assert xp.isclose(val, expected)
 
 
-def test_curvature(as_xp_array, xp):
+def test_curvature(as_xp_array, xp, device):
     # Create a circular spline
     M = 4
     spline = splinebox.spline_curves.Spline(M=M, basis_function=splinebox.basis_functions.Exponential(M), closed=True)
-    t = xp.linspace(0, M, 100)
+    t = xp.linspace(0, M, 100, device=device)
     for r in (1, 1.5, 2):
         # 2D
         spline.knots = as_xp_array([[0, r], [r, 0], [0, -r], [-r, 0]])
         curvature = spline.curvature(t)
-        assert xp.allclose(curvature, 1 / r)
+        assert xp.allclose(curvature, xp.asarray(1 / r, dtype=curvature.dtype))
 
         # If we reverse the direction, the curvature should change sign
         spline.knots = as_xp_array([[0, r], [-r, 0], [0, -r], [r, 0]])
         curvature = spline.curvature(t)
-        assert xp.allclose(curvature, -1 / r)
+        assert xp.allclose(curvature, xp.asarray(-1 / r, dtype=curvature.dtype))
 
         # 3D
         spline.knots = as_xp_array([[0, 0, r], [0, r, 0], [0, 0, -r], [0, -r, 0]])
         curvature = spline.curvature(t)
-        assert xp.allclose(curvature, 1 / r)
+        assert xp.allclose(curvature, xp.asarray(1 / r, dtype=curvature.dtype))
 
     # 1D
     spline = splinebox.spline_curves.Spline(M=M, basis_function=splinebox.basis_functions.B3(), closed=False)
@@ -685,38 +730,42 @@ def test_curvature(as_xp_array, xp):
     assert xp.allclose(result, expected)
 
 
-def test_normal_2D(as_xp_array, xp):
+def test_normal_2D(as_xp_array, xp, device):
     # Create a circular spline
     M = 4
     spline = splinebox.spline_curves.Spline(M=M, basis_function=splinebox.basis_functions.Exponential(M), closed=True)
-    t = xp.linspace(0, M, 100)
+    t = xp.linspace(0, M, 100, device=device)
 
-    theta = xp.linspace(0, 2 * xp.pi, 100)
+    theta = xp.linspace(0, 2 * xp.pi, 100, device=device)
     expected = xp.stack([xp.sin(theta), xp.cos(theta)], axis=-1)
+    atol = 1e-5 if expected.dtype == xp.float32 else 1e-8
     for r in (1, 1.5, 2):
         spline.knots = as_xp_array([[0, r], [r, 0], [0, -r], [-r, 0]])
         normals = spline.normal(t)
-        assert xp.allclose(normals, expected)
+        assert xp.allclose(normals, expected, atol=atol)
 
         # Reversing the direction change the direction of the normal vector
         spline.knots = as_xp_array([[0, r], [-r, 0], [0, -r], [r, 0]])
-        normals = spline.normal(t[::-1])
-        assert xp.allclose(normals, -1 * expected)
+        normals = spline.normal(xp.flip(t))
+        assert xp.allclose(normals, -1 * expected, atol=atol)
 
         # Check that they are normal vectors
-        assert xp.allclose(xp.linalg.vector_norm(normals, axis=1), xp.ones(len(t)))
+        assert xp.allclose(xp.linalg.vector_norm(normals, axis=1), xp.ones(len(t), device=device), atol=atol)
 
 
-def test_normal_3D(as_xp_array, xp):
+def test_normal_3D(as_xp_array, xp, device):
     M = 4
     spline = splinebox.spline_curves.Spline(M=M, basis_function=splinebox.basis_functions.B3(), closed=False)
-    t = xp.linspace(0, M - 1, 100)
+    t = xp.linspace(0, M - 1, 100, device=device)
 
     # This is a straight line
-    spline.control_points = xp.stack([xp.arange(M + 2), xp.arange(M + 2), xp.ones(M + 2)]).T
+    spline.control_points = xp.stack(
+        [xp.arange(M + 2, device=device), xp.arange(M + 2, device=device), xp.ones(M + 2, device=device)]
+    ).T
     normals = spline.normal(t, frame="bishop", initial_vector=as_xp_array([0.0, 0.0, 1.0]))
+    atol = 1e-5 if normals.dtype == xp.float32 else 1e-8
     # check that the normals don't change
-    assert xp.isclose(xp.sum(xp.diff(normals, axis=0)), 0)
+    assert xp.isclose(xp.sum(xp.diff(normals, axis=0)), xp.asarray(0, dtype=normals.dtype), atol=atol)
 
     spline.knots = as_xp_array([[1, 0, 0], [0, 1, 1], [-1, 0, 2], [0, -1, 3]])
     t = t[1:-1]
@@ -724,10 +773,10 @@ def test_normal_3D(as_xp_array, xp):
     tangents = spline(t, derivative=1)
     # Check that both normals are orthogonal t the tangents (dot product)
     dot = xp.sum(normals * tangents[:, xp.newaxis], axis=-1)
-    assert xp.allclose(dot, 0)
+    assert xp.allclose(dot, xp.asarray(0, dtype=dot.dtype), atol=atol)
     # Check that the normals are orthogonal to each other
     dot = xp.sum(normals[:, 0] * normals[:, 1])
-    assert xp.isclose(dot, 0)
+    assert xp.isclose(dot, xp.asarray(0, dtype=dot.dtype), atol=atol)
 
 
 def test_repr(initialised_spline_curve, is_hermite_spline, xp, dtype):
@@ -744,61 +793,149 @@ def test_repr(initialised_spline_curve, is_hermite_spline, xp, dtype):
     assert eval(repr(spline)) == spline
 
 
-def test_eq_spline(spline_curve, basis_function, closed, coeff_gen, is_hermite_spline):
-    spline = spline_curve
-    basis_function = basis_function
-    spline.control_points = coeff_gen(spline.M, spline.basis_function.support, spline.closed)
-    if is_hermite_spline(spline):
-        spline.tangents = coeff_gen(spline.M, spline.basis_function.support, spline.closed)
-        other = splinebox.spline_curves.HermiteSpline(
-            M=spline.M,
-            basis_function=basis_function,
-            closed=closed,
-            control_points=spline.control_points,
-            tangents=spline.tangents,
-        )
-    else:
-        other = splinebox.spline_curves.Spline(
-            M=spline.M, basis_function=basis_function, closed=closed, control_points=spline.control_points
-        )
-    if spline.basis_function != basis_function or spline.closed != closed:
-        assert spline != other
-    else:
+def test_eq_spline_basis_function(M, non_hermite_basis_function_combinations, closed, coeff_gen):
+    basis_function, other_basis_function = non_hermite_basis_function_combinations
+    spline = splinebox.spline_curves.Spline(M=M, basis_function=basis_function, closed=closed)
+    other = splinebox.spline_curves.Spline(M=M, basis_function=other_basis_function, closed=closed)
+
+    # Before initialising the spline with control points
+    if basis_function == other_basis_function:
         assert spline == other
-
-        spline.control_points = coeff_gen(spline.M, spline.basis_function.support, spline.closed)
+    else:
         assert spline != other
 
+    # Set identical control points
+    if basis_function.support == other_basis_function.support:
+        spline.control_points = coeff_gen(M, basis_function.support, closed)
         other.control_points = spline.control_points
-        if is_hermite_spline(spline) and is_hermite_spline(other):
-            # The tangents should not be equal yet
+        if basis_function == other_basis_function:
+            assert spline == other
+        else:
             assert spline != other
-            other.tangents = spline.tangents
-        assert spline == other
 
-    if is_hermite_spline(spline):
-        other = splinebox.spline_curves.HermiteSpline(
-            M=spline.M + 1, basis_function=spline.basis_function, closed=spline.closed
-        )
+
+def test_eq_hermite_spline_basis_function(M, hermite_basis_function_combinations, closed, coeff_gen):
+    basis_function, other_basis_function = hermite_basis_function_combinations
+    spline = splinebox.spline_curves.HermiteSpline(M=M, basis_function=basis_function, closed=closed)
+    other = splinebox.spline_curves.HermiteSpline(M=M, basis_function=other_basis_function, closed=closed)
+
+    # Before initialising the spline with control points
+    if basis_function == other_basis_function:
+        assert spline == other
     else:
-        other = splinebox.spline_curves.Spline(
-            M=spline.M + 1, basis_function=spline.basis_function, closed=spline.closed
-        )
+        assert spline != other
+
+    # Set identical control points and tangents
+    if basis_function.support == other_basis_function.support:
+        spline.control_points = coeff_gen(M, basis_function.support, closed)
+        spline.tangents = coeff_gen(M, basis_function.support, closed)
+        other.control_points = spline.control_points
+        other.tangents = spline.tangents
+        if basis_function == other_basis_function:
+            assert spline == other
+        else:
+            assert spline != other
+
+
+def test_eq_spline_M():
+    basis_function = splinebox.basis_functions.B1()
+    closed = False
+
+    spline = splinebox.spline_curves.Spline(M=10, basis_function=basis_function, closed=closed)
+    other = splinebox.spline_curves.Spline(M=9, basis_function=basis_function, closed=closed)
+    assert spline != other
+
+    other = splinebox.spline_curves.Spline(M=10, basis_function=basis_function, closed=closed)
+    assert spline == other
+
+
+def test_eq_spline_closed():
+    basis_function = splinebox.basis_functions.B3()
+    M = 7
+
+    spline = splinebox.spline_curves.Spline(M=M, basis_function=basis_function, closed=True)
+    other = splinebox.spline_curves.Spline(M=M, basis_function=basis_function, closed=False)
+    assert spline != other
+
+    other = splinebox.spline_curves.Spline(M=M, basis_function=basis_function, closed=True)
+    assert spline == other
+
+    # Identical control points for open and closed spline
+    spline = splinebox.spline_curves.Spline(M=M, basis_function=splinebox.basis_functions.B1(), closed=True)
+    other = splinebox.spline_curves.Spline(M=M, basis_function=spline.basis_function, closed=False)
+    spline.control_points = np.arange(M)[:, np.newaxis]
+    other.control_points = spline.control_points
+    assert spline != other
+
+
+def test_eq_spline_control_points(coeff_gen):
+    M = 7
+    basis_function = splinebox.basis_functions.B3()
+    closed = False
+
+    spline = splinebox.spline_curves.Spline(M=M, basis_function=basis_function, closed=closed)
+    other = splinebox.spline_curves.Spline(M=M, basis_function=basis_function, closed=closed)
+
+    # Only one spline with control points
+    spline.control_points = coeff_gen(M, basis_function.support, closed)
+    assert spline != other
+
+    # Different control points
+    other.control_points = coeff_gen(M, basis_function.support, closed)
+    assert spline != other
+
+    # Same control points
+    other.control_points = spline.control_points
+    assert spline == other
+
+
+def test_eq_hermite_spline_tangents(coeff_gen):
+    M = 7
+    basis_function = splinebox.basis_functions.CubicHermite()
+    closed = False
+
+    spline = splinebox.spline_curves.HermiteSpline(M=M, basis_function=basis_function, closed=closed)
+    other = splinebox.spline_curves.HermiteSpline(M=M, basis_function=basis_function, closed=closed)
+
+    # Only one spline with tangents
+    spline.tangents = coeff_gen(M, basis_function.support, closed)
+    assert spline != other
+
+    # Different tangents
+    other.tangents = coeff_gen(M, basis_function.support, closed)
+    assert spline != other
+
+    # Same tangents
+    other.tangents = spline.tangents
+    assert spline == other
+
+    # Same tangents different control points
+    spline.control_points = coeff_gen(M, basis_function.support, closed)
+    other.control_points = coeff_gen(M, basis_function.support, closed)
+    assert spline != other
+
+    # Same control points different tangents
+    other.control_points = spline.control_points
+    other.tangents = coeff_gen(M, basis_function.support, closed)
     assert spline != other
 
 
 def test_str(initialised_spline_curve):
     assert isinstance(str(initialised_spline_curve), str)
+    assert str(initialised_spline_curve.M) in str(initialised_spline_curve)
+    assert str(initialised_spline_curve.basis_function) in str(initialised_spline_curve)
+    if initialised_spline_curve.closed:
+        assert "closed" in str(initialised_spline_curve)
 
 
-def test_to_json_and_from_json(initialised_spline_curve, tmpdir, is_hermite_spline):
+def test_to_json_and_from_json(initialised_spline_curve, tmpdir, is_hermite_spline, xp, dtype, device):
     spline = initialised_spline_curve
     path = tmpdir / "spline.json"
     spline.to_json(path)
     if is_hermite_spline(initialised_spline_curve):
-        loaded_spline_curve = splinebox.spline_curves.HermiteSpline.from_json(path)
+        loaded_spline_curve = splinebox.spline_curves.HermiteSpline.from_json(path, xp=xp, dtype=dtype, device=device)
     else:
-        loaded_spline_curve = splinebox.spline_curves.Spline.from_json(path)
+        loaded_spline_curve = splinebox.spline_curves.Spline.from_json(path, xp=xp, dtype=dtype, device=device)
     assert spline == loaded_spline_curve
 
 
@@ -841,7 +978,9 @@ def test_from_json(tmpdir):
         splinebox.spline_curves.Spline.from_json(path)
 
 
-def test_saving_and_loading_of_multiple_splines(is_hermite_basis_function, tmpdir, coeff_gen, M, closed):
+def test_saving_and_loading_of_multiple_splines(
+    is_hermite_basis_function, tmpdir, coeff_gen, M, closed, xp, dtype, device
+):
     splines = []
     for basis_function_name in splinebox.basis_functions.inventory():
         basis_function = splinebox.basis_functions.basis_function_from_name(basis_function_name, M=M)
@@ -857,7 +996,7 @@ def test_saving_and_loading_of_multiple_splines(is_hermite_basis_function, tmpdi
     path = tmpdir / "splines.json"
     splinebox.spline_curves.splines_to_json(path, splines)
 
-    loaded_splines = splinebox.spline_curves.splines_from_json(path)
+    loaded_splines = splinebox.spline_curves.splines_from_json(path, xp=xp, dtype=dtype, device=device)
 
     for spline, loaded_spline in zip(splines, loaded_splines):
         assert spline == loaded_spline
@@ -1016,10 +1155,10 @@ def test_moving_frame(initialised_spline_curve, xp, device, dtype):
         assert xp.allclose(xp.cross(frame[:, 0], spline(t, derivative=1)), zero, atol=atol)
 
 
-def test_moving_frame_raises(as_xp_array, xp):
+def test_moving_frame_raises(as_xp_array, xp, device):
     M = 6
     spline = splinebox.spline_curves.Spline(M=M, basis_function=splinebox.basis_functions.B3(), closed=False)
-    t = xp.linspace(0, M - 1, 100)
+    t = xp.linspace(0, M - 1, 100, device=device)
 
     spline.knots = as_xp_array(np.random.rand(6, 3))
 
@@ -1032,7 +1171,9 @@ def test_moving_frame_raises(as_xp_array, xp):
         spline.moving_frame(t, method="frenet")
 
     # Straight segment
-    spline.control_points = xp.stack([xp.arange(M + 2), xp.zeros(M + 2), xp.zeros(M + 2)], axis=-1)
+    spline.control_points = xp.stack(
+        [xp.arange(M + 2, device=device), xp.zeros(M + 2, device=device), xp.zeros(M + 2, device=device)], axis=-1
+    )
     with pytest.raises(RuntimeError):
         spline.moving_frame(t, method="frenet")
 
@@ -1049,6 +1190,8 @@ def test_moving_frame_unsorted(frame, as_xp_array, xp):
     sorted_t = t[sort_indices]
 
     initial_vector = xp.cross(spline(t[0], derivative=1), spline(sorted_t[0], derivative=1))
+    if initial_vector.shape[0] == 1:
+        initial_vector = xp.squeeze(initial_vector, axis=0)
 
     sorted_frame = spline.moving_frame(sorted_t, method=frame, initial_vector=initial_vector)
     unsorted_frame = spline.moving_frame(t, method=frame, initial_vector=initial_vector)
@@ -1110,7 +1253,11 @@ def test_mesh(initialised_spline_curve, radius, step_t, step_angle, mesh_type, c
                 assert V + F - E == 2
 
 
-def test_mesh_cap_ends_false_alias_matches_none(as_xp_array, xp):
+def test_mesh_cap_ends_false_alias_matches_none(as_xp_array, xp, request):
+    if not array_api_compat.is_numpy_namespace(xp):
+        # Currently only implemented for numpy
+        request.node.add_marker(pytest.mark.xfail)
+
     spline = splinebox.spline_curves.Spline(M=4, basis_function=splinebox.basis_functions.B3(), closed=False)
     spline.knots = as_xp_array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.5, 0.0], [3.0, 0.5, 0.5]])
 
@@ -1122,7 +1269,11 @@ def test_mesh_cap_ends_false_alias_matches_none(as_xp_array, xp):
     assert xp.array_equal(connectivity_none, connectivity_false)
 
 
-def test_mesh_cap_ends_true_raises_value_error(as_xp_array):
+def test_mesh_cap_ends_true_raises_value_error(as_xp_array, xp, request):
+    if not array_api_compat.is_numpy_namespace(xp):
+        # Currently only implemented for numpy
+        request.node.add_marker(pytest.mark.xfail)
+
     spline = splinebox.spline_curves.Spline(M=4, basis_function=splinebox.basis_functions.B3(), closed=False)
     spline.knots = as_xp_array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.5, 0.0], [3.0, 0.5, 0.5]])
 
@@ -1130,7 +1281,11 @@ def test_mesh_cap_ends_true_raises_value_error(as_xp_array):
         spline.mesh(radius=0.2, step_t=0.5, step_angle=30, cap_ends=True)
 
 
-def test_spherical_caps_add_more_geometry_than_flat_caps(as_xp_array):
+def test_spherical_caps_add_more_geometry_than_flat_caps(as_xp_array, xp, request):
+    if not array_api_compat.is_numpy_namespace(xp):
+        # Currently only implemented for numpy
+        request.node.add_marker(pytest.mark.xfail)
+
     spline = splinebox.spline_curves.Spline(M=4, basis_function=splinebox.basis_functions.B3(), closed=False)
     spline.knots = as_xp_array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.5, 0.0], [3.0, 0.5, 0.5]])
 
@@ -1141,7 +1296,11 @@ def test_spherical_caps_add_more_geometry_than_flat_caps(as_xp_array):
     assert len(sphere_connectivity) > len(flat_connectivity)
 
 
-def test_flat_caps_use_exact_open_spline_endpoints_when_step_t_does_not_divide_range(as_xp_array, xp):
+def test_flat_caps_use_exact_open_spline_endpoints_when_step_t_does_not_divide_range(as_xp_array, xp, request):
+    if not array_api_compat.is_numpy_namespace(xp):
+        # Currently only implemented for numpy
+        request.node.add_marker(pytest.mark.xfail)
+
     spline = splinebox.spline_curves.Spline(M=4, basis_function=splinebox.basis_functions.B3(), closed=False)
     spline.knots = as_xp_array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.5, 0.0], [3.0, 0.5, 0.5]])
 
@@ -1166,7 +1325,7 @@ def test_protected_spline_attributes(spline_curve, coeff_gen, basis_function):
     with pytest.raises(RuntimeError):
         spline.pad = spline.pad + 1
 
-    spline.control_points = coeff_gen(M=spline.M, support=spline.basis_function.support, closed=spline.closed)
+    spline.control_points = coeff_gen(spline.M, spline.basis_function.support, spline.closed)
 
     # Check that we cannot change M anymore
     with pytest.raises(RuntimeError):
@@ -1188,6 +1347,40 @@ def test_protected_spline_attributes(spline_curve, coeff_gen, basis_function):
         spline.half_support = spline.half_support + 1
     with pytest.raises(RuntimeError):
         spline.pad = spline.pad + 1
+
+
+def test_single_value_input_basis_matrix(initialised_spline_curve, is_hermite_spline, single_value_t, xp, dtype):
+    spline = initialised_spline_curve
+    output = spline.basis_matrix(single_value_t)
+
+    # For hermite spline two matrices are returned for the two parts of the basis function.
+    # To not duplicate the tests, we iterate over the outpus.
+    outputs = output if is_hermite_spline(spline) else [output]
+    for output in outputs:
+        if array_api_compat.is_numpy_namespace(xp):
+            output = output.todense()
+        assert array_api_compat.is_array_api_obj(output)
+        assert array_api_compat.array_namespace(output) is xp
+        expected_dtype = xp.asarray(1.0).dtype if dtype is int else dtype
+        assert output.dtype == expected_dtype
+        assert output.shape == (1, spline.control_points.shape[0])
+
+
+def test_array_input_basis_matrix(initialised_spline_curve, is_hermite_spline, array_t, xp, dtype):
+    spline = initialised_spline_curve
+    output = spline.basis_matrix(array_t)
+
+    # For hermite spline two matrices are returned for the two parts of the basis function.
+    # To not duplicate the tests, we iterate over the outpus.
+    outputs = output if is_hermite_spline(spline) else [output]
+    for output in outputs:
+        if array_api_compat.is_numpy_namespace(xp):
+            output = output.todense()
+        assert array_api_compat.is_array_api_obj(output)
+        assert array_api_compat.array_namespace(output) is xp
+        expected_dtype = xp.asarray(1.0).dtype if dtype is int else dtype
+        assert output.dtype == expected_dtype
+        assert output.shape == (len(array_t), spline.control_points.shape[0])
 
 
 def test_single_value_input_call(initialised_spline_curve, single_value_t, xp, dtype):
@@ -1244,7 +1437,7 @@ def test_single_value_input_curvature(initialised_twice_differentiable_spline_cu
     expected_dtype = xp.asarray(1.0).dtype if dtype is int else dtype
 
     curvature = spline.curvature(single_value_t)
-    assert isinstance(curvature, expected_dtype)
+    assert curvature.dtype == expected_dtype
 
 
 def test_array_input_curvature(initialised_twice_differentiable_spline_curve, array_t, xp, dtype):
@@ -1262,7 +1455,7 @@ def test_single_value_input_dtheta(initialised_twice_differentiable_2D_spline_cu
     spline = initialised_twice_differentiable_2D_spline_curve
     dtheta = spline.dtheta(single_value_t)
     expected_dtype = xp.asarray(1.0).dtype if dtype is int else dtype
-    assert isinstance(dtheta, expected_dtype)
+    assert dtheta.dtype == expected_dtype
 
 
 def test_array_input_dtheta(initialised_twice_differentiable_2D_spline_curve, array_t, xp, dtype):
@@ -1278,7 +1471,7 @@ def test_array_input_dtheta(initialised_twice_differentiable_2D_spline_curve, ar
 
 def test_single_value_input_normal_2D(initialised_2D_spline_curve, single_value_t, xp, dtype):
     spline = initialised_2D_spline_curve
-    output = spline.normal(single_value_t, shift=1e-10)
+    output = spline.normal(single_value_t, shift=1e-4)
     assert array_api_compat.is_array_api_obj(output)
     assert array_api_compat.array_namespace(output) is xp
     expected_dtype = xp.asarray(1.0).dtype if dtype is int else dtype
@@ -1288,7 +1481,7 @@ def test_single_value_input_normal_2D(initialised_2D_spline_curve, single_value_
 
 def test_array_input_normal_2D(initialised_2D_spline_curve, array_t, xp, dtype):
     spline = initialised_2D_spline_curve
-    output = spline.normal(array_t, shift=1e-10)
+    output = spline.normal(array_t, shift=1e-4)
     assert array_api_compat.is_array_api_obj(output)
     assert array_api_compat.array_namespace(output) is xp
     expected_dtype = xp.asarray(1.0).dtype if dtype is int else dtype
@@ -1300,7 +1493,7 @@ def test_single_value_input_normal_3D(
     initialised_twice_differentiable_3D_spline_curve, single_value_t, frame, xp, dtype
 ):
     spline = initialised_twice_differentiable_3D_spline_curve
-    output = spline.normal(single_value_t, frame=frame, shift=1e-10)
+    output = spline.normal(single_value_t, frame=frame, shift=1e-4)
     assert array_api_compat.is_array_api_obj(output)
     assert array_api_compat.array_namespace(output) is xp
     expected_dtype = xp.asarray(1.0).dtype if dtype is int else dtype
@@ -1310,7 +1503,7 @@ def test_single_value_input_normal_3D(
 
 def test_array_input_normal_3D(initialised_twice_differentiable_3D_spline_curve, array_t, frame, xp, dtype):
     spline = initialised_twice_differentiable_3D_spline_curve
-    output = spline.normal(array_t, frame=frame, shift=1e-10)
+    output = spline.normal(array_t, frame=frame, shift=1e-4)
     assert array_api_compat.is_array_api_obj(output)
     assert array_api_compat.array_namespace(output) is xp
     expected_dtype = xp.asarray(1.0).dtype if dtype is int else dtype
@@ -1322,7 +1515,7 @@ def test_single_value_input_moving_frame_3D(
     initialised_twice_differentiable_3D_spline_curve, single_value_t, frame, xp, dtype
 ):
     spline = initialised_twice_differentiable_3D_spline_curve
-    output = spline.moving_frame(single_value_t, method=frame, shift=1e-10)
+    output = spline.moving_frame(single_value_t, method=frame, shift=1e-4)
     assert array_api_compat.is_array_api_obj(output)
     assert array_api_compat.array_namespace(output) is xp
     expected_dtype = xp.asarray(1.0).dtype if dtype is int else dtype
@@ -1332,7 +1525,7 @@ def test_single_value_input_moving_frame_3D(
 
 def test_array_input_moving_frame_3D(initialised_twice_differentiable_3D_spline_curve, array_t, frame, xp, dtype):
     spline = initialised_twice_differentiable_3D_spline_curve
-    output = spline.moving_frame(array_t, method=frame, shift=1e-10)
+    output = spline.moving_frame(array_t, method=frame, shift=1e-4)
     assert array_api_compat.is_array_api_obj(output)
     assert array_api_compat.array_namespace(output) is xp
     expected_dtype = xp.asarray(1.0).dtype if dtype is int else dtype
@@ -1346,214 +1539,222 @@ def test_ndim(initialised_spline_curve, as_xp_array):
     assert spline.ndim == expected
 
 
-def _basis_matrix_reference(spline, control_points_np):
-    """Construct a numpy spline with the same configuration for reference."""
-    return splinebox.spline_curves.Spline(
-        spline.M, spline.basis_function, closed=spline.closed, control_points=control_points_np
+def test_basis_matrix_B1(as_xp_array, xp, device):
+    control_points = as_xp_array(np.random.rand(5, 3))
+    M = 5
+    spline = splinebox.spline_curves.Spline(
+        M=M,
+        basis_function=splinebox.basis_functions.B1(),
+        closed=False,
+        control_points=control_points,
     )
+    t = xp.arange(5, device=device)
+    result = spline.basis_matrix(t)
+    if array_api_compat.is_numpy_namespace(xp):
+        result = result.todense()
+    expected = xp.eye(M, dtype=control_points.dtype, device=device)[: len(t)]
+    assert xp.allclose(result, expected)
 
 
-def test_basis_matrix_matches_numpy_reference(spline_curve, as_xp_array, xp, is_hermite_spline, request, coeff_gen):
-    spline = spline_curve
-
-    if is_hermite_spline(spline):
-        # Currently not implemented for Hermite spline curves
-        request.node.add_marker(pytest.mark.xfail)
-
-    M = spline.M
-    support = spline.basis_function.support
-    closed = spline.closed
-    rng = np.random.default_rng(seed=1234)
-    n = M if closed else M + 2 * (math.ceil(support / 2) - 1)
-    control_points_np = rng.random((n, 3)) * 100
-
-    spline.control_points = as_xp_array(control_points_np)
-    t = as_xp_array(np.linspace(0, M - 1, 20))
-
-    bm = spline.basis_matrix(t)
-    result = bm @ spline.control_points
-
-    reference = _basis_matrix_reference(spline, control_points_np)
-    expected = reference(np.asarray(t))
-
-    assert np.allclose(np.asarray(result), expected)
-
-
-def test_basis_matrix_single_value_t(non_hermite_spline_curve, as_xp_array, xp):
-    spline = non_hermite_spline_curve
-    M = spline.M
-    support = spline.basis_function.support
-    closed = spline.closed
-    rng = np.random.default_rng(seed=1234)
-    n = M if closed else M + 2 * (math.ceil(support / 2) - 1)
-    control_points_np = rng.random((n, 3)) * 100
-
-    spline.control_points = as_xp_array(control_points_np)
-
-    bm = spline.basis_matrix(as_xp_array(np.array([1.5])))
-    assert bm.shape == (1, n)
-
-    result = bm @ spline.control_points
-    reference = _basis_matrix_reference(spline, control_points_np)
-    assert np.allclose(np.asarray(result[0]), reference(np.array(1.5))[0])
+def test_basis_matrix(as_xp_array, xp, device, derivative):
+    control_points = as_xp_array(np.random.rand(7, 3))
+    M = 5
+    spline = splinebox.spline_curves.Spline(
+        M=M,
+        basis_function=splinebox.basis_functions.B3(),
+        closed=False,
+        control_points=control_points,
+    )
+    t = xp.asarray([-2.0, 0.5, 1.9, 2.4, 6.1], device=device, dtype=control_points.dtype)
+    result = spline.basis_matrix(t, derivative=derivative)
+    if array_api_compat.is_numpy_namespace(xp):
+        result = result.todense()
+    t_expected = xp.asarray(
+        [
+            [-1.0, -2.0, -3.0, -4.0, -5.0, -6.0, -7.0],
+            [1.5, 0.5, -0.5, -1.5, -2.5, -3.5, -4.5],
+            [2.9, 1.9, 0.9, -0.1, -1.1, -2.1, -3.1],
+            [3.4, 2.4, 1.4, 0.4, -0.6, -1.6, -2.6],
+            [7.1, 6.1, 5.1, 4.1, 3.1, 2.1, 1.1],
+        ],
+        device=device,
+        dtype=control_points.dtype,
+    )
+    expected = spline.basis_function(t_expected, derivative=derivative)
+    assert xp.allclose(result, expected)
 
 
-def test_basis_matrix_out_of_range_t(non_hermite_spline_curve, as_xp_array, xp, closed):
-    """
-    The rows of the basis matrix correspond to the input t values, even if
-    some t values are outside the valid range of an open spline, and rows
-    without any valid control point are all zero.
-
-    The numpy path currently re-packs the rows in this case, so it is
-    skipped for open splines.
-    """
-    if not closed and xp.__name__.endswith("numpy"):
-        pytest.skip("The numpy path re-packs the rows for out-of-range t values.")
-    spline = non_hermite_spline_curve
-    M = spline.M
-    support = spline.basis_function.support
-    rng = np.random.default_rng(seed=1234)
-    n = M if closed else M + 2 * (math.ceil(support / 2) - 1)
-    control_points_np = rng.random((n, 3)) * 100
-
-    spline.control_points = as_xp_array(control_points_np)
-    # t values before and after the valid range of an open spline
-    t = np.linspace(-2, M + 2, 20)
-
-    bm = spline.basis_matrix(as_xp_array(t))
-    if scipy.sparse.issparse(bm):
-        bm = bm.toarray()
-    assert bm.shape == (len(t), n)
-
-    for i, t_value in enumerate(t):
-        row = np.asarray(bm[i])
-        single_row = spline.basis_matrix(as_xp_array(np.array([t_value])))
-        if scipy.sparse.issparse(single_row):
-            single_row = single_row.toarray()
-        assert np.allclose(row, np.asarray(single_row)[0], equal_nan=True)
+def test_basis_matrix_closed(as_xp_array, xp, device, derivative):
+    control_points = as_xp_array(np.random.rand(5, 3))
+    M = 5
+    spline = splinebox.spline_curves.Spline(
+        M=M,
+        basis_function=splinebox.basis_functions.B3(),
+        closed=True,
+        control_points=control_points,
+    )
+    t = xp.asarray([0.5, 1.9, 3.4], device=device, dtype=control_points.dtype)
+    result = spline.basis_matrix(t, derivative=derivative)
+    if array_api_compat.is_numpy_namespace(xp):
+        result = result.todense()
+    t_expected = xp.asarray(
+        [
+            [0.5, -0.5, -1.5, -2.5, 1.5],
+            [1.9, 0.9, -0.1, -1.1, -2.1],
+            [-1.6, 2.4, 1.4, 0.4, -0.6],
+        ],
+        device=device,
+        dtype=control_points.dtype,
+    )
+    expected = spline.basis_function(t_expected, derivative=derivative)
+    assert xp.allclose(result, expected)
 
 
-def test_basis_matrix_derivative_argument(non_hermite_spline_curve, as_xp_array, xp, derivative):
-    spline = non_hermite_spline_curve
-    M = spline.M
-    support = spline.basis_function.support
-    closed = spline.closed
-    rng = np.random.default_rng(seed=1234)
-    n = M if closed else M + 2 * (math.ceil(support / 2) - 1)
-    control_points_np = rng.random((n, 3)) * 100
-
-    spline.control_points = as_xp_array(control_points_np)
-    t = as_xp_array(np.linspace(0, M - 1, 20))
-
-    bm = spline.basis_matrix(t, derivative=derivative)
-    result = bm @ spline.control_points
-
-    reference = _basis_matrix_reference(spline, control_points_np)
-    expected = reference(np.asarray(t), derivative=derivative)
-
-    assert np.allclose(np.asarray(result), expected, equal_nan=True)
-
-
-def _test_t(spline, n=20):
-    return np.linspace(0, spline.M, n, endpoint=False) if spline.closed else np.linspace(0, spline.M - 1, n)
-
-
-def _basis_matrix_control_point_component(spline, t, derivative=0):
-    """Return the control-point component of the basis matrix for any spline type."""
-    bm = spline.basis_matrix(t, derivative=derivative)
-    return bm[0] if isinstance(bm, tuple) else bm
-
-
-def test_derivative_wrt_control_points_matches_basis_matrix(initialised_spline_curve, xp):
+def test_derivative_wrt_control_points_matches_basis_matrix(
+    initialised_spline_curve, partial_derivative_positions, xp, is_hermite_spline
+):
     spline = initialised_spline_curve
-    t = _test_t(spline)
-    expected = _basis_matrix_control_point_component(spline, t).toarray()
-    result = spline.derivative_wrt_control_points(t).toarray()
+    t = partial_derivative_positions
+    expected = spline.basis_matrix(t)[0] if is_hermite_spline(spline) else spline.basis_matrix(t)
+    result = spline.derivative_wrt_control_points(t)
+    if array_api_compat.is_numpy_namespace(xp):
+        expected = expected.todense()
+        result = result.todense()
     assert xp.allclose(result, expected, equal_nan=True)
 
 
-def test_derivative_wrt_control_points_finite_difference(initialised_spline_curve):
+def test_derivative_wrt_control_points_derivative_argument(
+    initialised_spline_curve, partial_derivative_positions, xp, is_hermite_spline
+):
     spline = initialised_spline_curve
-    t = _test_t(spline)
+    t = partial_derivative_positions
+    for derivative in [0, 1, 2]:
+        expected = (
+            spline.basis_matrix(t, derivative=derivative)[0]
+            if is_hermite_spline(spline)
+            else spline.basis_matrix(t, derivative=derivative)
+        )
+        result = spline.derivative_wrt_control_points(t, derivative=derivative)
+        if array_api_compat.is_numpy_namespace(xp):
+            expected = expected.todense()
+            result = result.todense()
+        assert xp.allclose(result, expected, equal_nan=True)
+
+
+def test_derivative_wrt_control_points_finite_difference(initialised_spline_curve, partial_derivative_positions, xp):
+    spline = initialised_spline_curve
+    t = partial_derivative_positions
 
     delta = np.random.randn(*spline.control_points.shape) * 1e-7
+    dtype = (
+        xp.asarray(1.0).dtype
+        if xp.isdtype(spline.control_points.dtype, kind="integral")
+        else spline.control_points.dtype
+    )
+    delta = xp.asarray(delta, dtype=dtype, device=spline.control_points.device)
     spline_perturbed = spline.copy()
     spline_perturbed.control_points = spline.control_points + delta
 
-    jacobian = spline.derivative_wrt_control_points(t).toarray()
+    jacobian = spline.derivative_wrt_control_points(t)
+    if array_api_compat.is_numpy_namespace(xp):
+        jacobian = jacobian.todense()
     predicted = jacobian @ delta
     actual = spline_perturbed(t) - spline(t)
-    assert np.allclose(predicted, actual, atol=1e-5)
+    assert xp.allclose(predicted, actual, atol=1e-5)
 
 
-def test_derivative_of_norm_squared_wrt_control_points_shape(initialised_spline_curve):
+def test_derivative_of_norm_squared_wrt_control_points_shape(
+    initialised_spline_curve, partial_derivative_positions, xp
+):
     spline = initialised_spline_curve
     n_control_points = spline.M if spline.closed else spline.M + 2 * spline.pad
-    t = _test_t(spline)
+    t = partial_derivative_positions
     result = spline.derivative_of_norm_squared_wrt_control_points(t)
     assert result.shape == (len(t), n_control_points, spline.ndim)
 
 
-def test_derivative_of_norm_squared_wrt_control_points_finite_difference(initialised_spline_curve):
+def test_derivative_of_norm_squared_wrt_control_points_finite_difference(
+    initialised_spline_curve, partial_derivative_positions, xp
+):
     spline = initialised_spline_curve
-    t = _test_t(spline)
+    t = partial_derivative_positions
 
     delta = np.random.randn(*spline.control_points.shape) * 1e-7
+    dtype = (
+        xp.asarray(1.0).dtype
+        if xp.isdtype(spline.control_points.dtype, kind="integral")
+        else spline.control_points.dtype
+    )
+    delta = xp.asarray(delta, dtype=dtype, device=spline.control_points.device)
     spline_perturbed = spline.copy()
     spline_perturbed.control_points = spline.control_points + delta
 
     def total_norm_squared(s):
         vals = s(t)
-        return np.sum(vals * vals)
+        return xp.sum(vals * vals)
 
-    gradient = np.sum(spline.derivative_of_norm_squared_wrt_control_points(t), axis=0)
-    predicted = np.sum(gradient * delta)
+    gradient = xp.sum(spline.derivative_of_norm_squared_wrt_control_points(t), axis=0)
+    predicted = xp.sum(gradient * delta)
     actual = total_norm_squared(spline_perturbed) - total_norm_squared(spline)
-    assert np.isclose(predicted, actual, atol=1e-5)
+    atol = 1e-2 if predicted.dtype == xp.float32 else 1e-5
+    assert xp.isclose(predicted, actual, atol=atol)
 
 
-def test_derivative_wrt_control_points_derivative_argument(initialised_spline_curve):
-    spline = initialised_spline_curve
-    t = _test_t(spline)
-    for derivative in [0, 1, 2]:
-        expected = _basis_matrix_control_point_component(spline, t, derivative=derivative).toarray()
-        result = spline.derivative_wrt_control_points(t, derivative=derivative).toarray()
-        assert np.allclose(result, expected, equal_nan=True)
-
-
-def test_derivative_wrt_tangents_matches_basis_matrix(hermite_spline_curve, coeff_gen):
+def test_derivative_wrt_tangents_matches_basis_matrix(
+    hermite_spline_curve, coeff_gen, partial_derivative_positions, xp
+):
     spline = hermite_spline_curve
     spline.control_points = coeff_gen(spline.M, spline.basis_function.support, spline.closed)
     spline.tangents = coeff_gen(spline.M, spline.basis_function.support, spline.closed)
-    t = _test_t(spline)
-    expected = spline.basis_matrix(t)[1].toarray()
-    result = spline.derivative_wrt_tangents(t).toarray()
-    assert np.allclose(result, expected, equal_nan=True)
+    t = partial_derivative_positions
+    expected = spline.basis_matrix(t)[1]
+    result = spline.derivative_wrt_tangents(t)
+    if array_api_compat.is_numpy_namespace(xp):
+        expected = expected.todense()
+        result = result.todense()
+    assert xp.allclose(result, expected, equal_nan=True)
 
 
-def test_derivative_wrt_tangents_finite_difference(hermite_spline_curve, coeff_gen):
+def test_derivative_wrt_tangents_finite_difference(
+    hermite_spline_curve, coeff_gen, partial_derivative_positions, xp, as_xp_array
+):
     spline = hermite_spline_curve
     spline.control_points = coeff_gen(spline.M, spline.basis_function.support, spline.closed)
     spline.tangents = coeff_gen(spline.M, spline.basis_function.support, spline.closed)
-    t = _test_t(spline)
+    t = partial_derivative_positions
 
     delta = np.random.randn(*spline.tangents.shape) * 1e-7
+    dtype = (
+        xp.asarray(1.0).dtype
+        if xp.isdtype(spline.control_points.dtype, kind="integral")
+        else spline.control_points.dtype
+    )
+    delta = xp.asarray(delta, dtype=dtype, device=spline.control_points.device)
     spline_perturbed = spline.copy()
     spline_perturbed.tangents = spline.tangents + delta
 
-    jacobian = spline.derivative_wrt_tangents(t).toarray()
+    jacobian = spline.derivative_wrt_tangents(t)
+    if array_api_compat.is_numpy_namespace(xp):
+        jacobian = jacobian.todense()
     predicted = jacobian @ delta
     actual = spline_perturbed(t) - spline(t)
-    assert np.allclose(predicted, actual, atol=1e-5)
+    assert xp.allclose(predicted, actual, atol=1e-5)
 
 
-def test_h1_finite_difference(initialised_spline_curve, is_hermite_spline, request):
+def test_h1_finite_difference(spline_curve, is_hermite_spline, request, codomain_dimensionality):
     # h1 appears in the derivative of the norm of the
     # first derivative of the spline to the fourth power.
     # For details, see the Active contour model sections of
     # in the Theory part of the documentation.
 
-    spline = initialised_spline_curve
+    spline = spline_curve
+    rng = np.random.default_rng(seed=1492)
+    spline.control_points = (
+        rng.random((spline.M, codomain_dimensionality)) * 100
+        if spline.closed
+        else rng.random((spline.M + 2 * (math.ceil(spline.basis_function.support / 2) - 1), codomain_dimensionality))
+        * 100
+    )
 
     if is_hermite_spline(spline):
         # Currently not implemented for Hermite spline curves
@@ -1579,13 +1780,20 @@ def test_h1_finite_difference(initialised_spline_curve, is_hermite_spline, reque
     assert np.allclose(predicted, actual, atol=1e-3)
 
 
-def test_h2_finite_difference(initialised_spline_curve, is_hermite_spline, request):
+def test_h2_finite_difference(spline_curve, is_hermite_spline, request, codomain_dimensionality):
     # h2 appears in the derivative of the squared norm of the
     # first derivative of the spline. For details, see the
     # Active contour model sections of in the Theory part of the
     # documentation.
 
-    spline = initialised_spline_curve
+    spline = spline_curve
+    rng = np.random.default_rng(seed=1492)
+    spline.control_points = (
+        rng.random((spline.M, codomain_dimensionality)) * 100
+        if spline.closed
+        else rng.random((spline.M + 2 * (math.ceil(spline.basis_function.support / 2) - 1), codomain_dimensionality))
+        * 100
+    )
 
     if is_hermite_spline(spline):
         # Currently not implemented for Hermite spline curves
@@ -1637,15 +1845,19 @@ def _numerical_curvature_energy(spline, n=10000):
 
 
 def test_derivative_of_curvilinear_reparametrisation_energy_wrt_control_points_shape(
-    initialised_spline_curve, is_hermite_spline, request
+    initialised_spline_curve, is_hermite_spline, request, xp
 ):
     spline = initialised_spline_curve
-    if is_hermite_spline(spline):
-        # Currently not implemented for Hermite spline curves
-        request.node.add_marker(pytest.mark.xfail)
-    result = spline.derivative_of_curvilinear_reparametrisation_energy_wrt_control_points(1.0)
-    assert isinstance(result, np.ndarray)
-    assert result.shape == spline.control_points.shape
+    if array_api_compat.is_numpy_namespace(xp):
+        if is_hermite_spline(spline):
+            # Currently not implemented for Hermite spline curves
+            request.node.add_marker(pytest.mark.xfail)
+        result = spline.derivative_of_curvilinear_reparametrisation_energy_wrt_control_points(1.0)
+        assert isinstance(result, np.ndarray)
+        assert result.shape == spline.control_points.shape
+    else:
+        with pytest.raises(NotImplementedError):
+            spline.derivative_of_curvilinear_reparametrisation_energy_wrt_control_points(1.0)
 
 
 def test_derivative_of_curvilinear_reparametrisation_energy_zero_for_uniform_speed(
@@ -1707,81 +1919,103 @@ def test_derivative_of_curvilinear_reparametrisation_energy_zero_for_uniform_spe
 
 
 def test_derivative_of_curvilinear_reparametrisation_energy_wrt_control_points_finite_difference(
-    initialised_spline_curve, is_hermite_spline, request
+    initialised_spline_curve, is_hermite_spline, request, xp
 ):
     spline = initialised_spline_curve
-    if is_hermite_spline(spline):
-        # Currently not implemented for Hermite spline curves
-        request.node.add_marker(pytest.mark.xfail)
     c = 1.5
 
-    delta = np.random.randn(*spline.control_points.shape) * 1e-7
-    spline_perturbed = spline.copy()
-    spline_perturbed.control_points = spline.control_points + delta
+    if array_api_compat.is_numpy_namespace(xp):
+        if is_hermite_spline(spline):
+            # Currently not implemented for Hermite spline curves
+            request.node.add_marker(pytest.mark.xfail)
 
-    gradient = spline.derivative_of_curvilinear_reparametrisation_energy_wrt_control_points(c)
-    predicted = np.sum(gradient * delta)
-    n = 1000000 if isinstance(spline.basis_function, splinebox.basis_functions.B1) else 10000
-    actual = _numerical_reparametrization_energy(spline_perturbed, c, n=n) - _numerical_reparametrization_energy(
-        spline, c, n=n
-    )
-    assert np.isclose(predicted, actual, atol=1e-5)
+        delta = np.random.randn(*spline.control_points.shape) * 1e-7
+        spline_perturbed = spline.copy()
+        spline_perturbed.control_points = spline.control_points + delta
+
+        gradient = spline.derivative_of_curvilinear_reparametrisation_energy_wrt_control_points(c)
+        predicted = np.sum(gradient * delta)
+        n = 1000000 if isinstance(spline.basis_function, splinebox.basis_functions.B1) else 10000
+        actual = _numerical_reparametrization_energy(spline_perturbed, c, n=n) - _numerical_reparametrization_energy(
+            spline, c, n=n
+        )
+        assert np.isclose(predicted, actual, atol=1e-5)
+    else:
+        with pytest.raises(NotImplementedError):
+            spline.derivative_of_curvilinear_reparametrisation_energy_wrt_control_points(c)
 
 
 def test_derivative_of_curvilinear_reparametrisation_energy_wrt_control_points_default_c(
-    initialised_spline_curve, is_hermite_spline, request
+    initialised_spline_curve, is_hermite_spline, request, xp
 ):
     spline = initialised_spline_curve
-    if is_hermite_spline(spline):
-        # Currently not implemented for Hermite spline curves
-        request.node.add_marker(pytest.mark.xfail)
 
-    # When c is not provided, the gradient is the exact gradient of the scale
-    # invariant curvilinear_reparametrisation_energy, including the dependence
-    # of c and the normalisation on the arc length.
-    delta = np.random.randn(*spline.control_points.shape) * 1e-5
-    gradient = spline.derivative_of_curvilinear_reparametrisation_energy_wrt_control_points()
-    predicted = np.sum(gradient * delta)
+    if array_api_compat.is_numpy_namespace(xp):
+        if is_hermite_spline(spline):
+            # Currently not implemented for Hermite spline curves
+            request.node.add_marker(pytest.mark.xfail)
 
-    spline_perturbed_plus = spline.copy()
-    spline_perturbed_plus.control_points = spline.control_points + delta
-    spline_perturbed_minus = spline.copy()
-    spline_perturbed_minus.control_points = spline.control_points - delta
+        # When c is not provided, the gradient is the exact gradient of the scale
+        # invariant curvilinear_reparametrisation_energy, including the dependence
+        # of c and the normalisation on the arc length.
+        delta = np.random.randn(*spline.control_points.shape) * 1e-5
+        gradient = spline.derivative_of_curvilinear_reparametrisation_energy_wrt_control_points()
+        predicted = np.sum(gradient * delta)
 
-    n = 1000000 if isinstance(spline.basis_function, splinebox.basis_functions.B1) else 10000
-    actual = (
-        _numerical_normalized_reparametrization_energy(spline_perturbed_plus, n=n)
-        - _numerical_normalized_reparametrization_energy(spline_perturbed_minus, n=n)
-    ) / 2
+        spline_perturbed_plus = spline.copy()
+        spline_perturbed_plus.control_points = spline.control_points + delta
+        spline_perturbed_minus = spline.copy()
+        spline_perturbed_minus.control_points = spline.control_points - delta
 
-    assert np.isclose(predicted, actual, rtol=1e-3, atol=1e-9)
+        n = 1000000 if isinstance(spline.basis_function, splinebox.basis_functions.B1) else 10000
+        actual = (
+            _numerical_normalized_reparametrization_energy(spline_perturbed_plus, n=n)
+            - _numerical_normalized_reparametrization_energy(spline_perturbed_minus, n=n)
+        ) / 2
+
+        assert np.isclose(predicted, actual, rtol=1e-3, atol=1e-9)
+    else:
+        with pytest.raises(NotImplementedError):
+            spline.derivative_of_curvilinear_reparametrisation_energy_wrt_control_points()
 
 
-def test_derivative_of_curvature_energy_wrt_control_points_shape(initialised_spline_curve, is_hermite_spline, request):
+def test_derivative_of_curvature_energy_wrt_control_points_shape(
+    initialised_spline_curve, is_hermite_spline, request, xp
+):
     spline = initialised_spline_curve
-    if is_hermite_spline(spline):
-        # Currently not implemented for Hermite spline curves
-        request.node.add_marker(pytest.mark.xfail)
-    result = spline.derivative_of_curvature_energy_wrt_control_points()
-    assert isinstance(result, np.ndarray)
-    assert result.shape == spline.control_points.shape
+    if array_api_compat.is_numpy_namespace(xp):
+        if is_hermite_spline(spline):
+            # Currently not implemented for Hermite spline curves
+            request.node.add_marker(pytest.mark.xfail)
+        result = spline.derivative_of_curvature_energy_wrt_control_points()
+        assert isinstance(result, np.ndarray)
+        assert result.shape == spline.control_points.shape
+    else:
+        with pytest.raises(NotImplementedError):
+            spline.derivative_of_curvilinear_reparametrisation_energy_wrt_control_points()
 
 
 def test_derivative_of_curvature_energy_wrt_control_points_zero_for_straight_line(
-    open_spline_curve, codomain_dimensionality, is_hermite_spline, request
+    open_spline_curve, codomain_dimensionality, is_hermite_spline, request, xp
 ):
     spline = open_spline_curve
-    if is_hermite_spline(spline):
-        # Currently not implemented for Hermite spline curves
-        request.node.add_marker(pytest.mark.xfail)
-    if isinstance(spline.basis_function, splinebox.Exponential):
-        # Not possible to construct a straight line with an exponential spline
-        return
+    if array_api_compat.is_numpy_namespace(xp):
+        if is_hermite_spline(spline):
+            # Currently not implemented for Hermite spline curves
+            request.node.add_marker(pytest.mark.xfail)
+        if isinstance(spline.basis_function, splinebox.Exponential):
+            # Not possible to construct a straight line with an exponential spline
+            return
 
-    direction = np.arange(1, codomain_dimensionality + 1)
-    spline.control_points = np.array([i * direction for i in range(spline.M + 2 * spline.pad)], dtype=float)
-    result = spline.derivative_of_curvature_energy_wrt_control_points()
-    assert np.allclose(result, 0, atol=1e-10)
+        direction = np.arange(1, codomain_dimensionality + 1)
+        spline.control_points = np.array([i * direction for i in range(spline.M + 2 * spline.pad)], dtype=float)
+        result = spline.derivative_of_curvature_energy_wrt_control_points()
+        assert np.allclose(result, 0, atol=1e-10)
+    else:
+        direction = xp.arange(1, codomain_dimensionality + 1)
+        spline.control_points = xp.stack([i * direction for i in range(spline.M + 2 * spline.pad)], axis=0)
+        with pytest.raises(NotImplementedError):
+            spline.derivative_of_curvilinear_reparametrisation_energy_wrt_control_points()
 
 
 def test_derivative_of_curvature_energy_wrt_control_points_radial_for_circle(M, codomain_dimensionality):
@@ -1808,18 +2042,22 @@ def test_derivative_of_curvature_energy_wrt_control_points_radial_for_circle(M, 
 
 
 def test_derivative_of_curvature_energy_wrt_control_points_finite_difference(
-    initialised_spline_curve, is_hermite_spline, request
+    initialised_spline_curve, is_hermite_spline, request, xp
 ):
     spline = initialised_spline_curve
-    if is_hermite_spline(spline):
-        # Currently not implemented for Hermite spline curves
-        request.node.add_marker(pytest.mark.xfail)
+    if array_api_compat.is_numpy_namespace(xp):
+        if is_hermite_spline(spline):
+            # Currently not implemented for Hermite spline curves
+            request.node.add_marker(pytest.mark.xfail)
 
-    delta = np.random.randn(*spline.control_points.shape) * 1e-7
-    spline_perturbed = spline.copy()
-    spline_perturbed.control_points = spline.control_points + delta
+        delta = np.random.randn(*spline.control_points.shape) * 1e-7
+        spline_perturbed = spline.copy()
+        spline_perturbed.control_points = spline.control_points + delta
 
-    gradient = spline.derivative_of_curvature_energy_wrt_control_points()
-    predicted = np.sum(gradient * delta)
-    actual = _numerical_curvature_energy(spline_perturbed) - _numerical_curvature_energy(spline)
-    assert np.isclose(predicted, actual, atol=1e-5)
+        gradient = spline.derivative_of_curvature_energy_wrt_control_points()
+        predicted = np.sum(gradient * delta)
+        actual = _numerical_curvature_energy(spline_perturbed) - _numerical_curvature_energy(spline)
+        assert np.isclose(predicted, actual, atol=1e-5)
+    else:
+        with pytest.raises(NotImplementedError):
+            spline.derivative_of_curvilinear_reparametrisation_energy_wrt_control_points()

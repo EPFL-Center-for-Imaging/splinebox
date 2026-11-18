@@ -213,39 +213,50 @@ class Spline:
         else:
             return f"{closed_str} {self.ndim}D {self.basis_function} spline with {self.M} knots"
 
-    def __repr__(self):
-        xp, device = self._get_control_points_xp_and_device()
-        control_points_repr = repr(self.control_points)
-        control_points_repr = (
-            re.split(r",\s*dtype\b", control_points_repr)[0]
-            if "dtype" in control_points_repr
-            else control_points_repr[:-1]
-        )
-        dtype_repr = f"{xp.__name__}.{repr(self.control_points.dtype)}"
-
-        if array_api_compat.is_numpy_namespace(xp):
-            control_points_repr = f"np.{control_points_repr}, dtype={dtype_repr})"
-        elif array_api_compat.is_jax_namespace(xp):
-            device_repr = f"jax.devices('{device.platform}')[{device.id}]"
-            control_points_repr = control_points_repr.replace("Array", "array")
-            control_points_repr = f"{xp.__name__}.{control_points_repr}, dtype={dtype_repr}, device={device_repr})"
+    def _control_points_repr(self):
+        if self.control_points is not None:
+            xp, device = self._get_control_points_xp_and_device()
+            control_points_repr = repr(self.control_points)
+            control_points_repr = (
+                re.split(r",\s*dtype\b", control_points_repr)[0]
+                if "dtype" in control_points_repr
+                else control_points_repr[:-1]
+            )
+            control_points_repr = (
+                re.split(r",\s*device\b", control_points_repr)[0]
+                if "device" in control_points_repr
+                else control_points_repr
+            )
+            dtype_repr = f"{xp.__name__}.{repr(self.control_points.dtype)}"
+            if array_api_compat.is_numpy_namespace(xp):
+                control_points_repr = f"np.{control_points_repr}, dtype={dtype_repr})"
+            elif array_api_compat.is_jax_namespace(xp):
+                device_repr = f"jax.devices('{device.platform}')[{device.id}]"
+                control_points_repr = control_points_repr.replace("Array", "array")
+                control_points_repr = f"{xp.__name__}.{control_points_repr}, dtype={dtype_repr}, device={device_repr})"
+            else:
+                device_repr = f"{xp.__name__}.{repr(device)}"
+                control_points_repr = f"{xp.__name__}.{control_points_repr}, dtype={dtype_repr}, device={device_repr})"
+            return control_points_repr
         else:
-            device_repr = f"{xp.__name__}.{repr(device)}"
-            control_points_repr = f"{xp.__name__}.{control_points_repr}, dtype={dtype_repr}, device={device_repr})"
+            return "None"
+
+    def __repr__(self):
+        control_points_repr = self._control_points_repr()
 
         return f"splinebox.spline_curves.Spline(M={repr(self.M)}, basis_function={repr(self.basis_function)}, closed={repr(self.closed)}, control_points={control_points_repr})"
 
     def __eq__(self, other):
-        xp, device = self._get_control_points_xp_and_device()
-        return (
-            self.M == other.M
-            and self.basis_function == other.basis_function
-            and self.closed == other.closed
-            and self.closed == other.closed
-            and xp.all(self.control_points == other.control_points)
-            if self.control_points is not None and other.control_points is not None
-            else self.control_points is other.control_points
-        )
+        if self.control_points is not None and other.control_points is not None:
+            # Both splines have control points
+            xp, device = self._get_control_points_xp_and_device()
+            if not xp.all(self.control_points == other.control_points):
+                return False
+        elif (self.control_points is None) != (other.control_points is None):
+            # Only one spline has control points
+            return False
+        # The control points match check the remaining attributes
+        return self.M == other.M and self.basis_function == other.basis_function and self.closed == other.closed
 
     @property
     def control_points(self):
@@ -763,7 +774,7 @@ class Spline:
             json.dump(self._to_dict(version), f, indent=2)
 
     @classmethod
-    def from_json(cls, path):
+    def from_json(cls, path, xp=array_api_compat.numpy, dtype=None, device=None):
         """
         Constructs a spline from a json file that was saved using
         :meth:`splinebox.spline_curves.Spline.to_json`.
@@ -772,6 +783,15 @@ class Spline:
         ----------
         path : str or pathlib.Path
             Path to the json file.
+        xp : array_api_compat namespace, Optional
+            The array library for the control points and tangents.
+            Default is NumPy.
+        dtype : xp.dtype, Optional
+            The data type for the control points and tangents.
+            Default is ``None``.
+        device : xp.device, Optional
+            The device on which the array is created.
+            Default is ``None``.
 
         Examples
         --------
@@ -784,7 +804,7 @@ class Spline:
         """
         with open(path) as f:
             data = json.load(f)
-        data = _prepared_dict_for_constructor(data)
+        data = _prepared_dict_for_constructor(data, xp, dtype, device)
         return cls(**data)
 
     def draw(self, x, y):
@@ -1037,7 +1057,13 @@ class Spline:
             )
 
         # We do the fit in numpy to be able to exploit scipy's sparse arrays
-        points = np.array(points)
+        if array_api_compat.is_jax_namespace(xp):
+            import jax
+
+            cpu_device = jax.devices("cpu")[0]
+        else:
+            cpu_device = "cpu"
+        points = np.array(array_api_compat.to_device(points, cpu_device))
         n_control_points = self.M if self.closed else self.M + 2 * self.pad
 
         t = np.linspace(0, self.M, n_points + 1)[:-1] if self.closed else np.linspace(0, self.M - 1, n_points)
@@ -1196,7 +1222,7 @@ class Spline:
         initial_segment_lengths = self._gauss_legendre_quadrature(bounds[:, 0], self._segments[start_segment_indices])
         final_segment_lengths = self._gauss_legendre_quadrature(self._segments[stop_segment_indices], bounds[:, 1])
 
-        arc_lengths = xp.empty(len(bounds), dtype=xp.result_type(self.control_points, bounds))
+        arc_lengths = xp.empty(len(bounds), dtype=xp.result_type(self.control_points, bounds), device=device)
         for i, (initial_segment_length, final_segment_length) in enumerate(
             zip(initial_segment_lengths, final_segment_lengths)
         ):
@@ -1294,12 +1320,12 @@ class Spline:
         xp, device = self._get_control_points_xp_and_device()
         s, single_value = self._convert_to_array(s, xp, device)
         sort_indices = xp.argsort(s)
-        results = xp.empty(s.shape, dtype=xp.result_type(self.control_points, s))
+        results = xp.empty(s.shape, dtype=xp.result_type(self.control_points, s), device=device)
         s = xp.astype(s, results.dtype)
 
-        current_value = xp.asarray(0, dtype=s.dtype)
-        lower_bound = xp.asarray(0, dtype=s.dtype)
-        upper_bound = xp.asarray(self.M if self.closed else self.M - 1, dtype=s.dtype)
+        current_value = xp.asarray(0, dtype=s.dtype, device=device)
+        lower_bound = xp.asarray(0, dtype=s.dtype, device=device)
+        upper_bound = xp.asarray(self.M if self.closed else self.M - 1, dtype=s.dtype, device=device)
         intermediate_results = []
 
         total_length = self.arc_length()
@@ -1307,7 +1333,7 @@ class Spline:
         def upper_bound_key_func(x):
             diff = x[1] - s[i]
             if diff < 0:
-                return xp.asarray(xp.inf, dtype=s.dtype)
+                return xp.asarray(xp.inf, dtype=s.dtype, device=device)
             return diff
 
         for i in sort_indices:
@@ -1318,9 +1344,9 @@ class Spline:
             if len(intermediate_results) > 0:
                 upper_bound, upper_bound_len = min(intermediate_results, key=upper_bound_key_func)
                 if s[i] > upper_bound_len:
-                    upper_bound = xp.asarray(self.M if self.closed else self.M - 1, dtype=s.dtype)
+                    upper_bound = xp.asarray(self.M if self.closed else self.M - 1, dtype=s.dtype, device=device)
 
-            _item_set(
+            results = _item_set(
                 results,
                 i,
                 self._length_to_parameter_recursion(
@@ -1429,23 +1455,27 @@ class Spline:
         >>> spline.curvature([1, 3])
         array([ 2.035, -3.616])
         """
-        self._get_control_points_xp_and_device()
-        t, single_value = self._convert_to_array(t)
+        xp, device = self._get_control_points_xp_and_device()
+        t, single_value = self._convert_to_array(t, xp, device)
         first_deriv = self(t, derivative=1)
         second_deriv = self(t, derivative=2)
         if first_deriv.shape[1] == 1:
             # This assumes a uniform spline, i.e. the derivative of t is constant.
-            first_deriv = np.stack([first_deriv[:, 0], np.ones(len(t))], axis=-1)
-            second_deriv = np.stack([second_deriv[:, 0], np.zeros(len(t))], axis=-1)
-        norm_first_deriv = np.linalg.norm(first_deriv, axis=1)
-        norm_second_deriv = np.linalg.norm(second_deriv, axis=1)
+            first_deriv = xp.stack(
+                [first_deriv[:, 0], xp.ones(len(t), dtype=first_deriv.dtype, device=device)], axis=-1
+            )
+            second_deriv = xp.stack(
+                [second_deriv[:, 0], xp.zeros(len(t), dtype=second_deriv.dtype, device=device)], axis=-1
+            )
+        norm_first_deriv = xp.linalg.vector_norm(first_deriv, axis=1)
+        norm_second_deriv = xp.linalg.vector_norm(second_deriv, axis=1)
         if first_deriv.shape[1] == 2:
             # We use a different formula for the 2D case to get the signed curvature instead of
             # the unsigned curvature. This is useful when plotting curvature combs.
             nominator = first_deriv[:, 1] * second_deriv[:, 0] - first_deriv[:, 0] * second_deriv[:, 1]
         else:
-            nominator = np.sqrt(
-                norm_first_deriv**2 * norm_second_deriv**2 - np.sum(first_deriv * second_deriv, axis=1) ** 2
+            nominator = xp.sqrt(
+                norm_first_deriv**2 * norm_second_deriv**2 - xp.sum(first_deriv * second_deriv, axis=1) ** 2
             )
         k = nominator / norm_first_deriv**3
         if single_value:
@@ -1511,18 +1541,25 @@ class Spline:
         if self.ndim == 2:
             first_deriv = self(t, derivative=1)
 
-            nan_mask = np.isnan(first_deriv)
-            if np.any(nan_mask) and shift is not None:
-                t_mask = np.any(nan_mask, axis=-1)
-                first_deriv[t_mask] = self(t[t_mask] + shift, derivative=1)
-            nan_mask = np.isnan(first_deriv)
-            if np.any(nan_mask):
+            nan_mask = xp.isnan(first_deriv)
+            if xp.any(nan_mask) and shift is not None:
+                t_mask = xp.any(nan_mask, axis=-1)
+                first_deriv = _item_set(
+                    first_deriv,
+                    t_mask,
+                    self(t[t_mask] + shift, derivative=1),
+                    xp,
+                )
+            nan_mask = xp.isnan(first_deriv)
+            if xp.any(nan_mask):
                 raise RuntimeError(
-                    f"The normals cannot be computed for t={t[np.any(nan_mask, axis=-1)]} because the spline is not differentiable at those positions. Consider using the `shift` to avoid this problem."
+                    f"The normals cannot be computed for t={t[xp.any(nan_mask, axis=-1)]} because the spline is not differentiable at those positions. Consider using the `shift` to avoid this problem."
                 )
 
-            normals = (np.array([[0, -1], [1, 0]]) @ first_deriv.T).T
-            normals /= np.linalg.norm(normals, axis=1)[:, np.newaxis]
+            normals = (
+                xp.asarray([[0, -1], [1, 0]], dtype=first_deriv.dtype, device=first_deriv.device) @ first_deriv.T
+            ).T
+            normals /= xp.linalg.vector_norm(normals, axis=1)[:, np.newaxis]
         elif self.ndim == 3:
             frame = self.moving_frame(t, method=frame, initial_vector=initial_vector, shift=shift)
             normals = frame[:, 1:]
@@ -1723,7 +1760,9 @@ class Spline:
                     other_axis = (max_axis + 1) % 3
                     initial_vector[max_axis] = tangent[other_axis]
                     initial_vector[other_axis] = -tangent[max_axis]
-            elif t[0] != t[np.argmin(sort_indices)]:
+            elif initial_vector.ndim != 1:
+                raise ValueError("initial_vector should be a 1D array")
+            elif t[0] != t[xp.argmin(sort_indices)]:
                 warnings.warn(
                     "You provided an unsorted array. The initial vector will be applied to the smallest t instead of the t[0].",
                     UserWarning,
@@ -1852,7 +1891,7 @@ class Spline:
         """
         t_mod_1 = t % 1
         tval = t_mod_1[:, xp.newaxis] - shift[xp.newaxis, :]
-        indices = xp.asarray(t - t_mod_1, dtype=int)[:, xp.newaxis] + shift[xp.newaxis, :]
+        indices = xp.asarray(t - t_mod_1, dtype=int, device=t.device)[:, xp.newaxis] + shift[xp.newaxis, :]
         indices = indices % M if closed else indices + pad
         return tval, indices
 
@@ -1930,7 +1969,7 @@ class Spline:
         else:
             tval, indices = self._compute_tval_and_indices_xp(t, shift, self.closed, self.M, self.pad, xp)
             tval = xp.astype(tval, dtype)
-            t_indices = xp.tile(xp.arange(len(t))[:, xp.newaxis], (1, tval.shape[1]))
+            t_indices = xp.tile(xp.arange(len(t), device=device)[:, xp.newaxis], (1, tval.shape[1]))
             tval = tval.flatten()
             indices = indices.flatten()
             t_indices = t_indices.flatten()
@@ -1978,7 +2017,6 @@ class Spline:
         """
         xp, device = self._get_control_points_xp_and_device()
         t, single_value = self._convert_to_array(t, xp, device)
-
         bm = self.basis_matrix(t, derivative=derivative)
 
         if array_api_compat.is_torch_namespace(xp) and bm.dtype != self.control_points.dtype:
@@ -2012,7 +2050,9 @@ class Spline:
         Returns the following matrix: :math:`A_{tly}=\frac{\partial |r(t)|^2}{\partial c[l]_y}`.
         """
         bm = self.basis_matrix(t, derivative=derivative)
-        return 2 * bm.todense()[:, :, np.newaxis] * self(t, derivative=derivative)[:, np.newaxis, :]
+        if isinstance(bm, scipy.sparse.csr_array):
+            bm = bm.todense()
+        return 2 * bm[:, :, np.newaxis] * self(t, derivative=derivative)[:, np.newaxis, :]
 
     def derivative_of_curvilinear_reparametrisation_energy_wrt_control_points(self, c=None):
         r"""
@@ -2053,6 +2093,11 @@ class Spline:
 
         For an analytical derivation see :ref:`theory/active_contours:Active contour model`.
         """
+        xp, device = self._get_control_points_xp_and_device()
+        if not array_api_compat.is_numpy_namespace(xp):
+            raise NotImplementedError(
+                "`derivative_of_curvilinear_reparametrisation_energy_wrt_control_points` is only implemented for numpy. For torch and jax use their autodiff instead."
+            )
         scale_invariant = c is None
         if scale_invariant:
             arc_length = self.arc_length()
@@ -2091,6 +2136,11 @@ class Spline:
 
         For an analytical derivation see :ref:`theory/active_contours:Active contour model`.
         """
+        xp, device = self._get_control_points_xp_and_device()
+        if not array_api_compat.is_numpy_namespace(xp):
+            raise NotImplementedError(
+                "`derivative_of_curvature_energy_wrt_control_points` is only implemented for numpy. For torch and jax use their autodiff instead."
+            )
         return 2 * np.einsum("mx,lm->lx", self.control_points, self._h3)
 
     def _convert_to_array(self, t, xp, device):
@@ -2253,7 +2303,7 @@ class Spline:
         >>> plt.legend()  # doctest: +SKIP
         >>> plt.show()  # doctest: +SKIP
         """
-        self._get_control_points_xp_and_device()
+        xp, device = self._get_control_points_xp_and_device()
         if self.ndim == 1:
             raise RuntimeError("1D splines can not be rotated.")
 
@@ -2261,8 +2311,11 @@ class Spline:
             centroid = self._control_points_centroid()
             self.translate(-centroid)
 
-        for k in range(len(self.control_points)):
-            self.control_points[k] = np.matmul(rotation_matrix, self.control_points[k])
+        if array_api_compat.is_torch_namespace(xp) and rotation_matrix.dtype != self.control_points.dtype:
+            dtype = xp.result_type(rotation_matrix.dtype, self.control_points.dtype)
+            rotation_matrix = xp.asarray(rotation_matrix, dtype=dtype, device=device)
+            self.control_points = xp.asarray(self.control_points, dtype=dtype, device=device)
+        self.control_points = xp.einsum("ij,kj->ki", rotation_matrix, self.control_points)
 
         if centred:
             self.translate(centroid)
@@ -2789,65 +2842,69 @@ class HermiteSpline(Spline):
         super().__init__(M, basis_function, closed, control_points=control_points, padding_function=padding_function)
         self.tangents = tangents
 
+    def _get_tangents_xp_and_device(self):
+        if self.tangents is None:
+            raise RuntimeError("This spline object doesn't have any tangents yet.")
+        xp = array_api_compat.array_namespace(self.tangents)
+        device = array_api_compat.device(self.tangents)
+        return xp, device
+
     def _get_control_points_and_tangents_xp_and_device(self):
         """
         Most methods require control points and tangents to be set before they
         can be used. This helper function checks if control points and tangents have been
         set and returns their array namespace and the device.
         """
-        xp, device = self._get_control_points_xp_and_device()
-        if self.tangents is None:
-            raise RuntimeError("This spline object doesn't have any tangents yet.")
-        if array_api_compat.array_namespace(self.tangents) is not xp:
+        control_points_xp, control_points_device = self._get_control_points_xp_and_device()
+        tangents_xp, tangents_device = self._get_tangents_xp_and_device()
+        if control_points_xp is not tangents_xp:
             raise TypeError(
-                f"The control points are a {xp.__name__.split('.')[-1]} array but the tangents are a "
-                f"{array_api_compat.array_namespace(self.tangents).__name__.split('.')[-1]} array."
+                f"The control points are a {control_points_xp.__name__.split('.')[-1]} array but the tangents are a {tangents_xp.__name__.split('.')[-1]} array."
             )
-        if array_api_compat.device(self.tangents) != device:
+        if tangents_device != control_points_device:
             raise TypeError(
-                f"Control points are on device {device} and tangents are on device {array_api_compat.device(self.tangents)}. "
+                f"Control points are on device {control_points_device} and tangents are on device {tangents_device}. "
                 "They have to be on the same device."
             )
-        return xp, device
+        return control_points_xp, control_points_device
+
+    def _tangents_repr(self):
+        if self.tangents is not None:
+            xp, device = self._get_tangents_xp_and_device()
+            tangents_repr = repr(self.tangents)
+            tangents_repr = (
+                re.split(r",\s*dtype\b", tangents_repr)[0] if "dtype" in tangents_repr else tangents_repr[:-1]
+            )
+            tangents_repr = re.split(r",\s*device\b", tangents_repr)[0] if "device" in tangents_repr else tangents_repr
+            dtype_repr = f"{xp.__name__}.{repr(self.tangents.dtype)}"
+            if array_api_compat.is_numpy_namespace(xp):
+                tangents_repr = f"np.{tangents_repr}, dtype={dtype_repr})"
+            elif array_api_compat.is_jax_namespace(xp):
+                device_repr = f"jax.devices('{device.platform}')[{device.id}]"
+                tangents_repr = tangents_repr.replace("Array", "array")
+                tangents_repr = f"{xp.__name__}.{tangents_repr}, dtype={dtype_repr}, device={device_repr})"
+            else:
+                device_repr = f"{xp.__name__}.{repr(device)}"
+                tangents_repr = f"{xp.__name__}.{tangents_repr}, dtype={dtype_repr}, device={device_repr})"
+            return tangents_repr
+        else:
+            return "None"
 
     def __repr__(self):
-        xp, device = self._get_control_points_xp_and_device()
-
-        control_points_repr = repr(self.control_points)
-        tangents_repr = repr(self.tangents)
-
-        control_points_repr = (
-            re.split(r",\s*dtype\b", control_points_repr)[0]
-            if "dtype" in control_points_repr
-            else control_points_repr[:-1]
-        )
-        tangents_repr = re.split(r",\s*dtype\b", tangents_repr)[0] if "dtype" in tangents_repr else tangents_repr[:-1]
-
-        dtype_repr = f"{xp.__name__}.{repr(self.control_points.dtype)}"
-
-        if array_api_compat.is_numpy_namespace(xp):
-            control_points_repr = f"np.{control_points_repr}, dtype={dtype_repr})"
-            tangents_repr = f"np.{tangents_repr}, dtype={dtype_repr})"
-        elif array_api_compat.is_jax_namespace(xp):
-            device_repr = f"jax.devices('{device.platform}')[{device.id}]"
-            control_points_repr = control_points_repr.replace("Array", "array")
-            control_points_repr = f"{xp.__name__}.{control_points_repr}, dtype={dtype_repr}, device={device_repr})"
-            tangents_repr = tangents_repr.replace("Array", "array")
-            tangents_repr = f"{xp.__name__}.{tangents_repr}, dtype={dtype_repr}, device={device_repr})"
-        else:
-            device_repr = f"{xp.__name__}.{repr(device)}"
-            control_points_repr = f"{xp.__name__}.{control_points_repr}, dtype={dtype_repr}, device={device_repr})"
-            tangents_repr = f"{xp.__name__}.{tangents_repr}, dtype={dtype_repr}, device={device_repr})"
-
+        control_points_repr = self._control_points_repr()
+        tangents_repr = self._tangents_repr()
         return f"splinebox.spline_curves.HermiteSpline(M={repr(self.M)}, basis_function={repr(self.basis_function)}, closed={repr(self.closed)}, control_points={control_points_repr}, tangents={tangents_repr})"
 
     def __eq__(self, other):
-        xp, device = self._get_control_points_and_tangents_xp_and_device()
-        return (
-            super().__eq__(other) and xp.all(self.tangents == other.tangents)
-            if self.tangents is not None and other.tangents is not None
-            else self.tangents is other.tangents
-        )
+        if self.tangents is not None and other.tangents is not None:
+            # Both splines have tangents
+            xp = array_api_compat.array_namespace(self.tangents)
+            if not xp.all(self.tangents == other.tangents):
+                return False
+        elif (self.tangents is None) != (other.tangents is None):
+            # Only one spline has tangents
+            return False
+        return super().__eq__(other)
 
     @property
     def tangents(self):
@@ -2904,7 +2961,13 @@ class HermiteSpline(Spline):
             )
 
         # We do the fit in numpy to be able to exploit scipy's sparse arrays
-        points = np.array(points)
+        if array_api_compat.is_jax_namespace(xp):
+            import jax
+
+            cpu_device = jax.devices("cpu")[0]
+        else:
+            cpu_device = "cpu"
+        points = np.array(array_api_compat.to_device(points, cpu_device))
         n_control_points = self.M if self.closed else self.M + 2 * self.pad
 
         t = np.linspace(0, self.M, n_points + 1)[:-1] if self.closed else np.linspace(0, self.M - 1, n_points)
@@ -3046,7 +3109,7 @@ class HermiteSpline(Spline):
         else:
             tval, indices = self._compute_tval_and_indices_xp(t, shift, self.closed, self.M, self.pad, xp)
             tval = xp.astype(tval, dtype)
-            t_indices = xp.tile(xp.arange(len(t))[:, xp.newaxis], (1, tval.shape[1]))
+            t_indices = xp.tile(xp.arange(len(t), device=device)[:, xp.newaxis], (1, tval.shape[1]))
             tval = tval.flatten()
             indices = indices.flatten()
             t_indices = t_indices.flatten()
@@ -3114,7 +3177,9 @@ class HermiteSpline(Spline):
         For an analytical derivation see :ref:`theory/active_contours:Active contour model`.
         """
         bm = self.derivative_wrt_control_points(t, derivative=derivative)
-        return 2 * bm.todense()[:, :, np.newaxis] * self(t, derivative=derivative)[:, np.newaxis, :]
+        if isinstance(bm, scipy.sparse.csr_array):
+            bm = bm.todense()
+        return 2 * bm[:, :, np.newaxis] * self(t, derivative=derivative)[:, np.newaxis, :]
 
     def derivative_of_norm_squared_wrt_tangents(self, t, derivative=0):
         """
@@ -3142,10 +3207,14 @@ class HermiteSpline(Spline):
     def rotate(self, rotation_matrix, centred=True):
         xp, device = self._get_control_points_and_tangents_xp_and_device()
 
-        self.rotate(self, rotation_matrix, centred=centred)
+        super().rotate(rotation_matrix, centred=centred)
 
-        for k in range(len(self.tangents)):
-            self.tangents[k] = np.matmul(rotation_matrix, self.tangents[k])
+        if array_api_compat.is_torch_namespace(xp) and rotation_matrix.dtype != self.tangents.dtype:
+            dtype = xp.result_type(rotation_matrix.dtype, self.tangents.dtype)
+            rotation_matrix = xp.asarray(rotation_matrix, dtype=dtype, device=device)
+            self.tangents = xp.asarray(self.tangents, dtype=dtype, device=device)
+
+        self.tangents = xp.einsum("ij,kj->ki", rotation_matrix, self.tangents)
 
     def _to_dict(self, version):
         dictionary_representation = super()._to_dict(version)
@@ -3153,7 +3222,7 @@ class HermiteSpline(Spline):
         return dictionary_representation
 
 
-def _prepared_dict_for_constructor(data):
+def _prepared_dict_for_constructor(data, xp, dtype, device):
     """
     Helper function that processes the dictionaries loaded from
     json files. It ensures all of the values are valid and prepares
@@ -3163,6 +3232,12 @@ def _prepared_dict_for_constructor(data):
     ----------
     data : dict
         The dictionary from the json file.
+    xp : array_api_compat namespace
+        The array library for the control points and tangents.
+    dtype : xp.dtype
+        The data type for the control points and tangents.
+    device : xp.device
+        The device on which the array is created.
     """
     if not isinstance(data["version"], int):
         raise ValueError("version has to be an integer.")
@@ -3180,9 +3255,9 @@ def _prepared_dict_for_constructor(data):
     data["closed"] = data["closed"] in true_strings
 
     if "control_points" in data:
-        data["control_points"] = np.array(data["control_points"])
+        data["control_points"] = xp.asarray(data["control_points"], dtype=dtype, device=device)
     if "tangents" in data:
-        data["tangents"] = np.array(data["tangents"])
+        data["tangents"] = xp.asarray(data["tangents"], dtype=dtype, device=device)
 
     # The version of the json file is only required for parsing
     del data["version"]
@@ -3233,7 +3308,7 @@ def splines_to_json(path, splines, version=1):
         json.dump(dicts, f, indent=2)
 
 
-def splines_from_json(path):
+def splines_from_json(path, xp=array_api_compat.numpy, dtype=None, device=None):
     """
     Loads multiple splines from a json file generated using
     :func:`splinebox.spline_curves.splines_to_json`.
@@ -3242,6 +3317,12 @@ def splines_from_json(path):
     ----------
     path : str or pathlib.Path
         Path to the json file.
+    xp : array_api_compat namespace
+        The array library for the control points and tangents.
+    dtype : xp.dtype
+        The data type for the control points and tangents.
+    device : xp.device
+        The device on which the array is created.
 
     Returns
     -------
@@ -3279,7 +3360,7 @@ def splines_from_json(path):
         data = [data]
 
     for spline_data in data:
-        spline_data = _prepared_dict_for_constructor(spline_data)
+        spline_data = _prepared_dict_for_constructor(spline_data, xp, dtype, device)
 
         if spline_data["basis_function"].multigenerator:
             # This is a basis function for a Hermite spline
