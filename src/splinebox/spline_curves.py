@@ -1944,25 +1944,18 @@ class Spline:
             if validate_input and bool(xp.any(nan_mask)):
                 raise ValueError("t should not contain any NaN values.")
 
-            # We cast t to an integer later and NaN doesn't have a universally-defined int value.
-            # Convert to 0 so the behavior is defined. It is converted back at the end.
-            t = xp.where(nan_mask, xp.zeros_like(t), t)
-
+            # Get the values for the basis matrix
             tval, indices = self._compute_tval_and_indices_xp(t, shift, self.closed, self.M, self.pad, xp)
-            tval = xp.astype(tval, dtype)
-            t_indices = xp.tile(xp.arange(len(t))[:, xp.newaxis], (1, tval.shape[1]))
-            tval = tval.flatten()
-            indices = indices.flatten()
-            t_indices = t_indices.flatten()
-            mask = (indices >= 0) & (indices <= (self.M - 1 + 2 * self.pad))
-            tval = tval[mask]
-            indices = indices[mask]
-            t_indices = t_indices[mask]
-            data = self.basis_function(tval, derivative=derivative)
-            bm = xp.zeros((len(t), n_control_points), dtype=data.dtype, device=device)
-            bm = _item_set(bm, (t_indices, indices), data, xp)
+            data = self.basis_function(xp.astype(tval, dtype), derivative=derivative)
 
-            # put the NaN values back in place.
+            # Populate the basis matrix
+            columns = xp.arange(n_control_points, device=device)
+            match = indices[:, :, xp.newaxis] == columns[xp.newaxis, xp.newaxis, :]
+            zero = xp.zeros((), dtype=data.dtype, device=device)
+            bm = xp.sum(xp.where(match, data[:, :, xp.newaxis], zero), axis=1)
+
+            # A NaN in t gives meaningless indices and weights for its row
+            # Overwrite the whole row with NaN.
             bm = xp.where(nan_mask[:, xp.newaxis], xp.asarray(xp.nan, dtype=bm.dtype, device=device), bm)
 
         return bm
