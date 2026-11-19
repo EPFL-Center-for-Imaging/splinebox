@@ -1895,7 +1895,7 @@ class Spline:
         indices = indices % M if closed else indices + pad
         return tval, indices
 
-    def basis_matrix(self, t, derivative=0):
+    def basis_matrix(self, t, derivative=0, validate_input=True):
         r"""
         Computes the basis matrix :math:`\mathbf{\Phi}` as defined in :ref:`theory/data_approximation:Data approximation`.
         In some contexts this matrix is referred to as a collocation matrix.
@@ -1906,6 +1906,11 @@ class Spline:
             The t values where the spline should be evaluated.
         derivative : int
             The degree of the derivative to compute.
+        validate_input : bool
+            If set to True, checks if `t` contains NaN values and raises
+            a ValueError if it does. NaN input produces invalid results.
+            However, running without validation is provided for JIT compatibilty.
+            Default value is True.
 
         Returns
         -------
@@ -1913,6 +1918,11 @@ class Spline:
             The basis matrix. If the control points are not numpy arrays, a
             dense array in the same namespace as the control points is
             returned instead, since scipy.sparse only supports numpy.
+
+        Raises
+        ------
+        ValueError
+            If `t` contains NaN values and `validate_input` is True.
         """
         xp, device = self._get_control_points_xp_and_device()
         t, single_value = self._convert_to_array(t, xp, device)
@@ -1923,16 +1933,16 @@ class Spline:
             else xp.result_type(t.dtype, self.control_points.dtype)
         )
 
-        minimum = xp.min(t)
-        maximum = xp.max(t)
-        if bool(xp.isnan(maximum)):
-            raise ValueError("t should not contain any NaN values.")
-
         bound = math.ceil(self.half_support)
         shift = xp.arange(-bound + 1, bound + 1, device=device)
         n_control_points = self.M if self.closed else self.M + 2 * self.pad
 
         if array_api_compat.is_numpy_namespace(xp):
+            minimum = xp.min(t)
+            maximum = xp.max(t)
+            if validate_input and bool(xp.isnan(maximum)):
+                raise ValueError("t should not contain any NaN values.")
+
             tval = xp.empty((len(t), len(shift)), dtype=dtype, device=device)
             indices = xp.empty((len(t), len(shift)), dtype=int, device=device)
             self._compute_tval_and_indices_numba(t, shift, self.closed, self.M, self.pad, tval, indices)
@@ -1967,23 +1977,29 @@ class Spline:
             bm = scipy.sparse.csr_array((data, indices, indptr), shape=(len(t), n_control_points + 1), copy=False)
             bm = bm[:, :n_control_points]
         else:
+            nan_mask = xp.isnan(t)
+            # Needs the values of t, so it fails under jax.jit or torch.compile
+            # unless validate_input=False.
+            if validate_input and bool(xp.any(nan_mask)):
+                raise ValueError("t should not contain any NaN values.")
+
+            # Get the values for the basis matrix
             tval, indices = self._compute_tval_and_indices_xp(t, shift, self.closed, self.M, self.pad, xp)
-            tval = xp.astype(tval, dtype)
-            t_indices = xp.tile(xp.arange(len(t), device=device)[:, xp.newaxis], (1, tval.shape[1]))
-            tval = tval.flatten()
-            indices = indices.flatten()
-            t_indices = t_indices.flatten()
-            mask = (indices >= 0) & (indices <= (self.M - 1 + 2 * self.pad))
-            tval = tval[mask]
-            indices = indices[mask]
-            t_indices = t_indices[mask]
-            data = self.basis_function(tval, derivative=derivative)
-            bm = xp.zeros((len(t), n_control_points), dtype=data.dtype, device=device)
-            bm = _item_set(bm, (t_indices, indices), data, xp)
+            data = self.basis_function(xp.astype(tval, dtype), derivative=derivative)
+
+            # Populate the basis matrix
+            columns = xp.arange(n_control_points, device=device)
+            match = indices[:, :, xp.newaxis] == columns[xp.newaxis, xp.newaxis, :]
+            zero = xp.zeros((), dtype=data.dtype, device=device)
+            bm = xp.sum(xp.where(match, data[:, :, xp.newaxis], zero), axis=1)
+
+            # A NaN in t gives meaningless indices and weights for its row
+            # Overwrite the whole row with NaN.
+            bm = xp.where(nan_mask[:, xp.newaxis], xp.asarray(xp.nan, dtype=bm.dtype, device=device), bm)
 
         return bm
 
-    def __call__(self, t, derivative=0):
+    def __call__(self, t, derivative=0, validate_input=True):
         """
         Evaluate the spline or one of its derivatives at
         parameter value(s) `t`.
@@ -1995,6 +2011,16 @@ class Spline:
         derivative : int
             Can be 0, 1, 2 for the spline, and its
             first and second derivative respectively.
+        validate_input : bool
+            If set to True, checks if `t` contains NaN values and raises
+            a ValueError if it does. NaN input produces invalid results.
+            However, running without validation is provided for JIT compatibilty.
+            Default value is True.
+
+        Raises
+        ------
+        ValueError
+            If `t` contains NaN values and `validate_input` is True.
 
         Examples
         --------
@@ -2017,7 +2043,8 @@ class Spline:
         """
         xp, device = self._get_control_points_xp_and_device()
         t, single_value = self._convert_to_array(t, xp, device)
-        bm = self.basis_matrix(t, derivative=derivative)
+
+        bm = self.basis_matrix(t, derivative=derivative, validate_input=validate_input)
 
         if array_api_compat.is_torch_namespace(xp) and bm.dtype != self.control_points.dtype:
             # Torch doesn't allow matrix multiplication with mixed dtypes
