@@ -4,6 +4,7 @@ import functools
 import itertools
 import math
 
+import array_api_compat
 import pytest
 import splinebox.basis_functions
 import splinebox.spline_curves
@@ -38,11 +39,26 @@ with contextlib.suppress(ImportError):
     # other array backends (jax silently truncates float64 data otherwise).
     jax.config.update("jax_enable_x64", True)
 
+    jax.config.update("jax_default_matmul_precision", "highest")
+
     ARRAY_BACKENDS_AND_DEVICES.append(pytest.param((jax.numpy, jax.devices("cpu")[0]), id="jax-cpu"))
 
     if any(device.platform == "gpu" for device in jax.devices()):
         gpus = jax.devices("gpu")
         ARRAY_BACKENDS_AND_DEVICES.append(pytest.param((jax.numpy, gpus[0]), id="jax-gpu"))
+
+NON_HERMITE_BASIS_FUNCTIONS = [
+    pytest.param((splinebox.basis_functions.B1, {}), id="B1"),
+    pytest.param((splinebox.basis_functions.B2, {}), id="B2"),
+    pytest.param((splinebox.basis_functions.B3, {}), id="B3"),
+    pytest.param((splinebox.basis_functions.Exponential, {"M": 5}), id="Exponential-M5"),
+    pytest.param((splinebox.basis_functions.CatmullRom, {}), id="CatmullRom"),
+]
+
+HERMITE_BASIS_FUNCTIONS = [
+    pytest.param((splinebox.basis_functions.CubicHermite, {}), id="CubicHermite"),
+    pytest.param((splinebox.basis_functions.ExponentialHermite, {"M": 5}), id="ExponentialHermite-M5"),
+]
 
 
 @pytest.fixture(params=ARRAY_BACKENDS_AND_DEVICES)
@@ -124,31 +140,40 @@ def is_hermite_basis_function():
     return _is_hermite_basis_function
 
 
-@pytest.fixture(
-    params=[
-        (splinebox.basis_functions.B1, {}),
-        (splinebox.basis_functions.B2, {}),
-        (splinebox.basis_functions.B3, {}),
-        (splinebox.basis_functions.Exponential, {"M": 5}),
-        (splinebox.basis_functions.CatmullRom, {}),
-    ],
-    ids=["B1", "B2", "B3", "Exponential-M5", "CatmullRom"],
-)
+@pytest.fixture(params=NON_HERMITE_BASIS_FUNCTIONS)
 def non_hermite_basis_function(request):
     basis_function, params = request.param
     return basis_function(**params)
 
 
-@pytest.fixture(
-    params=[
-        (splinebox.basis_functions.CubicHermite, {}),
-        (splinebox.basis_functions.ExponentialHermite, {"M": 5}),
-    ],
-    ids=["CubicHermite", "ExponentialHermite-M5"],
-)
+@pytest.fixture(params=HERMITE_BASIS_FUNCTIONS)
 def hermite_basis_function(request):
     basis_function, params = request.param
     return basis_function(**params)
+
+
+@pytest.fixture(
+    params=[
+        pytest.param((a.values[0], b.values[0]), id=f"{a.id}-{b.id}")
+        for a, b in itertools.combinations_with_replacement(NON_HERMITE_BASIS_FUNCTIONS, r=2)
+    ]
+)
+def non_hermite_basis_function_combinations(request):
+    basis_function1, params1 = request.param[0]
+    basis_function2, params2 = request.param[1]
+    return basis_function1(**params1), basis_function2(**params2)
+
+
+@pytest.fixture(
+    params=[
+        pytest.param((a.values[0], b.values[0]), id=f"{a.id}-{b.id}")
+        for a, b in itertools.combinations_with_replacement(HERMITE_BASIS_FUNCTIONS, r=2)
+    ]
+)
+def hermite_basis_function_combinations(request):
+    basis_function1, params1 = request.param[0]
+    basis_function2, params2 = request.param[1]
+    return basis_function1(**params1), basis_function2(**params2)
 
 
 @pytest.fixture(
@@ -258,9 +283,9 @@ def derivative(request):
 
 
 @pytest.fixture(params=[1.5, np.array(0.0), np.linspace(0, 10, 1000)])
-def call_positions(request, as_xp_array):
+def call_positions(request, as_xp_array, dtype):
     if isinstance(request.param, collections.abc.Iterable):
-        return as_xp_array(request.param)
+        return as_xp_array(request.param, dtype=dtype)
     return request.param
 
 
@@ -279,6 +304,19 @@ def basis_function_call_positions(request, as_xp_array, dtype):
     if isinstance(request.param, collections.abc.Iterable):
         return as_xp_array(request.param, dtype=dtype)
     return request.param
+
+
+@pytest.fixture
+def partial_derivative_positions(M, closed, xp, dtype, device):
+    """
+    Parameter values at which the partial derivatives are tested.
+    """
+    dtype = None if dtype == int else dtype
+    return (
+        xp.linspace(0, M, 20, endpoint=False, dtype=dtype, device=device)
+        if closed
+        else xp.linspace(0, M - 1, 20, dtype=dtype, device=device)
+    )
 
 
 @pytest.fixture(params=[1, 2, 3, 5], ids=["ndim=1", "ndim=2", "ndim=3", "ndim=5"])
@@ -440,22 +478,31 @@ def initialised_closed_spline_curve(closed_spline_curve, initialise_spline_curve
 
 
 @pytest.fixture
-def rotation_matrix(codomain_dimensionality):
+def rotation_matrix(codomain_dimensionality, as_xp_array, xp, device, dtype):
     rng = np.random.default_rng(seed=9577)
 
-    R = np.eye(codomain_dimensionality)
+    dtype = xp.asarray(1.0).dtype if dtype == int else dtype
+
+    R = xp.eye(codomain_dimensionality, dtype=dtype, device=device)
     if codomain_dimensionality == 1:
         return R
     # Get the axis of all possible rotation planes aligned with the axis
-    plane_indices = list(itertools.combinations(np.arange(codomain_dimensionality), 2))
+    plane_indices = list(itertools.combinations(xp.arange(codomain_dimensionality, device=device), 2))
     # randomly choose an angle between -pi and pi for each rotation plane
-    thetas = rng.random(len(plane_indices)) * 2 * np.pi - np.pi
+    thetas = as_xp_array(rng.random(len(plane_indices)), dtype=dtype) * 2 * xp.pi - xp.pi
     for (i, j), theta in zip(plane_indices, thetas):
-        R_theta = np.eye(codomain_dimensionality)
-        R_theta[i, i] = np.cos(theta)
-        R_theta[i, j] = np.sin(theta)
-        R_theta[j, i] = -np.sin(theta)
-        R_theta[j, j] = np.cos(theta)
+        R_theta = xp.eye(codomain_dimensionality, dtype=dtype, device=device)
+        if array_api_compat.is_jax_namespace(xp):
+            R_theta = R_theta.at[i, i].set(xp.cos(theta))
+            R_theta = R_theta.at[i, j].set(xp.sin(theta))
+            R_theta = R_theta.at[j, i].set(-xp.sin(theta))
+            R_theta = R_theta.at[j, j].set(xp.cos(theta))
+        else:
+            R_theta[i, i] = xp.cos(theta)
+            R_theta[i, j] = xp.sin(theta)
+            R_theta[j, i] = -xp.sin(theta)
+            R_theta[j, j] = xp.cos(theta)
+
         R = R @ R_theta
     return R
 
