@@ -180,10 +180,10 @@ def test_closed_splines(initialised_closed_spline_curve, derivative, xp):
 
 def test_draw(closed, xp, device):
     spline = splinebox.spline_curves.Spline(M=4, basis_function=splinebox.basis_functions.B1(), closed=closed)
-    spline.knots = xp.asarray([[1, 1], [1, 2], [2, 2], [2, 1]])
+    spline.knots = xp.asarray([[1, 1], [1, 2], [2, 2], [2, 1]], dtype=xp.float64)
 
-    x = xp.linspace(0, 3, 16)
-    y = xp.linspace(0, 3, 16)
+    x = xp.linspace(0, 3, 16, dtype=xp.float64)
+    y = xp.linspace(0, 3, 16, dtype=xp.float64)
 
     # You can only draw closed splines
     if not closed:
